@@ -1,0 +1,503 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["views"]
+}
+
+// ==========================================
+// 1. ENUMS & VOCABULARY
+// ==========================================
+
+enum RoleCode {
+  SUPER_ADMIN
+  SALES_PO_EXECUTIVE
+  PRODUCT_ENGINEER
+  PRODUCTION_PLANNER
+  PROCESS_OPERATOR
+  QC_OFFICER
+  STORE_DISPATCH
+  ACCOUNTS_FINANCE
+  MIS_VIEWER
+  CUSTOMER
+}
+
+enum POStatus {
+  OPEN
+  IN_PRODUCTION
+  COMPLETED
+  CLOSED
+  CANCELLED
+}
+
+enum JobCardStatus {
+  CREATED
+  NOT_LAUNCHED
+  LAUNCHED
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  READY_FOR_DISPATCH
+  DISPATCHED
+  DELIVERED
+  CANCELLED
+}
+
+enum SubJobCardStatus {
+  PENDING_LAUNCH
+  IN_STAGE
+  COMPLETED
+  REJECTED_SCRAP
+  ON_HOLD
+}
+
+enum DeliveryStatus {
+  PENDING
+  DISPATCHED
+  IN_TRANSIT
+  DELIVERED
+  DELIVERY_FAILED
+}
+
+enum NotificationType {
+  DISPATCH_ALERT
+  DELIVERY_CONFIRMED
+  REJECTION_ALERT
+  SYSTEM_ALERT
+}
+
+// ==========================================
+// 2. CORE MASTER DATA & RBAC
+// ==========================================
+
+model Department {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique @db.VarChar(100)
+  description String?  @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+  users       User[]
+  stages      ProcessStage[]
+
+  @@map("departments")
+}
+
+model ProcessStage {
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String   @unique @db.VarChar(100)
+  code          String?  @unique @db.VarChar(30)
+  description   String?  @db.Text
+  defaultOrder  Int?     @map("default_order")
+  departmentId  String?  @map("department_id") @db.Uuid
+  isActive      Boolean  @default(true) @map("is_active")
+  
+  department    Department? @relation(fields: [departmentId], references: [id])
+  assignedUsers User[]   @relation("StageAssignedUsers")
+  flowSteps     ProcessFlowStep[]
+  subJobCards   SubJobCard[] @relation("CurrentStage")
+  movements     StageMovementLog[] @relation("MovementStage")
+
+  @@map("process_stages")
+}
+
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        RoleCode @unique
+  description String?  @db.VarChar(255)
+  users       User[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique @db.VarChar(100) // e.g. "job_card.launch"
+  description String?  @db.VarChar(255)
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id") @db.Uuid
+  permissionId String     @map("permission_id") @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model User {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String   @db.VarChar(150)
+  email           String   @unique @db.VarChar(150)
+  phone           String?  @db.VarChar(20)
+  passwordHash    String   @map("password_hash") @db.VarChar(255)
+  roleId          String   @map("role_id") @db.Uuid
+  departmentId    String?  @map("department_id") @db.Uuid
+  assignedStageId String?  @map("assigned_stage_id") @db.Uuid
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  role            Role          @relation(fields: [roleId], references: [id])
+  department      Department?   @relation(fields: [departmentId], references: [id])
+  assignedStage   ProcessStage? @relation("StageAssignedUsers", fields: [assignedStageId], references: [id])
+
+  createdFlows    ProcessFlowMaster[]
+  createdProducts Product[]
+  createdPOs      CustomerPO[]
+  createdJobCards JobCard[]
+  createdSubCards SubJobCard[]
+  loggedMovements StageMovementLog[]
+  createdDispatches Dispatch[]
+  auditLogs       AuditLog[]
+  notifications   Notification[] @relation("UserNotifications")
+
+  @@index([email])
+  @@index([roleId])
+  @@map("users")
+}
+
+// ==========================================
+// 3. PROCESS FLOWS & PRODUCT MASTER
+// ==========================================
+
+model ProcessFlowMaster {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique @db.VarChar(150)
+  totalSteps  Int      @default(0) @map("total_steps")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdById String   @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  steps       ProcessFlowStep[]
+  products    Product[]
+  jobCards    JobCard[]
+
+  @@map("process_flow_masters")
+}
+
+model ProcessFlowStep {
+  id                   String            @id @default(uuid()) @db.Uuid
+  processFlowMasterId  String            @map("process_flow_master_id") @db.Uuid
+  stageId              String            @map("stage_id") @db.Uuid
+  stepOrder            Int               @map("step_order")
+
+  flowMaster           ProcessFlowMaster @relation(fields: [processFlowMasterId], references: [id], onDelete: Cascade)
+  stage                ProcessStage      @relation(fields: [stageId], references: [id])
+
+  @@unique([processFlowMasterId, stepOrder])
+  @@unique([processFlowMasterId, stageId])
+  @@index([processFlowMasterId])
+  @@map("process_flow_steps")
+}
+
+model Product {
+  id                  String   @id @default(uuid()) @db.Uuid
+  specCardNo          String   @map("spec_card_no") @db.VarChar(20) // e.g. D001
+  revisionNo          String   @default("Rev-00") @map("revision_no") @db.VarChar(20)
+  parentProductId     String?  @map("parent_product_id") @db.Uuid
+  isCurrentRevision   Boolean  @default(true) @map("is_current_revision")
+  revisionReason      String?  @map("revision_reason") @db.Text
+  name                String   @db.VarChar(150)
+  code                String   @db.VarChar(50)
+  customerId          String?  @map("customer_id") @db.Uuid
+  pcbSize             String   @map("pcb_size") @db.VarChar(50) // e.g. "100x150mm"
+  layers              Int
+  thicknessMm         Float    @map("thickness_mm")
+  copperWeight        String   @map("copper_weight") @db.VarChar(20) // e.g. "1oz"
+  solderMask          String   @map("solder_mask") @db.VarChar(30)
+  legend              String   @db.VarChar(30)
+  surfaceFinish       String   @map("surface_finish") @db.VarChar(50)
+  materialType        String?  @default("FR4") @map("material_type") @db.VarChar(50)
+  panelSize           String?  @map("panel_size") @db.VarChar(50)
+  qtyPerPanel         Int?     @default(1) @map("qty_per_panel")
+  specialInstructions String?  @map("special_instructions") @db.Text
+  processFlowId       String   @map("process_flow_id") @db.Uuid
+  isActive            Boolean  @default(true) @map("is_active")
+  createdById         String   @map("created_by") @db.Uuid
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  customer        Customer?         @relation(fields: [customerId], references: [id])
+  processFlow     ProcessFlowMaster @relation(fields: [processFlowId], references: [id])
+  createdBy       User              @relation(fields: [createdById], references: [id])
+  parentProduct   Product?          @relation("ProductRevisions", fields: [parentProductId], references: [id])
+  childRevisions  Product[]         @relation("ProductRevisions")
+  purchaseOrders  CustomerPO[]
+  jobCards        JobCard[]
+
+  @@unique([specCardNo, revisionNo])
+  @@unique([code, revisionNo])
+  @@index([specCardNo])
+  @@index([code])
+  @@index([customerId])
+  @@index([parentProductId])
+  @@map("products")
+}
+
+// ==========================================
+// 4. CUSTOMERS & PURCHASE ORDERS
+// ==========================================
+
+model Customer {
+  id            String   @id @default(uuid()) @db.Uuid
+  companyName   String   @unique @map("company_name") @db.VarChar(150)
+  code          String?  @unique @db.VarChar(30)
+  contactPerson String?  @map("contact_person") @db.VarChar(100)
+  email         String?  @db.VarChar(150)
+  phone         String?  @db.VarChar(20)
+  address       String?  @db.Text
+  gstNo         String?  @map("gst_no") @db.VarChar(30)
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  portalAccess   CustomerPortalAccess[]
+  products       Product[]
+  purchaseOrders CustomerPO[]
+
+  @@map("customers")
+}
+
+model CustomerPortalAccess {
+  id           String    @id @default(uuid()) @db.Uuid
+  customerId   String    @map("customer_id") @db.Uuid
+  email        String    @unique @db.VarChar(150)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  customer      Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  notifications Notification[] @relation("CustomerNotifications")
+
+  @@index([customerId])
+  @@index([email])
+  @@map("customer_portal_access")
+}
+
+model CustomerPO {
+  id                   String   @id @default(uuid()) @db.Uuid
+  poNo                 String   @unique @map("po_no") @db.VarChar(50) // e.g. P001
+  customerId           String   @map("customer_id") @db.Uuid
+  productId            String   @map("product_id") @db.Uuid
+  orderQty             Int      @map("order_qty")
+  poDate               DateTime @map("po_date") @db.Date
+  expectedDeliveryDate DateTime @map("expected_delivery_date") @db.Date
+  status               POStatus @default(OPEN)
+  attachmentUrl        String?  @map("attachment_url") @db.Text
+  notes                String?  @db.Text
+  createdById          String   @map("created_by") @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  customer             Customer @relation(fields: [customerId], references: [id])
+  product              Product  @relation(fields: [productId], references: [id])
+  createdBy            User     @relation(fields: [createdById], references: [id])
+  jobCards             JobCard[]
+
+  @@index([poNo])
+  @@index([customerId])
+  @@index([status])
+  @@map("customer_pos")
+}
+
+// ==========================================
+// 5. JOB CARDS & SUB-JOB CARDS
+// ==========================================
+
+model JobCard {
+  id                   String        @id @default(uuid()) @db.Uuid
+  jobCardNo            String        @unique @map("job_card_no") @db.VarChar(50) // e.g. JC001
+  customerPoId         String        @map("customer_po_id") @db.Uuid
+  productId            String        @map("product_id") @db.Uuid
+  processFlowMasterId  String        @map("process_flow_master_id") @db.Uuid
+  totalQty             Int           @map("total_qty")
+  status               JobCardStatus @default(CREATED)
+  qrCodeValue          String        @unique @map("qr_code_value") @db.VarChar(255)
+  launchedAt           DateTime?     @map("launched_at") @db.Timestamptz
+  completedAt          DateTime?     @map("completed_at") @db.Timestamptz
+  createdById          String        @map("created_by") @db.Uuid
+  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  customerPO           CustomerPO        @relation(fields: [customerPoId], references: [id])
+  product              Product           @relation(fields: [productId], references: [id])
+  processFlowMaster    ProcessFlowMaster @relation(fields: [processFlowMasterId], references: [id])
+  createdBy            User              @relation(fields: [createdById], references: [id])
+  subJobCards          SubJobCard[]
+  dispatches           Dispatch[]
+
+  @@index([jobCardNo])
+  @@index([customerPoId])
+  @@index([status])
+  @@map("job_cards")
+}
+
+model SubJobCard {
+  id                  String           @id @default(uuid()) @db.Uuid
+  subJobCardNo        String           @unique @map("sub_job_card_no") @db.VarChar(60) // e.g. JC001-1
+  jobCardId           String           @map("job_card_id") @db.Uuid
+  parentSubJobCardId  String?          @map("parent_sub_job_card_id") @db.Uuid
+  currentStageId      String?          @map("current_stage_id") @db.Uuid
+  qty                 Int
+  qtyReceived         Int              @default(0) @map("qty_received")
+  qtyProcessed        Int              @default(0) @map("qty_processed")
+  qtyHold             Int              @default(0) @map("qty_hold")
+  qtyRejected         Int              @default(0) @map("qty_rejected")
+  status              SubJobCardStatus @default(PENDING_LAUNCH)
+  qrCodeValue         String           @unique @map("qr_code_value") @db.VarChar(255)
+  isRework            Boolean          @default(false) @map("is_rework")
+  createdById         String           @map("created_by") @db.Uuid
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  jobCard             JobCard          @relation(fields: [jobCardId], references: [id], onDelete: Cascade)
+  parentSubJobCard    SubJobCard?      @relation("SubJobCardSplitLineage", fields: [parentSubJobCardId], references: [id])
+  childSubJobCards    SubJobCard[]     @relation("SubJobCardSplitLineage")
+  currentStage        ProcessStage?    @relation("CurrentStage", fields: [currentStageId], references: [id])
+  createdBy           User             @relation(fields: [createdById], references: [id])
+  movements           StageMovementLog[]
+
+  @@index([subJobCardNo])
+  @@index([jobCardId])
+  @@index([currentStageId])
+  @@map("sub_job_cards")
+}
+
+// ==========================================
+// 6. PROCESS TRACKING & TRACEABILITY LEDGER
+// ==========================================
+
+model StageMovementLog {
+  id                   String       @id @default(uuid()) @db.Uuid
+  subJobCardId         String       @map("sub_job_card_id") @db.Uuid
+  stageId              String       @map("stage_id") @db.Uuid
+  qtyReceived          Int          @map("qty_received")
+  qtyProcessed         Int          @map("qty_processed")
+  qtyForwarded         Int          @map("qty_forwarded")
+  qtyRejected          Int          @default(0) @map("qty_rejected")
+  qtyHold              Int          @default(0) @map("qty_hold")
+  rejectionReason      String?      @map("rejection_reason") @db.VarChar(255)
+  remarks              String?      @db.Text
+  qcReviewStatus       String?      @default("NOT_APPLICABLE") @map("qc_review_status") @db.VarChar(30)
+  qcReviewedById       String?      @map("qc_reviewed_by") @db.Uuid
+  qcReviewedAt         DateTime?    @map("qc_reviewed_at") @db.Timestamptz
+  qcRemarks            String?      @map("qc_remarks") @db.Text
+  isOverride           Boolean      @default(false) @map("is_override")
+  isRework             Boolean      @default(false) @map("is_rework")
+  clientRequestId      String?      @unique @map("client_request_id") @db.VarChar(100) // Idempotency key
+  createdById          String       @map("created_by") @db.Uuid
+  createdAt            DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  subJobCard           SubJobCard   @relation(fields: [subJobCardId], references: [id])
+  stage                ProcessStage @relation("MovementStage", fields: [stageId], references: [id])
+  createdBy            User         @relation(fields: [createdById], references: [id])
+
+  @@index([subJobCardId])
+  @@index([stageId])
+  @@index([createdById])
+  @@index([createdAt])
+  @@map("stage_movement_logs")
+}
+
+// ==========================================
+// 7. DISPATCH, DELIVERY & NOTIFICATIONS
+// ==========================================
+
+model Dispatch {
+  id                String         @id @default(uuid()) @db.Uuid
+  dispatchNo        String         @unique @map("dispatch_no") @db.VarChar(50)
+  jobCardId         String         @map("job_card_id") @db.Uuid
+  dispatchedQty     Int            @map("dispatched_qty")
+  destination       String         @db.Text
+  
+  vehicleNo         String?        @map("vehicle_no") @db.VarChar(50)
+  courierName       String?        @map("courier_name") @db.VarChar(100)
+  deliveryPartner   String?        @map("delivery_partner") @db.VarChar(100)
+  driverName        String?        @map("driver_name") @db.VarChar(100)
+  contactNumber     String?        @map("contact_number") @db.VarChar(20)
+  trackingLrNo      String?        @map("tracking_lr_no") @db.VarChar(100)
+  dispatchRemarks   String?        @map("dispatch_remarks") @db.Text
+
+  deliveryStatus    DeliveryStatus @default(DISPATCHED) @map("delivery_status")
+  deliveryPhotoUrl  String?        @map("delivery_photo_url") @db.VarChar(500)
+  failureReason     String?        @map("failure_reason") @db.VarChar(255)
+  deliveredByName   String?        @map("delivered_by_name") @db.VarChar(100)
+  deliveredAt       DateTime?      @map("delivered_at") @db.Timestamptz
+  receiverName      String?        @map("receiver_name") @db.VarChar(100)
+  receiverMobile    String?        @map("receiver_mobile") @db.VarChar(20)
+  deliveryRemarks   String?        @map("delivery_remarks") @db.Text
+
+  createdById       String         @map("created_by") @db.Uuid
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  jobCard           JobCard        @relation(fields: [jobCardId], references: [id])
+  createdBy         User           @relation(fields: [createdById], references: [id])
+
+  @@index([dispatchNo])
+  @@index([jobCardId])
+  @@index([deliveryStatus])
+  @@map("dispatches")
+}
+
+model Notification {
+  id                     String           @id @default(uuid()) @db.Uuid
+  recipientUserId        String?          @map("recipient_user_id") @db.Uuid
+  recipientCustomerId    String?          @map("recipient_customer_id") @db.Uuid
+  type                   NotificationType
+  title                  String           @db.VarChar(150)
+  message                String           @db.Text
+  isRead                 Boolean          @default(false) @map("is_read")
+  referenceEntityType    String?          @map("reference_entity_type") @db.VarChar(50) // e.g. "Dispatch", "JobCard"
+  referenceEntityId      String?          @map("reference_entity_id") @db.Uuid
+  createdAt              DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  recipientUser          User?                 @relation("UserNotifications", fields: [recipientUserId], references: [id], onDelete: Cascade)
+  recipientCustomer      CustomerPortalAccess? @relation("CustomerNotifications", fields: [recipientCustomerId], references: [id], onDelete: Cascade)
+
+  @@index([recipientUserId, isRead])
+  @@index([recipientCustomerId, isRead])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String?  @map("user_id") @db.Uuid
+  action         String   @db.VarChar(100) // e.g. "USER_CREATE", "STAGE_OVERRIDE"
+  entityType     String   @map("entity_type") @db.VarChar(50)
+  entityId       String?  @map("entity_id") @db.VarChar(100)
+  oldValuesJson  String?  @map("old_values_json") @db.Text
+  newValuesJson  String?  @map("new_values_json") @db.Text
+  ipAddress      String?  @map("ip_address") @db.VarChar(50)
+  userAgent      String?  @map("user_agent") @db.Text
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model DailyReportSnapshot {
+  id              String   @id @default(uuid()) @db.Uuid
+  snapshotDate    DateTime @map("snapshot_date") @db.Date
+  reportType      String   @map("report_type") @db.VarChar(50)
+  dataJson        String   @map("data_json") @db.Text
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([snapshotDate, reportType])
+  @@index([snapshotDate])
+  @@map("daily_report_snapshots")
+}
