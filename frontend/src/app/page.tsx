@@ -25,7 +25,7 @@ export default function LandingPage() {
       {/* Navbar */}
       <nav className="absolute top-0 left-0 w-full z-50 flex flex-col md:flex-row justify-between items-center p-6 lg:px-12 gap-4">
         <div className="flex items-center gap-3">
-           <Image src="/logo-removebg-preview.png" alt="RF Electrotech Logo" width={220} height={60} priority className="object-contain brightness-0 invert opacity-90" />
+           <Image src="/Assets/logo-1.png" alt="RF Electrotech Logo" width={220} height={60} priority className="object-contain opacity-90" />
         </div>
         <div className="flex flex-wrap items-center justify-center md:justify-end gap-6">
           <div className="hidden lg:flex items-center gap-2 text-sm font-semibold text-white drop-shadow-md">
@@ -211,8 +211,8 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="bg-[#111827] text-slate-300 relative mt-24">
         {/* Overlapping Logo */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-white rounded-full flex items-center justify-center p-4 shadow-2xl border-4 border-blue-500 z-20 overflow-hidden">
-          <Image src="/Assets/Screenshot_2026-07-04_162637-removebg-preview.png" alt="RF Electrotech Logo Icon" width={100} height={100} className="object-cover scale-110" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-36 h-36 bg-white rounded-full flex items-center justify-center shadow-lg z-20">
+          <Image src="/Assets/Screenshot_2026-07-04_162637-removebg-preview.png" alt="RF Electrotech Logo Icon" width={130} height={130} className="object-contain scale-125" />
         </div>
         
         {/* Subtle architectural overlay */}

@@ -57,7 +57,7 @@ export const Sidebar: React.FC = () => {
     <>
       <aside className="w-64 bg-[#0f172a] flex flex-col text-slate-400 h-full shrink-0" data-purpose="main-sidebar">
         <div className="p-6 flex items-center space-x-3">
-          <Image src="/logo-removebg-preview.png" alt="RF Electrotech Logo" width={180} height={45} className="object-contain brightness-0 invert opacity-90" />
+          <Image src="/Assets/logo-1.png" alt="RF Electrotech Logo" width={180} height={45} className="object-contain opacity-90" />
         </div>
 
         <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">

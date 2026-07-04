@@ -11,6 +11,9 @@ export const metadata: Metadata = {
   title: 'RF Electro — PCB Manufacturing ERP',
   description: 'Production-traceability-first PCB Manufacturing ERP system',
   manifest: '/manifest.json',
+  icons: {
+    icon: '/icon.png',
+  },
 };
 
 export default function RootLayout({

@@ -83,7 +83,7 @@ export default function LoginPage() {
 
         <div className="relative z-10 space-y-6">
           <div className="flex items-center gap-3 mb-16">
-            <Image src="/logo-removebg-preview.png" alt="RF Electrotech" width={220} height={60} className="object-contain brightness-0 invert opacity-100" />
+            <Image src="/Assets/logo-1.png" alt="RF Electrotech" width={220} height={60} className="object-contain opacity-100" />
           </div>
           
           <div className="space-y-6 max-w-lg animate-in slide-in-from-left-8 duration-700 fade-in zoom-in-95">
@@ -127,7 +127,7 @@ export default function LoginPage() {
           {/* Mobile Header (Hidden on Desktop) */}
           <div className="md:hidden flex flex-col items-center gap-3 mb-10">
             <div className="p-4 bg-slate-900 rounded-2xl">
-              <Image src="/logo-removebg-preview.png" alt="RF Electrotech" width={160} height={45} className="object-contain brightness-0 invert" />
+              <Image src="/Assets/logo-1.png" alt="RF Electrotech" width={160} height={45} className="object-contain" />
             </div>
           </div>
 
