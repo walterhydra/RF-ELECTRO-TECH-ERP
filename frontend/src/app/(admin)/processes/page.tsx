@@ -29,7 +29,7 @@ interface ProcessStage {
   code: string | null;
   description: string | null;
   defaultOrder: number;
-  departmentId: string | null;
+  departmentId?: string | null;
   departmentName?: string;
   isActive: boolean;
 }
