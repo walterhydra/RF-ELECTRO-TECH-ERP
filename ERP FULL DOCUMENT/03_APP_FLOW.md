@@ -373,9 +373,58 @@ Dashboard → [Users] → User List
 
 ---
 
-## 5. Screen Inventory
+## 4.7 Journey G — Backward Rework Loop Flow (`isRework = true`)
+*Covers Rework Routing, QC Escalation & Yield Isolation.*
 
-Use this flat list for route/component scaffolding, alongside the journey diagrams in §4.
+When a batch or sub-job card fails QC inspection at a downstream process stage (e.g. Stage 5: Solder Mask), but the defect is fixable (e.g. uneven solder mask or pinholes), it is routed **backward** to a previous rework stage (e.g. Stage 2: Micro-Etch / Stripping) instead of being scrapped.
+
+### Rework State Transition Flow Diagram
+
+```mermaid
+graph TD
+    StageN["📍 Current Stage N (e.g. Stage 5: Solder Mask)"]
+    QCCheck{"🔍 QC Inspection"}
+    Pass["✅ Pass -> Move Forward to Stage N+1"]
+    Scrap["❌ Permanent Defect -> Log Rejection / Scrap"]
+    ReworkRoute["🔄 Fixable Defect -> Route to Rework Stage N-K"]
+
+    SubJobRework["🆕 Create Rework Sub-Job Card (e.g. JC001-1-RW1)<br/>Set isRework = true, status = IN_STAGE"]
+    ReworkProcess["⚙️ Process at Rework Stage (e.g. Stage 2: Stripping)"]
+    ReEnterFlow["➡️ Re-enter Standard Flow at Stage N-K+1"]
+
+    StageN --> QCCheck
+    QCCheck -- "Pass" --> Pass
+    QCCheck -- "Irreparable Scrap" --> Scrap
+    QCCheck -- "Reworkable Defect" --> ReworkRoute
+
+    ReworkRoute --> SubJobRework
+    SubJobRework --> ReworkProcess
+    ReworkProcess --> ReEnterFlow
+
+    style StageN fill:#0d6efd,color:#ffffff
+    style QCCheck fill:#ffc107,color:#000000
+    style ReworkRoute fill:#fd7e14,color:#ffffff
+    style SubJobRework fill:#6f42c1,color:#ffffff
+```
+
+### Step-by-Step Rework Journey:
+
+1. **QC Officer Flagging:**
+   - On the Movement Update Form, QC Officer sets `qtyRejected > 0` and selects Disposition: `REWORK` (instead of `SCRAP`).
+   - Mandatory fields: `rejectionReason` (e.g. "Solder mask peeling / pinhole") and `targetReworkStageId` (e.g. "Stage 2: Chemical Stripping").
+2. **System Rework Sub-Job Card Spawn:**
+   - System auto-generates a Rework Sub-Job Card: `JC001-1-RW1` with `isRework = true` and `parentSubJobCardId = JC001-1`.
+   - `stage_movement_logs` logs `isRework = true`, `qcReviewStatus = "REWORK_ROUTED"`.
+3. **Rework Queue Processing:**
+   - Sub-Job Card `JC001-1-RW1` appears in the operator queue for Stage 2 ("Chemical Stripping") with a visual **`🔄 REWORK` badge**.
+   - Operator scans QR, performs rework, and logs `qtyProcessed`.
+4. **First-Pass Yield (FPY) Protection:**
+   - **Yield Calculation Rule:** Rework passes do NOT inflate primary production volume or artificially depress First-Pass Yield (FPY). FPY measures clean single-pass yield; rework quantity is tracked in a separate `Rework Yield Metric`.
+
+---
+
+## 5. Screen Inventory (By Surface)
+ this flat list for route/component scaffolding, alongside the journey diagrams in §4.
 
 ### 5.1 Internal Web App
 | Screen | Purpose |

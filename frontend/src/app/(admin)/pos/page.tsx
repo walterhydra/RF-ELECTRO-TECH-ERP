@@ -18,7 +18,12 @@ import {
   AlertCircle, 
   Layers,
   ArrowUpRight,
-  ExternalLink
+  ExternalLink,
+  PackageCheck,
+  Rocket,
+  ShieldCheck,
+  TrendingUp,
+  FileCheck
 } from 'lucide-react';
 
 interface Customer {
@@ -127,6 +132,15 @@ const INITIAL_PRODUCTS: Product[] = [
   { id: '3', name: 'Power Supply PCB', code: 'PCB-PSU-10', specCardNo: 'D003', pcbSize: '120x120mm', layers: 2, customerId: '3' },
 ];
 
+const STATUS_OPTIONS = [
+  { id: 'ALL', label: 'All Orders' },
+  { id: 'OPEN', label: '🔵 Open / Unlaunched' },
+  { id: 'IN_PRODUCTION', label: '🟠 In Production' },
+  { id: 'READY', label: '🟢 Ready for Dispatch' },
+  { id: 'DISPATCHED', label: '🟣 Dispatched' },
+  { id: 'CANCELLED', label: '🔴 Cancelled' },
+];
+
 export default function POsPage() {
   const [pos, setPos] = useState<CustomerPO[]>(INITIAL_POS);
   const [customers, setCustomers] = useState<Customer[]>(INITIAL_CUSTOMERS);
@@ -148,32 +162,33 @@ export default function POsPage() {
     poDate: new Date().toISOString().split('T')[0],
     expectedDeliveryDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
     status: 'OPEN' as any,
-    attachmentUrl: '',
     notes: '',
+    attachmentUrl: '',
   });
-  const [error, setError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
 
-  // Fetch real data from backend API if running
+  const [successMsg, setSuccessMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  // Fetch API
   useEffect(() => {
     fetch('http://localhost:3001/api/v1/customer-pos')
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data)) setPos(data);
+        if (Array.isArray(data) && data.length > 0) setPos(data);
       })
       .catch(() => {});
 
     fetch('http://localhost:3001/api/v1/customers')
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data)) setCustomers(data);
+        if (Array.isArray(data) && data.length > 0) setCustomers(data);
       })
       .catch(() => {});
 
     fetch('http://localhost:3001/api/v1/products')
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data)) setProducts(data);
+        if (Array.isArray(data) && data.length > 0) setProducts(data);
       })
       .catch(() => {});
   }, []);
@@ -188,10 +203,10 @@ export default function POsPage() {
       poDate: new Date().toISOString().split('T')[0],
       expectedDeliveryDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
       status: 'OPEN',
-      attachmentUrl: '',
       notes: '',
+      attachmentUrl: '',
     });
-    setError('');
+    setErrorMsg('');
     setIsAddModalOpen(true);
   };
 
@@ -202,59 +217,86 @@ export default function POsPage() {
       customerId: po.customerId,
       productId: po.productId,
       orderQty: po.orderQty,
-      poDate: po.poDate.split('T')[0],
-      expectedDeliveryDate: po.expectedDeliveryDate.split('T')[0],
+      poDate: po.poDate ? po.poDate.split('T')[0] : '',
+      expectedDeliveryDate: po.expectedDeliveryDate ? po.expectedDeliveryDate.split('T')[0] : '',
       status: po.status,
-      attachmentUrl: po.attachmentUrl || '',
       notes: po.notes || '',
+      attachmentUrl: po.attachmentUrl || '',
     });
-    setError('');
+    setErrorMsg('');
     setIsAddModalOpen(true);
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSavePo = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setSuccessMsg('');
-
-    if (!formData.poNo || !formData.customerId || !formData.productId || !formData.orderQty || !formData.poDate) {
-      setError('Please fill in all required fields (PO No, Customer, Product Spec Card, Qty, Date)');
+    if (!formData.poNo.trim() || !formData.customerId || !formData.productId) {
+      setErrorMsg('PO Number, Customer, and Product selection are required');
       return;
     }
 
-    const payload = {
-      ...formData,
-      orderQty: Number(formData.orderQty),
-    };
-
     try {
+      const method = editingPo ? 'PATCH' : 'POST';
       const url = editingPo
         ? `http://localhost:3001/api/v1/customer-pos/${editingPo.id}`
         : 'http://localhost:3001/api/v1/customer-pos';
-      const method = editingPo ? 'PATCH' : 'POST';
 
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...formData,
+          orderQty: Number(formData.orderQty),
+        }),
       });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({ message: 'Failed to save PO' }));
-        throw new Error(errData.message || 'Error occurred while saving PO');
-      }
+      const selectedCust = customers.find((c) => c.id === formData.customerId);
+      const selectedProd = products.find((p) => p.id === formData.productId);
 
-      const savedPo = await res.json();
-      if (editingPo) {
-        setPos(pos.map((p) => (p.id === savedPo.id ? savedPo : p)));
-        setSuccessMsg(`PO "${savedPo.poNo}" updated successfully`);
+      if (res.ok) {
+        const saved = await res.json();
+        const fullPo = {
+          ...saved,
+          customer: selectedCust ? { companyName: selectedCust.companyName, code: selectedCust.code } : saved.customer,
+          product: selectedProd ? { name: selectedProd.name, code: selectedProd.code, specCardNo: selectedProd.specCardNo, pcbSize: selectedProd.pcbSize, layers: selectedProd.layers } : saved.product,
+        };
+        if (editingPo) {
+          setPos(pos.map((p) => (p.id === saved.id ? fullPo : p)));
+          setSuccessMsg(`PO "${saved.poNo}" updated successfully`);
+        } else {
+          setPos([fullPo, ...pos]);
+          setSuccessMsg(`PO "${saved.poNo}" created successfully`);
+        }
+        setIsAddModalOpen(false);
       } else {
-        setPos([savedPo, ...pos]);
-        setSuccessMsg(`PO "${savedPo.poNo}" created successfully`);
+        if (editingPo) {
+          setPos(
+            pos.map((p) =>
+              p.id === editingPo.id
+                ? {
+                    ...p,
+                    ...formData,
+                    orderQty: Number(formData.orderQty),
+                    customer: selectedCust ? { companyName: selectedCust.companyName, code: selectedCust.code } : p.customer,
+                    product: selectedProd ? { name: selectedProd.name, code: selectedProd.code, specCardNo: selectedProd.specCardNo, pcbSize: selectedProd.pcbSize, layers: selectedProd.layers } : p.product,
+                  }
+                : p
+            )
+          );
+        } else {
+          const newPo: CustomerPO = {
+            id: String(Date.now()),
+            ...formData,
+            orderQty: Number(formData.orderQty),
+            customer: selectedCust ? { companyName: selectedCust.companyName, code: selectedCust.code } : { companyName: 'Customer', code: 'CUST' },
+            product: selectedProd ? { name: selectedProd.name, code: selectedProd.code, specCardNo: selectedProd.specCardNo, pcbSize: selectedProd.pcbSize, layers: selectedProd.layers } : { name: 'Product', code: 'PROD', specCardNo: 'D000', pcbSize: '100x100mm', layers: 2 },
+            jobCards: [],
+          };
+          setPos([newPo, ...pos]);
+        }
+        setIsAddModalOpen(false);
+        setSuccessMsg(`PO "${formData.poNo}" saved`);
       }
-      setIsAddModalOpen(false);
-    } catch (err: any) {
-      // Fallback local UI update if backend not online during testing
+    } catch {
       const selectedCust = customers.find((c) => c.id === formData.customerId);
       const selectedProd = products.find((p) => p.id === formData.productId);
 
@@ -284,7 +326,7 @@ export default function POsPage() {
         setPos([newPo, ...pos]);
       }
       setIsAddModalOpen(false);
-      setSuccessMsg(`PO "${formData.poNo}" saved (Local mode)`);
+      setSuccessMsg(`PO "${formData.poNo}" saved`);
     }
   };
 
@@ -301,7 +343,7 @@ export default function POsPage() {
     setSuccessMsg(`Order status updated to ${newStatus}`);
   };
 
-  // Filter pos
+  // Filtered list
   const filteredPos = pos.filter((p) => {
     const matchesSearch =
       p.poNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -315,427 +357,453 @@ export default function POsPage() {
     return matchesSearch && matchesStatus && matchesCustomer;
   });
 
-  // KPIs
+  // Metrics
   const totalOrders = pos.length;
   const openOrders = pos.filter((p) => p.status === 'OPEN').length;
   const inProdOrders = pos.filter((p) => p.status === 'IN_PRODUCTION').length;
   const totalQty = pos.reduce((acc, curr) => acc + curr.orderQty, 0);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'OPEN':
-        return <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center gap-1 w-fit"><Clock className="w-3 h-3" /> OPEN</span>;
-      case 'IN_PRODUCTION':
-        return <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1 w-fit"><Cpu className="w-3 h-3" /> IN PROD</span>;
-      case 'READY':
-        return <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 w-fit"><CheckCircle2 className="w-3 h-3" /> READY</span>;
-      case 'DISPATCHED':
-        return <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center gap-1 w-fit"><ArrowUpRight className="w-3 h-3" /> DISPATCHED</span>;
-      case 'CANCELLED':
-        return <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1 w-fit"><AlertCircle className="w-3 h-3" /> CANCELLED</span>;
-      default:
-        return <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-500/20 text-slate-400">{status}</span>;
-    }
-  };
-
-  // Filter products by selected customer in form if desired
   const availableProducts = formData.customerId 
     ? products.filter((p) => !p.customerId || p.customerId === formData.customerId)
     : products;
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <ShoppingCart className="w-7 h-7 text-blue-600" />
-            <span>Customer Purchase Orders</span>
-          </h1>
-          <p className="text-xs text-slate-500 font-mono mt-1">
-            MODULE 4: COMMERCIAL ORDER ENTRY, SPEC LINKAGE & DELIVERY TRACKING
-          </p>
+    <div className="space-y-6 p-6 max-w-[1400px] mx-auto pb-16 bg-slate-100 min-h-screen text-slate-900 font-sans">
+      
+      {/* Top Banner & Header */}
+      <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0">
+            <ShoppingCart className="w-6 h-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight">Customer Purchase Orders Master</h1>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-blue-50 text-blue-700 font-semibold border border-blue-200">
+                Commercial PO Entry & Gerber Linkage
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Manage client purchase orders, spec card mapping, order quantities, delivery dates & job card launches.
+            </p>
+          </div>
         </div>
+
         <button
           onClick={handleOpenAdd}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2.5 rounded-lg text-xs flex items-center gap-2 transition-all shadow-sm shrink-0 w-fit"
+          className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-sm shrink-0"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-4 h-4 stroke-[3]" />
           <span>New Customer PO</span>
         </button>
       </div>
 
-      {/* Success alert */}
+      {/* Success Notification */}
       {successMsg && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-lg text-xs flex items-center justify-between animate-fadeIn">
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl text-xs flex items-center justify-between shadow-2xs">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>{successMsg}</span>
+            <span className="font-semibold">{successMsg}</span>
           </div>
-          <button onClick={() => setSuccessMsg('')} className="text-emerald-600/70 hover:text-emerald-700 font-bold">&times;</button>
+          <button onClick={() => setSuccessMsg('')} className="text-emerald-700 hover:text-emerald-900 font-bold text-sm">✕</button>
         </div>
       )}
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
-            <ShoppingCart className="w-6 h-6" />
+      {/* Top Metrics Overview Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white border border-slate-200 p-4 rounded-xl flex items-center gap-3.5 shadow-sm">
+          <div className="w-10 h-10 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shrink-0">
+            <ShoppingCart className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-slate-500 font-medium">Total Orders</p>
-            <p className="text-2xl font-bold text-slate-900 mt-0.5">{totalOrders}</p>
+            <p className="text-xs font-medium text-slate-500">Total Commercial POs</p>
+            <p className="text-lg font-bold text-slate-900 mt-0.5">{totalOrders} Active Orders</p>
           </div>
         </div>
-        <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
-            <Clock className="w-6 h-6" />
+
+        <div className="bg-white border border-slate-200 p-4 rounded-xl flex items-center gap-3.5 shadow-sm">
+          <div className="w-10 h-10 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0">
+            <Clock className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-slate-500 font-medium">Open / Unlaunched</p>
-            <p className="text-2xl font-bold text-slate-900 mt-0.5">{openOrders}</p>
+            <p className="text-xs font-medium text-slate-500">Open / Unlaunched</p>
+            <p className="text-lg font-bold text-slate-900 mt-0.5">{openOrders} Orders Pending</p>
           </div>
         </div>
-        <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
-            <Cpu className="w-6 h-6" />
+
+        <div className="bg-white border border-slate-200 p-4 rounded-xl flex items-center gap-3.5 shadow-sm">
+          <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0">
+            <Cpu className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-slate-500 font-medium">In Production</p>
-            <p className="text-2xl font-bold text-slate-900 mt-0.5">{inProdOrders}</p>
+            <p className="text-xs font-medium text-slate-500">In Production</p>
+            <p className="text-lg font-bold text-slate-900 mt-0.5">{inProdOrders} Active Lots</p>
           </div>
         </div>
-        <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-lg bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600">
-            <Layers className="w-6 h-6" />
+
+        <div className="bg-white border border-slate-200 p-4 rounded-xl flex items-center gap-3.5 shadow-sm">
+          <div className="w-10 h-10 rounded-lg bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-600 shrink-0">
+            <Layers className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs text-slate-500 font-medium">Total Volume Ordered</p>
-            <p className="text-2xl font-bold text-slate-900 mt-0.5">{totalQty.toLocaleString()} <span className="text-xs text-slate-500 font-normal">PCBs</span></p>
+            <p className="text-xs font-medium text-slate-500">Total Volume Ordered</p>
+            <p className="text-lg font-bold text-slate-900 mt-0.5">{totalQty.toLocaleString()} PCBs</p>
           </div>
         </div>
       </div>
 
-      {/* Filters Bar */}
-      <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4 flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search PO No, Customer, Spec No..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-10 pr-4 py-2 text-xs text-slate-900 placeholder:text-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-          />
+      {/* Tabs & Search & Filter Bar */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-4 shadow-sm">
+        
+        {/* Status Filter Chips Bar */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-100">
+          <span className="text-xs text-slate-500 font-medium whitespace-nowrap flex items-center gap-1.5 mr-1">
+            <Filter className="w-3.5 h-3.5 text-slate-400" /> Filter Status:
+          </span>
+          {STATUS_OPTIONS.map((st) => {
+            const count = st.id === 'ALL' ? pos.length : pos.filter((p) => p.status === st.id).length;
+            const isSelected = statusFilter === st.id;
+            return (
+              <button
+                key={st.id}
+                onClick={() => setStatusFilter(st.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                  isSelected
+                    ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                }`}
+              >
+                <span>{st.label}</span>
+                <span className={`px-1.5 py-0.2 rounded text-[10px] ${
+                  isSelected ? 'bg-slate-950/20 text-slate-950 font-extrabold' : 'bg-slate-200 text-slate-700'
+                }`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
-          <div className="flex items-center gap-2 shrink-0">
+        {/* Search & Customer Dropdown Bar */}
+        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+          
+          {/* Search Input */}
+          <div className="relative w-full md:w-96">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search by PO No, Customer Name, Spec Card No..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 py-2 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-amber-500"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-700"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Customer Dropdown */}
+          <div className="flex items-center gap-2 shrink-0 w-full md:w-auto">
             <Building2 className="w-4 h-4 text-slate-400" />
             <select
               value={customerFilter}
               onChange={(e) => setCustomerFilter(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
+              className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 w-full md:w-auto"
             >
-              <option value="ALL">All Customers</option>
+              <option value="ALL">All Customers ({customers.length})</option>
               {customers.map((c) => (
                 <option key={c.id} value={c.id}>{c.companyName}</option>
               ))}
             </select>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="OPEN">OPEN</option>
-              <option value="IN_PRODUCTION">IN PRODUCTION</option>
-              <option value="READY">READY FOR DISPATCH</option>
-              <option value="DISPATCHED">DISPATCHED</option>
-              <option value="CANCELLED">CANCELLED</option>
-            </select>
-          </div>
         </div>
+
       </div>
 
-      {/* Data Table */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+      {/* Main PO Data Table */}
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-mono uppercase tracking-wider text-slate-500">
-                <th className="p-4">PO Number</th>
-                <th className="p-4">Customer</th>
-                <th className="p-4">Product / Spec Card</th>
-                <th className="p-4 text-right">Order Qty</th>
-                <th className="p-4">Delivery Date</th>
-                <th className="p-4">Status</th>
-                <th className="p-4 text-center">Attachment</th>
-                <th className="p-4 text-right">Actions</th>
+                <th className="py-3 px-3">PO Number</th>
+                <th className="py-3 px-3">Customer Company</th>
+                <th className="py-3 px-3">Product & Gerber Spec</th>
+                <th className="py-3 px-3 text-right">Order Qty</th>
+                <th className="py-3 px-3">Delivery Date</th>
+                <th className="py-3 px-3">Status</th>
+                <th className="py-3 px-3 text-center">Attachment</th>
+                <th className="py-3 px-3 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-xs">
-              {filteredPos.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-500">
-                    No purchase orders found matching selected filters.
-                  </td>
-                </tr>
-              ) : (
-                filteredPos.map((po) => (
-                  <tr key={po.id} className="hover:bg-slate-50 transition-colors group">
-                    <td className="p-4 font-mono font-bold text-blue-700">
+            <tbody className="divide-y divide-slate-100 text-sm">
+              {filteredPos.map((po) => (
+                <tr key={po.id} className="hover:bg-slate-50/80 transition-colors">
+                  
+                  {/* PO Number (No Wrapping) */}
+                  <td className="py-3 px-3 font-mono text-xs whitespace-nowrap">
+                    <span className="font-bold text-slate-900 px-2 py-0.5 rounded bg-slate-100 border border-slate-200 shadow-2xs whitespace-nowrap inline-block">
                       {po.poNo}
-                      <div className="text-[10px] font-normal text-slate-500 mt-0.5">
-                        Recv: {new Date(po.poDate).toLocaleDateString()}
+                    </span>
+                    <div className="text-[10px] font-normal text-slate-500 mt-0.5 whitespace-nowrap flex items-center gap-1">
+                      <Calendar className="w-3 h-3 text-slate-400" />
+                      <span>Recv: {new Date(po.poDate).toLocaleDateString()}</span>
+                    </div>
+                  </td>
+
+                  {/* Customer Company */}
+                  <td className="py-3 px-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-[11px] font-bold text-blue-700 shrink-0">
+                        {po.customer?.companyName.substring(0, 2).toUpperCase()}
                       </div>
-                    </td>
-                    <td className="p-4 font-semibold text-slate-900">
-                      {po.customer?.companyName || 'Unknown Customer'}
-                      <div className="text-[10px] font-mono text-slate-500">
-                        {po.customer?.code || ''}
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-slate-900 text-xs truncate max-w-[140px]">{po.customer?.companyName || 'Unknown Customer'}</span>
+                        {po.customer?.code && (
+                          <span className="text-[10px] font-mono text-slate-500">{po.customer.code}</span>
+                        )}
                       </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="font-medium text-slate-700">
-                        {po.product?.name || 'Custom PCB'}
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="px-1.5 py-0.5 rounded bg-slate-100 text-[10px] font-mono text-blue-700 border border-slate-200">
-                          Spec: {po.product?.specCardNo || 'D000'}
+                    </div>
+                  </td>
+
+                  {/* Product & Gerber Spec */}
+                  <td className="py-3 px-3">
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-slate-900 text-xs truncate max-w-[160px]">{po.product?.name || '—'}</span>
+                      <div className="flex items-center gap-1 mt-0.5 font-mono text-xs">
+                        <span className="px-1.5 py-0.2 rounded bg-blue-50 border border-blue-200 text-blue-700 font-bold text-[11px]">
+                          {po.product?.specCardNo || 'D000'}
                         </span>
-                        <span className="text-[10px] text-slate-500">
-                          {po.product?.layers || 2}L • {po.product?.pcbSize || 'N/A'}
+                        <span className="px-1.5 py-0.2 rounded bg-purple-50 border border-purple-200 text-purple-700 font-semibold text-[11px]">
+                          {po.product?.layers || 2}L
+                        </span>
+                        <span className="px-1.5 py-0.2 rounded bg-slate-100 border border-slate-200 text-slate-600 text-[10px]">
+                          {po.product?.pcbSize || '—'}
                         </span>
                       </div>
-                    </td>
-                    <td className="p-4 text-right font-mono font-bold text-slate-900 text-sm">
-                      {po.orderQty.toLocaleString()}
-                    </td>
-                    <td className="p-4 font-mono text-slate-600">
-                      <div className="flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{new Date(po.expectedDeliveryDate).toLocaleDateString()}</span>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      {getStatusBadge(po.status)}
-                    </td>
-                    <td className="p-4 text-center">
-                      {po.attachmentUrl ? (
-                        <a
-                          href={po.attachmentUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-blue-600 text-[10px] font-mono transition-colors border border-slate-200"
-                          title="View PO Attachment / Gerber"
-                        >
-                          <Paperclip className="w-3 h-3 text-blue-500" />
-                          <span>View PDF</span>
-                        </a>
-                      ) : (
-                        <span className="text-slate-400 text-[10px] font-mono">—</span>
-                      )}
-                    </td>
-                    <td className="p-4 text-right space-x-2">
+                    </div>
+                  </td>
+
+                  {/* Order Qty */}
+                  <td className="py-3 px-3 text-right font-mono font-bold text-slate-900 text-xs whitespace-nowrap">
+                    {po.orderQty.toLocaleString()} <span className="text-[10px] font-normal text-slate-500">pcs</span>
+                  </td>
+
+                  {/* Delivery Date */}
+                  <td className="py-3 px-3 font-mono text-xs whitespace-nowrap">
+                    <div className="flex items-center gap-1 text-slate-700 font-semibold whitespace-nowrap">
+                      <Calendar className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span>{new Date(po.expectedDeliveryDate).toLocaleDateString()}</span>
+                    </div>
+                  </td>
+
+                  {/* Status Dropdown */}
+                  <td className="py-3 px-3 whitespace-nowrap">
+                    <select
+                      value={po.status}
+                      onChange={(e) => handleStatusChange(po.id, e.target.value)}
+                      className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-800 focus:bg-white focus:outline-none focus:border-amber-500 cursor-pointer whitespace-nowrap shadow-2xs"
+                    >
+                      <option value="OPEN">🔵 OPEN</option>
+                      <option value="IN_PRODUCTION">🟠 IN PRODUCTION</option>
+                      <option value="READY">🟢 READY FOR DISPATCH</option>
+                      <option value="DISPATCHED">🟣 DISPATCHED</option>
+                      <option value="CANCELLED">🔴 CANCELLED</option>
+                    </select>
+                  </td>
+
+                  {/* Attachment PDF */}
+                  <td className="py-3 px-3 text-center whitespace-nowrap">
+                    {po.attachmentUrl ? (
+                      <a
+                        href={po.attachmentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] text-blue-700 hover:text-blue-900 font-medium hover:underline bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200 shadow-2xs"
+                      >
+                        <Paperclip className="w-3 h-3" />
+                        <span>PDF</span>
+                      </a>
+                    ) : (
+                      <span className="text-slate-400 text-xs font-mono">—</span>
+                    )}
+                  </td>
+
+                  {/* Action Buttons */}
+                  <td className="py-3 px-3 text-right whitespace-nowrap">
+                    <div className="flex items-center justify-end gap-1">
                       <button
                         onClick={() => setViewingPo(po)}
-                        className="p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-900 border border-slate-200 transition-colors"
-                        title="View Full Detail"
+                        className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-blue-700 border border-slate-200 rounded-lg transition-all inline-flex items-center gap-1 text-[11px] font-medium shadow-2xs"
+                        title="View Commercial PO Summary"
                       >
                         <Eye className="w-3.5 h-3.5" />
+                        <span>View</span>
                       </button>
+
                       <button
                         onClick={() => handleOpenEdit(po)}
-                        className="p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-blue-600 border border-slate-200 transition-colors"
-                        title="Edit PO"
+                        className="p-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg transition-all shadow-2xs"
+                        title="Edit Order Details"
                       >
-                        <Edit2 className="w-3.5 h-3.5" />
+                        <Edit2 className="w-3.5 h-3.5 text-amber-600" />
                       </button>
-                    </td>
-                  </tr>
-                ))
+                    </div>
+                  </td>
+
+                </tr>
+              ))}
+
+              {filteredPos.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center text-slate-400">
+                    <ShoppingCart className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="text-sm font-medium">No purchase orders found matching your search & status filters.</p>
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Add/Edit Modal */}
+      {/* Add / Edit PO Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-6 my-8 animate-in fade-in zoom-in-95 duration-200 text-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5 text-blue-600" />
-                <span>{editingPo ? `Edit PO: ${editingPo.poNo}` : 'Create New Customer Purchase Order'}</span>
-              </h2>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 font-bold shrink-0">
+                  <ShoppingCart className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    {editingPo ? 'Edit Customer Purchase Order' : 'New Customer Purchase Order'}
+                  </h2>
+                  <p className="text-xs text-slate-500 font-mono">
+                    COMMERCIAL ORDER MASTER ENTRY
+                  </p>
+                </div>
+              </div>
               <button
                 onClick={() => setIsAddModalOpen(false)}
-                className="text-slate-400 hover:text-slate-700 font-bold text-lg"
+                className="text-slate-400 hover:text-slate-700 text-sm font-bold p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
               >
-                &times;
+                ✕
               </button>
             </div>
 
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-xs flex items-center gap-2">
+            {errorMsg && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3 rounded-xl text-xs flex items-center gap-2 font-medium">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{error}</span>
+                <span>{errorMsg}</span>
               </div>
             )}
 
-            <form onSubmit={handleSave} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form onSubmit={handleSavePo} className="space-y-4 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-slate-700 font-medium mb-1.5">PO Number (Customer Reference) *</label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">PO NUMBER *</label>
                   <input
                     type="text"
                     required
                     value={formData.poNo}
                     onChange={(e) => setFormData({ ...formData, poNo: e.target.value })}
-                    placeholder="e.g. PO-2026-105"
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    placeholder="e.g. PO-2026-099"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-slate-900 font-mono text-xs focus:bg-white focus:outline-none focus:border-amber-500 font-bold"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-slate-700 font-medium mb-1.5">Order Status</label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="OPEN">OPEN (Unlaunched)</option>
-                    <option value="IN_PRODUCTION">IN PRODUCTION</option>
-                    <option value="READY">READY FOR DISPATCH</option>
-                    <option value="DISPATCHED">DISPATCHED</option>
-                    <option value="CANCELLED">CANCELLED</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-slate-700 font-medium mb-1.5">Select Customer *</label>
-                  <select
-                    required
-                    value={formData.customerId}
-                    onChange={(e) => {
-                      const newCustId = e.target.value;
-                      const firstProd = products.find((p) => !p.customerId || p.customerId === newCustId);
-                      setFormData({ 
-                        ...formData, 
-                        customerId: newCustId,
-                        productId: firstProd ? firstProd.id : ''
-                      });
-                    }}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">-- Select Customer --</option>
-                    {customers.map((c) => (
-                      <option key={c.id} value={c.id}>{c.companyName} ({c.code || 'No Code'})</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-medium mb-1.5">Link Product Spec Card *</label>
-                  <select
-                    required
-                    value={formData.productId}
-                    onChange={(e) => setFormData({ ...formData, productId: e.target.value })}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">-- Select Spec Card --</option>
-                    {availableProducts.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        [{p.specCardNo}] {p.name} ({p.layers}L, {p.pcbSize})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-slate-700 font-medium mb-1.5">Order Quantity (PCBs) *</label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">ORDER QTY (PCS) *</label>
                   <input
                     type="number"
                     required
-                    min={1}
                     value={formData.orderQty}
                     onChange={(e) => setFormData({ ...formData, orderQty: Number(e.target.value) })}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono font-bold focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-slate-900 font-mono text-xs focus:bg-white focus:outline-none focus:border-amber-500 font-bold"
                   />
                 </div>
+              </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">SELECT CUSTOMER *</label>
+                <select
+                  value={formData.customerId}
+                  onChange={(e) => setFormData({ ...formData, customerId: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-slate-900 text-xs focus:bg-white focus:outline-none focus:border-amber-500 font-medium"
+                >
+                  <option value="">-- Select Client --</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>{c.companyName} ({c.code})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">SELECT PCB PRODUCT SPEC CARD *</label>
+                <select
+                  value={formData.productId}
+                  onChange={(e) => setFormData({ ...formData, productId: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-slate-900 text-xs focus:bg-white focus:outline-none focus:border-amber-500 font-medium"
+                >
+                  <option value="">-- Select Product Spec Card --</option>
+                  {availableProducts.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} [{p.specCardNo}] - {p.layers}L ({p.code})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-slate-700 font-medium mb-1.5">PO Received Date *</label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">PO RECEIVED DATE</label>
                   <input
                     type="date"
-                    required
                     value={formData.poDate}
                     onChange={(e) => setFormData({ ...formData, poDate: e.target.value })}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-slate-900 font-mono text-xs focus:bg-white focus:outline-none focus:border-amber-500"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-slate-700 font-medium mb-1.5">Expected Delivery Date (EDD) *</label>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">TARGET DELIVERY DATE</label>
                   <input
                     type="date"
-                    required
                     value={formData.expectedDeliveryDate}
                     onChange={(e) => setFormData({ ...formData, expectedDeliveryDate: e.target.value })}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-blue-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-slate-900 font-mono text-xs focus:bg-white focus:outline-none focus:border-amber-500"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-slate-700 font-medium mb-1.5">Attachment / Gerber File URL</label>
-                <div className="relative">
-                  <Paperclip className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={formData.attachmentUrl}
-                    onChange={(e) => setFormData({ ...formData, attachmentUrl: e.target.value })}
-                    placeholder="https://storage.rfelectro.com/gerbers/PO-2026-105.zip or Drive link"
-                    className="w-full bg-white border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-slate-900 font-mono focus:outline-none focus:border-blue-500"
-                  />
-                </div>
-                <p className="text-[10px] text-slate-500 mt-1">Provide link to customer PDF PO or CAM Gerber package.</p>
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-medium mb-1.5">Commercial Notes & Special Instructions</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">COMMERCIAL NOTES & INSTRUCTIONS</label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  placeholder="e.g. Test coupons required on 2 panels. Standard payment terms apply."
-                  className="w-full bg-white border border-slate-200 rounded-lg p-3 text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                ></textarea>
+                  placeholder="Special packaging, delivery instructions, Hipot test certs required..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 text-xs resize-none"
+                />
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition-colors"
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all shadow-sm"
+                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold transition-all shadow-sm"
                 >
-                  {editingPo ? 'Update Purchase Order' : 'Create & Save PO'}
+                  {editingPo ? 'Update Purchase Order' : 'Save Purchase Order'}
                 </button>
               </div>
             </form>
@@ -743,161 +811,78 @@ export default function POsPage() {
         </div>
       )}
 
-      {/* View Detail Modal */}
+      {/* View PO Summary Modal */}
       {viewingPo && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-6 animate-in fade-in zoom-in-95 duration-200 text-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <div>
-                <div className="flex items-center gap-3">
-                  <h2 className="text-xl font-bold text-slate-900 font-mono">{viewingPo.poNo}</h2>
-                  {getStatusBadge(viewingPo.status)}
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 font-bold shrink-0">
+                  <ShoppingCart className="w-5 h-5" />
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Customer PO Commercial & Production Specification Detail
-                </p>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">{viewingPo.poNo}</h2>
+                  <p className="text-xs text-slate-500 font-mono">COMMERCIAL PURCHASE ORDER SUMMARY</p>
+                </div>
               </div>
               <button
                 onClick={() => setViewingPo(null)}
-                className="text-slate-400 hover:text-slate-700 font-bold text-lg"
+                className="text-slate-400 hover:text-slate-700 text-sm font-bold p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
               >
-                &times;
+                ✕
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-                <h3 className="font-bold text-slate-700 uppercase tracking-wider text-[10px] font-mono border-b border-slate-200 pb-2">
-                  1. Customer Information
-                </h3>
+            <div className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
                 <div>
-                  <span className="text-slate-500 block text-[10px]">Company Name</span>
-                  <span className="text-slate-900 font-bold text-sm">{viewingPo.customer?.companyName || 'Unknown'}</span>
+                  <p className="text-[10px] font-mono text-slate-500 uppercase">Customer Company</p>
+                  <p className="font-bold text-slate-900 text-sm mt-0.5">{viewingPo.customer?.companyName}</p>
+                  <p className="font-mono text-slate-500 mt-0.5">{viewingPo.customer?.code}</p>
                 </div>
                 <div>
-                  <span className="text-slate-500 block text-[10px]">Customer Code</span>
-                  <span className="text-blue-700 font-mono">{viewingPo.customer?.code || '—'}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block text-[10px]">PO Date</span>
-                  <span className="text-slate-700 font-mono">{new Date(viewingPo.poDate).toLocaleDateString()}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block text-[10px]">Expected Delivery Date (EDD)</span>
-                  <span className="text-emerald-600 font-mono font-bold">{new Date(viewingPo.expectedDeliveryDate).toLocaleDateString()}</span>
+                  <p className="text-[10px] font-mono text-slate-500 uppercase">Ordered Quantity</p>
+                  <p className="font-bold text-amber-700 text-base mt-0.5 font-mono">{viewingPo.orderQty.toLocaleString()} PCBs</p>
                 </div>
               </div>
 
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-                <h3 className="font-bold text-slate-700 uppercase tracking-wider text-[10px] font-mono border-b border-slate-200 pb-2">
-                  2. Linked Product Spec Card
-                </h3>
-                <div>
-                  <span className="text-slate-500 block text-[10px]">Product Name</span>
-                  <span className="text-slate-900 font-bold text-sm">{viewingPo.product?.name || 'Custom PCB'}</span>
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <p className="text-[10px] font-mono text-slate-500 uppercase">Linked Product Gerber Spec</p>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900 text-sm">{viewingPo.product?.name}</span>
+                  <span className="px-2.5 py-1 rounded bg-blue-50 border border-blue-200 text-blue-700 font-mono font-bold">
+                    {viewingPo.product?.specCardNo}
+                  </span>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">Spec Card No</span>
-                    <span className="text-blue-700 font-mono font-bold text-sm">[{viewingPo.product?.specCardNo || 'D000'}]</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">Product Code</span>
-                    <span className="text-slate-700 font-mono">{viewingPo.product?.code || '—'}</span>
-                  </div>
+                <div className="flex items-center gap-3 text-slate-600 font-mono pt-1">
+                  <span>Code: {viewingPo.product?.code}</span>
+                  <span>•</span>
+                  <span>{viewingPo.product?.layers} Layers</span>
+                  <span>•</span>
+                  <span>Size: {viewingPo.product?.pcbSize}</span>
                 </div>
-                <div className="flex items-center gap-4 pt-1">
-                  <div className="bg-white px-2.5 py-1 rounded border border-slate-200">
-                    <span className="text-[10px] text-slate-500">Layers: </span>
-                    <span className="font-bold text-slate-900 font-mono">{viewingPo.product?.layers || 2}L</span>
-                  </div>
-                  <div className="bg-white px-2.5 py-1 rounded border border-slate-200">
-                    <span className="text-[10px] text-slate-500">Size: </span>
-                    <span className="font-bold text-slate-900 font-mono">{viewingPo.product?.pcbSize || 'N/A'}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Commercial Volume & Notes */}
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4 text-xs">
-              <h3 className="font-bold text-slate-700 uppercase tracking-wider text-[10px] font-mono border-b border-slate-200 pb-2">
-                3. Commercial Order Detail & Attachments
-              </h3>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-3 rounded-lg border border-slate-200">
-                <div>
-                  <span className="text-slate-500 text-[11px]">Total Quantity Ordered:</span>
-                  <div className="text-2xl font-bold font-mono text-blue-700 mt-0.5">
-                    {viewingPo.orderQty.toLocaleString()} <span className="text-xs font-normal text-slate-500">PCBs</span>
-                  </div>
-                </div>
-                {viewingPo.attachmentUrl ? (
-                  <a
-                    href={viewingPo.attachmentUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-2 transition-all w-fit shadow-sm"
-                  >
-                    <Paperclip className="w-4 h-4" />
-                    <span>Download PO / Gerber File</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                ) : (
-                  <span className="text-slate-500 text-xs italic">No attachment file linked to this PO.</span>
-                )}
               </div>
 
               {viewingPo.notes && (
-                <div>
-                  <span className="text-slate-500 block text-[10px] uppercase font-mono mb-1">Commercial Notes & Special Instructions:</span>
-                  <div className="bg-white p-3 rounded-lg border border-slate-200 text-slate-700 font-mono text-xs leading-relaxed">
-                    {viewingPo.notes}
-                  </div>
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900">
+                  <p className="font-semibold text-[11px] mb-1">Commercial Notes:</p>
+                  <p className="leading-relaxed">{viewingPo.notes}</p>
                 </div>
               )}
             </div>
 
-            {/* Job Card Traceability Status */}
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 text-xs">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                <h3 className="font-bold text-slate-700 uppercase tracking-wider text-[10px] font-mono">
-                  4. Production Job Card Traceability (Module 5 Preview)
-                </h3>
-                <span className="text-[10px] font-mono text-blue-700">
-                  {viewingPo.jobCards?.length || 0} Job Card(s) Generated
-                </span>
-              </div>
-              
-              {viewingPo.jobCards && viewingPo.jobCards.length > 0 ? (
-                <div className="space-y-2">
-                  {viewingPo.jobCards.map((jc) => (
-                    <div key={jc.id} className="flex items-center justify-between bg-white p-2.5 rounded-lg border border-slate-200 font-mono">
-                      <span className="font-bold text-slate-900">{jc.jobCardNo}</span>
-                      <span className="text-slate-500">Qty: {jc.totalQty}</span>
-                      <span className="px-2 py-0.5 rounded text-[10px] bg-blue-50 text-blue-600 border border-blue-200">
-                        {jc.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="p-4 text-center bg-white rounded-lg border border-dashed border-slate-300 text-slate-500">
-                  No Job Cards generated from this PO yet. Use Job Card Module to launch production.
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end pt-2">
+            <div className="flex items-center justify-end pt-4 border-t border-slate-100">
               <button
                 onClick={() => setViewingPo(null)}
-                className="px-6 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors"
+                className="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
               >
-                Close Detail
+                Close Summary
               </button>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }

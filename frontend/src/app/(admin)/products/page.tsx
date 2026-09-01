@@ -633,51 +633,114 @@ export default function ProductsPage() {
   });
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 p-6 max-w-[1400px] mx-auto pb-16 bg-slate-100 min-h-screen text-slate-900 font-sans">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+      <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+          <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0">
             <Cpu className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-wide">
-              Product Master (PCB Spec Cards)
-            </h1>
-            <p className="text-xs text-slate-500 font-mono mt-1">
-              CAM GERBER SPECIFICATIONS • LAYER STACKUPS • REVISION TRACEABILITY
-              • FLOW ROUTING
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+                Product Master (PCB Spec Cards)
+              </h1>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-blue-50 text-blue-700 font-semibold border border-blue-200">
+                CAM Gerber Specs
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              CAM Gerber specifications, layer stackups, revision traceability & shop-floor routing flows.
             </p>
           </div>
         </div>
         <button
           onClick={handleOpenAdd}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-xl text-xs flex items-center gap-2 transition-all shadow-sm hover:scale-105"
+          className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-sm shrink-0"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-4 h-4 stroke-[3]" />
           <span>New Spec Card</span>
         </button>
       </div>
 
+      {/* Metrics Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white border border-slate-200 p-4 rounded-xl flex items-center gap-3.5 shadow-sm">
+          <div className="w-10 h-10 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shrink-0">
+            <Cpu className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500">Active Spec Cards</p>
+            <p className="text-lg font-bold text-slate-900 mt-0.5">
+              {products.filter((p) => p.isCurrentRevision !== false).length} Designs
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 p-4 rounded-xl flex items-center gap-3.5 shadow-sm">
+          <div className="w-10 h-10 rounded-lg bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-600 shrink-0">
+            <Layers className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500">Multilayer Designs (≥4 L)</p>
+            <p className="text-lg font-bold text-slate-900 mt-0.5">
+              {products.filter((p) => p.layers >= 4).length} Multilayers
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 p-4 rounded-xl flex items-center gap-3.5 shadow-sm">
+          <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0">
+            <GitBranch className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500">Routing Flow Links</p>
+            <p className="text-lg font-bold text-slate-900 mt-0.5">
+              {products.filter((p) => p.processFlowId).length} Active Flows
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 p-4 rounded-xl flex items-center gap-3.5 shadow-sm">
+          <div className="w-10 h-10 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0">
+            <History className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-slate-500">Archived Revisions</p>
+            <p className="text-lg font-bold text-slate-900 mt-0.5">
+              {products.filter((p) => p.isCurrentRevision === false).length} Versions
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Search & Filter Bar */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
-        <div className="flex items-center gap-3 flex-1 bg-slate-50 border border-slate-200 px-3 py-2 rounded-lg">
-          <Search className="w-5 h-5 text-slate-400" />
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+        <div className="flex items-center gap-3 flex-1 bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-xl">
+          <Search className="w-4 h-4 text-slate-400 shrink-0" />
           <input
             type="text"
             placeholder="Search by Spec Card # (e.g. D001), Product Name, PCB Code, or Customer..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="bg-transparent text-sm text-slate-900 placeholder-slate-500 w-full focus:outline-none"
+            className="bg-transparent text-xs text-slate-900 placeholder-slate-400 w-full focus:outline-none"
           />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="text-xs text-slate-400 hover:text-slate-700 px-2 py-0.5 bg-slate-200 rounded"
+            >
+              Clear
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-3 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-200">
-          <label className="inline-flex items-center gap-2 text-xs text-slate-600 font-mono cursor-pointer select-none">
+          <label className="inline-flex items-center gap-2 text-xs text-slate-600 font-medium cursor-pointer select-none">
             <input
               type="checkbox"
               checked={showArchivedRevs}
               onChange={(e) => setShowArchivedRevs(e.target.checked)}
-              className="rounded bg-white border-slate-300 text-blue-600 focus:ring-blue-500 w-4 h-4"
+              className="rounded bg-white border-slate-300 text-amber-500 focus:ring-amber-500 w-4 h-4"
             />
             <span>
               Show Old / Archived Revisions (
@@ -690,46 +753,46 @@ export default function ProductsPage() {
       {/* Table */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse min-w-[950px]">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-mono uppercase text-slate-500">
-                <th className="py-4 px-6 w-28">Spec Card #</th>
-                <th className="py-4 px-6">Product Name & Code</th>
-                <th className="py-4 px-6">Customer</th>
-                <th className="py-4 px-6">Stackup & Specs</th>
-                <th className="py-4 px-6">Routing Flow</th>
-                <th className="py-4 px-6">Status</th>
-                <th className="py-4 px-6 text-right">Actions</th>
+              <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-mono uppercase tracking-wider text-slate-500">
+                <th className="py-3.5 px-5 whitespace-nowrap min-w-[150px]">Spec Card #</th>
+                <th className="py-3.5 px-5">Product Name & Code</th>
+                <th className="py-3.5 px-5">Customer</th>
+                <th className="py-3.5 px-5">Stackup & Specs</th>
+                <th className="py-3.5 px-5">Routing Flow</th>
+                <th className="py-3.5 px-5">Status</th>
+                <th className="py-3.5 px-5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm">
               {filtered.map((prod) => (
                 <tr
                   key={prod.id}
-                  className={`hover:bg-slate-50 transition-colors ${prod.isCurrentRevision === false ? "bg-slate-50/50 opacity-75" : ""}`}
+                  className={`hover:bg-slate-50/80 transition-colors ${prod.isCurrentRevision === false ? "bg-slate-50/50 opacity-75" : ""}`}
                 >
-                  <td className="py-4 px-6 font-mono text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-slate-900 px-2 py-1 rounded bg-white border border-slate-200 shadow-sm">
+                  <td className="py-3.5 px-5 font-mono text-xs">
+                    <div className="flex items-center gap-2 whitespace-nowrap">
+                      <span className="font-bold text-slate-900 px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 shadow-2xs shrink-0">
                         {prod.specCardNo}
                       </span>
                       <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold whitespace-nowrap inline-flex items-center shrink-0 border ${
                           prod.isCurrentRevision !== false
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                            : "bg-slate-100 text-slate-500 border border-slate-200"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-slate-100 text-slate-500 border-slate-200"
                         }`}
                       >
                         {prod.revisionNo || "Rev-00"}
                       </span>
                     </div>
                     {prod.isCurrentRevision === false && (
-                      <span className="text-[10px] text-slate-500 font-mono block mt-1">
+                      <span className="text-[10px] text-amber-700 font-mono block mt-1 font-semibold">
                         ARCHIVED
                       </span>
                     )}
                   </td>
-                  <td className="py-4 px-6">
+                  <td className="py-3.5 px-5">
                     <div className="flex flex-col">
                       <span className="font-semibold text-slate-900">
                         {prod.name}
@@ -739,12 +802,12 @@ export default function ProductsPage() {
                       </span>
                     </div>
                   </td>
-                  <td className="py-4 px-6 font-medium text-slate-700">
+                  <td className="py-3.5 px-5 font-medium text-slate-700">
                     {prod.customerName || "—"}
                   </td>
-                  <td className="py-4 px-6">
+                  <td className="py-3.5 px-5">
                     <div className="flex flex-wrap items-center gap-1.5 text-xs font-mono">
-                      <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700 font-bold">
+                      <span className="px-2 py-0.5 rounded bg-purple-50 border border-purple-200 text-purple-700 font-bold">
                         {prod.layers}L
                       </span>
                       <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700">
@@ -753,7 +816,7 @@ export default function ProductsPage() {
                       <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700">
                         {prod.copperWeight}
                       </span>
-                      <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700 truncate max-w-[120px]">
+                      <span className="px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700 truncate max-w-[120px]">
                         {prod.surfaceFinish.split(" ")[0]}
                       </span>
                     </div>
@@ -761,8 +824,8 @@ export default function ProductsPage() {
                       Mask: {prod.solderMask} | Legend: {prod.legend}
                     </div>
                   </td>
-                  <td className="py-4 px-6">
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 shadow-sm text-xs text-slate-700 font-mono">
+                  <td className="py-3.5 px-5">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-mono">
                       <GitBranch className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                       <span className="truncate max-w-[140px]">
                         {flows.find((f) => f.id === prod.processFlowId)?.name ||
@@ -771,34 +834,25 @@ export default function ProductsPage() {
                       </span>
                     </div>
                   </td>
-                  <td className="py-4 px-6">
+                  <td className="py-3.5 px-5">
                     <button
                       onClick={() => toggleStatus(prod.id)}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
                         prod.isActive
                           ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-                          : "bg-red-50 border-red-200 text-red-700 hover:bg-red-100"
+                          : "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100"
                       }`}
                     >
-                      {prod.isActive ? (
-                        <>
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Active</span>
-                        </>
-                      ) : (
-                        <>
-                          <XCircle className="w-3.5 h-3.5" />
-                          <span>Inactive</span>
-                        </>
-                      )}
+                      <span className={`w-2 h-2 rounded-full ${prod.isActive ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                      <span>{prod.isActive ? "Active" : "Inactive"}</span>
                     </button>
                   </td>
-                  <td className="py-4 px-6 text-right">
+                  <td className="py-3.5 px-5 text-right">
                     <div className="flex items-center justify-end gap-1.5">
                       <button
                         onClick={() => handleViewCard(prod)}
                         title="View & Print PCB Specification Card"
-                        className="p-2 bg-white border border-slate-200 hover:bg-slate-50 text-blue-600 hover:text-blue-700 rounded-lg transition-colors inline-flex items-center gap-1 text-xs font-medium shadow-sm"
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-blue-700 border border-slate-200 rounded-xl transition-all inline-flex items-center gap-1 text-xs font-medium shadow-2xs"
                       >
                         <Eye className="w-3.5 h-3.5" />
                         <span className="hidden lg:inline">Card</span>
@@ -807,7 +861,7 @@ export default function ProductsPage() {
                       <button
                         onClick={() => handleOpenHistory(prod)}
                         title="View Revision History & Traceability"
-                        className="p-2 bg-white border border-slate-200 hover:bg-slate-50 text-sky-600 hover:text-sky-700 rounded-lg transition-colors inline-flex items-center gap-1 text-xs font-medium shadow-sm"
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-sky-700 border border-slate-200 rounded-xl transition-all inline-flex items-center gap-1 text-xs font-medium shadow-2xs"
                       >
                         <History className="w-3.5 h-3.5" />
                         <span className="hidden lg:inline">Revs</span>
@@ -817,7 +871,7 @@ export default function ProductsPage() {
                         <button
                           onClick={() => handleOpenNewRevision(prod)}
                           title="Create New Revision (Rev-XX)"
-                          className="p-2 bg-white border border-slate-200 hover:bg-slate-50 text-emerald-600 hover:text-emerald-700 rounded-lg transition-colors inline-flex items-center gap-1 text-xs font-medium shadow-sm"
+                          className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-emerald-700 border border-slate-200 rounded-xl transition-all inline-flex items-center gap-1 text-xs font-medium shadow-2xs"
                         >
                           <GitBranch className="w-3.5 h-3.5" />
                           <span className="hidden lg:inline">+Rev</span>
@@ -827,9 +881,9 @@ export default function ProductsPage() {
                       <button
                         onClick={() => handleOpenEdit(prod)}
                         title="Edit Spec Card"
-                        className="p-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded-lg transition-colors inline-flex items-center gap-1 text-xs font-medium shadow-sm"
+                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl transition-all inline-flex items-center gap-1 text-xs font-medium shadow-2xs"
                       >
-                        <Edit2 className="w-3.5 h-3.5" />
+                        <Edit2 className="w-3.5 h-3.5 text-amber-600" />
                       </button>
                     </div>
                   </td>

@@ -571,25 +571,55 @@ CREATE INDEX idx_pos_customer_status ON customer_pos(customer_id, status);
 
 ---
 
-## 9. Open Items to Confirm Before Finalizing (unresolved from both drafts + new from merge)
+---
 
-1. **Rework loops** — is a rejected quantity ever routed *back* to an earlier stage, or does it always exit the flow? Current schema assumes rejected qty exits. If rework is needed, `stage_movement_logs` needs a `reworked_to_stage_id` column, and `process_flow_steps` needs to permit non-linear/backward movement.
-2. **Multi-line POs** — one PO ↔ one Product is assumed, matching the client's example (`P001` → `D001`). If a PO can cover multiple products, `customer_pos` needs a child `po_line_items` table instead of embedding `product_id`/`order_qty` directly.
-3. **Pricing/Accounts** — multi-currency and pricing fields are intentionally omitted; scope for an Accounts module is unconfirmed. Add a separate `pricing` extension table later rather than overloading `customer_pos`.
-4. **RBAC granularity** — full `roles`/`permissions`/`role_permissions` was chosen for flexibility, but if the client wants a leaner Phase 1, a fixed `user_role` ENUM (`ADMIN`, `PRODUCTION_MANAGER`, `PROCESS_USER`, `DISPATCH_USER`) on `users` directly is a simpler, valid fallback — swap `role_id` for a `role` enum column and drop `roles`/`permissions`/`role_permissions`.
-5. **Notification channel** — `notifications` currently models *what* was sent and to whom, not *how* (email/SMS/push/in-app). Add a `channel` column once the client confirms which channels are in scope.
-6. **QR code content** — should the QR encode the raw `id`/`sub_job_card_no`, or a signed/opaque token (to prevent someone forging a scan URL)? Recommend a signed token for anything reachable without login.
-7. **Multi-factory / multi-tenant** — out of scope for Phase 1 per both original drafts; all entities currently live in a single schema.
+## 9. Multi-Product Purchase Order Architecture (Migration Specification)
+
+Phase 1 assumes **1 PO ↔ 1 Product** (`P001` → `D001`), embedding `product_id` and `order_qty` directly on `customer_pos`. 
+
+When transitioning to **Multi-Product Purchase Orders** (where a customer issues a single PO covering multiple PCB part numbers, e.g. Main Board + Display Board), the schema migrates cleanly using a child `customer_po_items` table:
+
+```sql
+-- Multi-Product PO Line Items Table
+CREATE TABLE customer_po_items (
+    id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    po_id                   UUID NOT NULL REFERENCES customer_pos(id) ON DELETE CASCADE,
+    line_item_no            INT NOT NULL,                  -- 1, 2, 3...
+    product_id              UUID NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+    order_qty               INT NOT NULL CHECK (order_qty > 0),
+    unit_price              DECIMAL(12,2),
+    expected_delivery_date  DATE,
+    status                  po_status NOT NULL DEFAULT 'OPEN',
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (po_id, line_item_no)
+);
+
+-- Note: Job Cards link to customer_po_items.id instead of customer_pos.id
+ALTER TABLE job_cards ADD COLUMN po_item_id UUID REFERENCES customer_po_items(id);
+```
 
 ---
 
-## 10. Next Steps
+## 10. Sync with Production Code Enhancements (`schema.prisma`)
 
-1. Resolve §9 with the client — items 1, 2, and 4 affect core table structure and are expensive to retrofit after data exists.
-2. Set up migrations (Prisma/TypeORM/Sequelize for Node, or Django/SQLAlchemy for Python) following the creation order in §5.
-3. Seed master data before building any UI on top of this: `process_stages`, `roles`, `permissions`, `role_permissions`, `departments`.
-4. Build the **Stage Engine service** — the core logic for split/forward/reject at a stage, enforcing the `sub_job_cards.qty` sum constraint (§6) and writing to `stage_movement_logs`. Unit test this thoroughly before wiring up any UI or mobile scanning flow.
-5. Build **QR generation & resolution** — generate `qr_code_value` (and image) at Job Card / Sub-Job Card creation; resolve a scanned value back to a record for both the desktop and mobile scanning flows.
-6. Build the **notification dispatcher** — trigger a `DISPATCH_ALERT` row on gate dispatch and a `DELIVERY_CONFIRMED` row on delivery update, per flow step 8.
-7. Build the **reporting layer** on the §7 views, plus a nightly job to populate `daily_report_snapshots` for dashboard performance.
-8. Revoke `UPDATE`/`DELETE` grants on `stage_movement_logs` for the application's DB role once the service layer is stable.
+The production Prisma schema (`backend/prisma/schema.prisma`) includes four crucial production enhancements built on top of this specification:
+
+1. **PCB Gerber Revision Control (`products` table):**
+   * Added `revisionNo` (e.g. `Rev-00`, `Rev-01`), `parentProductId` (self-referencing FK), `isCurrentRevision`, and `revisionReason`.
+2. **QC Hold & Review Status (`sub_job_cards` & `stage_movement_logs`):**
+   * Added `qtyHold`, `qcReviewStatus` (`"NOT_APPLICABLE"`, `"HOLD_PENDING_REVIEW"`, `"PASSED"`, `"REWORK_ROUTED"`), `qcReviewedById`, and `qcRemarks`.
+3. **Idempotency Key for Mobile Scanning (`stage_movement_logs`):**
+   * Added `clientRequestId` (Unique VARCHAR) to guarantee offline mobile scans retried over patchy Wi-Fi never insert duplicate movement logs.
+4. **Explicit 10-Role Factory Enum (`RoleCode` Enum):**
+   * Defined 10 explicit factory roles (`SUPER_ADMIN`, `SALES_PO_EXECUTIVE`, `PRODUCT_ENGINEER`, `PRODUCTION_PLANNER`, `PROCESS_OPERATOR`, `QC_OFFICER`, `STORE_DISPATCH`, `ACCOUNTS_FINANCE`, `MIS_VIEWER`, `CUSTOMER`).
+
+---
+
+## 11. Next Steps
+
+1. Resolve open items with the client before locking migration scripts.
+2. Set up Prisma migrations following the creation order in §5.
+3. Seed master data before building any UI: `process_stages`, `roles`, `permissions`, `role_permissions`, `departments`.
+4. Build the **Stage Engine service** — enforcing `sub_job_cards.qty` constraints and writing append-only `stage_movement_logs`.
+5. Revoke `UPDATE`/`DELETE` grants on `stage_movement_logs` for the app's DB role once the service layer is stable.
+

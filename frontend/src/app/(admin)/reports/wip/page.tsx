@@ -1,24 +1,29 @@
-"use client";
+'use client';
 
-import React, { useEffect, useState } from "react";
-import { Download, RefreshCw, BarChart2 } from "lucide-react";
+import React, { useEffect, useState } from 'react';
+import { Layers, Download, RefreshCw, ArrowLeft } from 'lucide-react';
 
-export default function WipPage() {
+export default function WipReportPage() {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchReport = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem("token");
-      const headers = { Authorization: `Bearer ${token}` };
-      const res = await fetch("http://localhost:3001/api/v1/reports/wip", {
-        headers,
-      });
-      const json = await res.json();
-      setData(json);
+      const token = localStorage.getItem('token');
+      const headers = { 'Authorization': `Bearer ${token}` };
+      const res = await fetch('http://localhost:3001/api/v1/reports/wip', { headers });
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json)) setData(json);
+        else if (json && Array.isArray(json.data)) setData(json.data);
+        else setData([]);
+      } else {
+        setData([]);
+      }
     } catch (error) {
       console.error(error);
+      setData([]);
     } finally {
       setLoading(false);
     }
@@ -29,88 +34,87 @@ export default function WipPage() {
   }, []);
 
   const exportCsv = () => {
-    if (data.length === 0) return;
-    const headers = ["Stage Name", "Total Active Lots", "Total Quantity"];
+    if (!Array.isArray(data) || data.length === 0) return;
+    const headers = ['Stage Code', 'Stage Name', 'WIP Quantity (PCS)', 'Sub-Job Lots'];
     const csvContent = [
-      headers.join(","),
-      ...data.map((r) => `${r.stageName},${r.totalLots},${r.totalQty}`),
-    ].join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
+      headers.join(','),
+      ...data.map(r => `${r.stageCode || ''},${r.stageName || ''},${r.wipQty || 0},${r.subJobCardsCount || 0}`)
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `wip_report_${new Date().toISOString().split("T")[0]}.csv`;
+    link.download = `wip_report_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
 
+  const safeData = Array.isArray(data) ? data : [];
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <BarChart2 className="text-cyan-600 w-6 h-6" /> Pending WIP
-          </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Real-time work-in-progress inventory across all stages.
-          </p>
+    <div className="space-y-6 p-6 max-w-[1400px] mx-auto pb-16 bg-slate-100 min-h-screen text-slate-900 font-sans">
+      <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <a href="/reports" className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors shrink-0">
+            <ArrowLeft className="w-5 h-5" />
+          </a>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight">Pending Stage WIP Monitor Report</h1>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-cyan-50 text-cyan-700 font-semibold border border-cyan-200">
+                Stage Density Audit
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">Real-time work-in-progress quantity & lot count at each manufacturing stage.</p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={fetchReport}
-            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-lg text-xs flex items-center gap-2 shadow-sm font-bold"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />{" "}
-            Refresh
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={fetchReport} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition-all inline-flex items-center gap-2 shadow-2xs">
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
           </button>
-          <button
-            onClick={exportCsv}
-            className="bg-cyan-50 border border-cyan-200 hover:bg-cyan-100 text-cyan-700 px-3 py-2 rounded-lg text-xs flex items-center gap-2 shadow-sm font-bold"
-          >
-            <Download className="w-4 h-4" /> Export CSV
+          <button onClick={exportCsv} className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-xl text-xs transition-all inline-flex items-center gap-2 shadow-sm">
+            <Download className="w-4 h-4" />
+            <span>Export CSV</span>
           </button>
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 shadow-sm rounded-xl overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-700">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-xs">
-              <tr>
-                <th className="px-6 py-4 font-semibold">Process Stage</th>
-                <th className="px-6 py-4 font-semibold text-right">
-                  Active Lots
-                </th>
-                <th className="px-6 py-4 font-semibold text-right text-cyan-700">
-                  Total WIP Qty
-                </th>
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-mono uppercase tracking-wider text-slate-500">
+                <th className="py-3.5 px-4 whitespace-nowrap">Stage Code</th>
+                <th className="py-3.5 px-4">Stage Name</th>
+                <th className="py-3.5 px-4 text-right">WIP Quantity</th>
+                <th className="py-3.5 px-4 text-right">Sub-Job Lots</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 text-xs">
               {loading ? (
                 <tr>
-                  <td colSpan={3} className="text-center py-8 text-slate-500">
-                    Loading data...
+                  <td colSpan={4} className="py-12 text-center text-slate-400">
+                    <RefreshCw className="w-6 h-6 animate-spin text-cyan-500 mx-auto mb-2" />
+                    <p className="font-medium text-xs">Loading WIP report data...</p>
                   </td>
                 </tr>
-              ) : data.length === 0 ? (
+              ) : safeData.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="text-center py-8 text-slate-500">
-                    No active WIP found
+                  <td colSpan={4} className="py-12 text-center text-slate-400">
+                    <Layers className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="font-medium text-sm">No WIP data found.</p>
                   </td>
                 </tr>
               ) : (
-                data.map((row, i) => (
-                  <tr
-                    key={i}
-                    className="hover:bg-slate-50/50 transition-colors"
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap text-slate-900 font-bold">
-                      {row.stageName}
+                safeData.map((row: any, i: number) => (
+                  <tr key={i} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3.5 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">
+                      <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200">{row.stageCode || 'STG'}</span>
                     </td>
-                    <td className="px-6 py-4 text-right">{row.totalLots}</td>
-                    <td className="px-6 py-4 text-right text-cyan-600 font-bold">
-                      {row.totalQty}
-                    </td>
+                    <td className="py-3.5 px-4 font-semibold text-slate-900">{row.stageName}</td>
+                    <td className="py-3.5 px-4 text-right font-mono font-bold text-cyan-700">{row.wipQty?.toLocaleString()} pcs</td>
+                    <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900">{row.subJobCardsCount || 0} Lots</td>
                   </tr>
                 ))
               )}

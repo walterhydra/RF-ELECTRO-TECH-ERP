@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Download, RefreshCw, Truck } from 'lucide-react';
-import { format } from 'date-fns';
+import { Truck, Download, RefreshCw, ArrowLeft } from 'lucide-react';
 
 export default function DispatchReportPage() {
   const [data, setData] = useState<any[]>([]);
@@ -14,10 +13,17 @@ export default function DispatchReportPage() {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
       const res = await fetch('http://localhost:3001/api/v1/reports/dispatch', { headers });
-      const json = await res.json();
-      setData(json);
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json)) setData(json);
+        else if (json && Array.isArray(json.data)) setData(json.data);
+        else setData([]);
+      } else {
+        setData([]);
+      }
     } catch (error) {
       console.error(error);
+      setData([]);
     } finally {
       setLoading(false);
     }
@@ -28,11 +34,11 @@ export default function DispatchReportPage() {
   }, []);
 
   const exportCsv = () => {
-    if (data.length === 0) return;
-    const headers = ['Job Card No', 'Customer', 'Product', 'Dispatched Qty', 'Destination', 'Status', 'Dispatched At', 'Delivered At'];
+    if (!Array.isArray(data) || data.length === 0) return;
+    const headers = ['Dispatch No', 'Customer', 'Vehicle No', 'Qty Dispatched', 'Status', 'Date'];
     const csvContent = [
       headers.join(','),
-      ...data.map(r => `${r.jobCard?.jobCardNo},${r.jobCard?.customerPO?.customer?.companyName},${r.jobCard?.product?.name},${r.dispatchedQty},"${r.destination}",${r.deliveryStatus},${r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'N/A'},${r.deliveredAt ? new Date(r.deliveredAt).toLocaleDateString() : 'N/A'}`)
+      ...data.map(r => `${r.dispatchNo || ''},${r.customerName || ''},${r.vehicleNo || ''},${r.qtyDispatched || 0},${r.status || ''},${r.dispatchDate ? new Date(r.dispatchDate).toLocaleDateString() : ''}`)
     ].join('\n');
     
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -42,61 +48,76 @@ export default function DispatchReportPage() {
     link.click();
   };
 
+  const safeData = Array.isArray(data) ? data : [];
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Truck className="text-purple-400 w-6 h-6" /> Dispatch Status
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">Real-time status of dispatched goods and deliveries.</p>
+    <div className="space-y-6 p-6 max-w-[1400px] mx-auto pb-16 bg-slate-100 min-h-screen text-slate-900 font-sans">
+      <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <a href="/reports" className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors shrink-0">
+            <ArrowLeft className="w-5 h-5" />
+          </a>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight">Dispatch & Delivery History Report</h1>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-amber-50 text-amber-800 font-semibold border border-amber-200">
+                Gate Pass Audit
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">Challan history, gate pass compliance, carrier tracking & delivered PCB volumes.</p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={fetchReport} className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-lg text-xs flex items-center gap-2">
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={fetchReport} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition-all inline-flex items-center gap-2 shadow-2xs">
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
           </button>
-          <button onClick={exportCsv} className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded-lg text-xs flex items-center gap-2">
-            <Download className="w-4 h-4" /> Export CSV
+          <button onClick={exportCsv} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all inline-flex items-center gap-2 shadow-sm">
+            <Download className="w-4 h-4" />
+            <span>Export CSV</span>
           </button>
         </div>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="bg-slate-950 text-slate-400 uppercase text-xs">
-              <tr>
-                <th className="px-6 py-4 font-semibold">Job Card No</th>
-                <th className="px-6 py-4 font-semibold">Customer</th>
-                <th className="px-6 py-4 font-semibold">Product</th>
-                <th className="px-6 py-4 font-semibold text-right">Dispatched Qty</th>
-                <th className="px-6 py-4 font-semibold">Status</th>
-                <th className="px-6 py-4 font-semibold">Dispatched At</th>
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-mono uppercase tracking-wider text-slate-500">
+                <th className="py-3.5 px-4 whitespace-nowrap">Challan / Gate Pass #</th>
+                <th className="py-3.5 px-4">Customer Company</th>
+                <th className="py-3.5 px-4">Vehicle / LR #</th>
+                <th className="py-3.5 px-4 text-right">Dispatched Qty</th>
+                <th className="py-3.5 px-4 whitespace-nowrap">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/50">
+            <tbody className="divide-y divide-slate-100 text-xs">
               {loading ? (
-                <tr><td colSpan={6} className="text-center py-8 text-slate-500">Loading data...</td></tr>
-              ) : data.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-8 text-slate-500">No dispatch records found</td></tr>
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-slate-400">
+                    <RefreshCw className="w-6 h-6 animate-spin text-amber-500 mx-auto mb-2" />
+                    <p className="font-medium text-xs">Loading dispatch report data...</p>
+                  </td>
+                </tr>
+              ) : safeData.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-slate-400">
+                    <Truck className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="font-medium text-sm">No dispatch records found.</p>
+                  </td>
+                </tr>
               ) : (
-                data.map((row, i) => (
-                  <tr key={i} className="hover:bg-slate-800/50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-white font-medium">{row.jobCard?.jobCardNo}</td>
-                    <td className="px-6 py-4">{row.jobCard?.customerPO?.customer?.companyName}</td>
-                    <td className="px-6 py-4">{row.jobCard?.product?.name}</td>
-                    <td className="px-6 py-4 text-right text-purple-400 font-bold">{row.dispatchedQty}</td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                        row.deliveryStatus === 'DELIVERED' ? 'bg-emerald-500/20 text-emerald-400' :
-                        row.deliveryStatus === 'IN_TRANSIT' ? 'bg-amber-500/20 text-amber-400' :
-                        'bg-slate-800 text-slate-300'
-                      }`}>
-                        {row.deliveryStatus}
+                safeData.map((row: any, i: number) => (
+                  <tr key={i} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3.5 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">{row.dispatchNo}</td>
+                    <td className="py-3.5 px-4 font-semibold text-slate-900">{row.customerName}</td>
+                    <td className="py-3.5 px-4 font-mono text-slate-600">{row.vehicleNo || '—'}</td>
+                    <td className="py-3.5 px-4 text-right font-mono font-bold text-amber-800">{row.qtyDispatched?.toLocaleString()} pcs</td>
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        {row.status || 'DISPATCHED'}
                       </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {row.createdAt ? format(new Date(row.createdAt), 'dd MMM yyyy HH:mm') : 'N/A'}
                     </td>
                   </tr>
                 ))

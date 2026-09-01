@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Calendar, Download, RefreshCw } from 'lucide-react';
+import { Calendar, Download, RefreshCw, ArrowLeft, TrendingUp, Cpu } from 'lucide-react';
 
 export default function DailyProductionPage() {
   const [data, setData] = useState<any[]>([]);
@@ -13,10 +13,17 @@ export default function DailyProductionPage() {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
       const res = await fetch('http://localhost:3001/api/v1/reports/daily-production', { headers });
-      const json = await res.json();
-      setData(json);
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json)) setData(json);
+        else if (json && Array.isArray(json.data)) setData(json.data);
+        else setData([]);
+      } else {
+        setData([]);
+      }
     } catch (error) {
       console.error(error);
+      setData([]);
     } finally {
       setLoading(false);
     }
@@ -27,11 +34,11 @@ export default function DailyProductionPage() {
   }, []);
 
   const exportCsv = () => {
-    if (data.length === 0) return;
+    if (!Array.isArray(data) || data.length === 0) return;
     const headers = ['Date', 'Process Stage', 'Qty Received', 'Qty Processed', 'Qty Forwarded', 'Qty Rejected'];
     const csvContent = [
       headers.join(','),
-      ...data.map(r => `${r.date},${r.stageName},${r.qtyReceived},${r.qtyProcessed},${r.qtyForwarded},${r.qtyRejected}`)
+      ...data.map(r => `${r.date || ''},${r.stageName || ''},${r.qtyReceived || 0},${r.qtyProcessed || 0},${r.qtyForwarded || 0},${r.qtyRejected || 0}`)
     ].join('\n');
     
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -41,52 +48,86 @@ export default function DailyProductionPage() {
     link.click();
   };
 
+  const safeData = Array.isArray(data) ? data : [];
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Calendar className="text-emerald-400 w-6 h-6" /> Daily Production
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">Output and productivity per process stage over time.</p>
+    <div className="space-y-6 p-6 max-w-[1400px] mx-auto pb-16 bg-slate-100 min-h-screen text-slate-900 font-sans">
+      <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <a
+            href="/reports"
+            className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors shrink-0"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </a>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight">Daily Production Output Report</h1>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200">
+                Shift Output Audit
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Daily panel processing throughput, stage-wise productivity & scrap loss metrics.
+            </p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={fetchReport} className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-lg text-xs flex items-center gap-2">
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={fetchReport}
+            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition-all inline-flex items-center gap-2 shadow-2xs"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
           </button>
-          <button onClick={exportCsv} className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-lg text-xs flex items-center gap-2">
-            <Download className="w-4 h-4" /> Export CSV
+          <button
+            onClick={exportCsv}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-all inline-flex items-center gap-2 shadow-sm"
+          >
+            <Download className="w-4 h-4" />
+            <span>Export CSV</span>
           </button>
         </div>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-300">
-            <thead className="bg-slate-950 text-slate-400 uppercase text-xs">
-              <tr>
-                <th className="px-6 py-4 font-semibold">Date</th>
-                <th className="px-6 py-4 font-semibold">Process Stage</th>
-                <th className="px-6 py-4 font-semibold text-right">Received</th>
-                <th className="px-6 py-4 font-semibold text-right text-indigo-400">Processed</th>
-                <th className="px-6 py-4 font-semibold text-right text-emerald-400">Forwarded</th>
-                <th className="px-6 py-4 font-semibold text-right text-rose-400">Rejected</th>
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-mono uppercase tracking-wider text-slate-500">
+                <th className="py-3.5 px-4 whitespace-nowrap">Date</th>
+                <th className="py-3.5 px-4">Process Stage</th>
+                <th className="py-3.5 px-4 text-right">Received</th>
+                <th className="py-3.5 px-4 text-right">Processed</th>
+                <th className="py-3.5 px-4 text-right">Forwarded</th>
+                <th className="py-3.5 px-4 text-right">Rejected</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/50">
+            <tbody className="divide-y divide-slate-100 text-xs">
               {loading ? (
-                <tr><td colSpan={6} className="text-center py-8 text-slate-500">Loading data...</td></tr>
-              ) : data.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-8 text-slate-500">No production data found</td></tr>
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-slate-400">
+                    <RefreshCw className="w-6 h-6 animate-spin text-emerald-500 mx-auto mb-2" />
+                    <p className="font-medium text-xs">Loading production report...</p>
+                  </td>
+                </tr>
+              ) : safeData.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-slate-400">
+                    <Calendar className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <p className="font-medium text-sm">No production data found for the selected period.</p>
+                  </td>
+                </tr>
               ) : (
-                data.map((row, i) => (
-                  <tr key={i} className="hover:bg-slate-800/50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-white font-medium">{row.date}</td>
-                    <td className="px-6 py-4 font-medium text-slate-200">{row.stageName}</td>
-                    <td className="px-6 py-4 text-right">{row.qtyReceived}</td>
-                    <td className="px-6 py-4 text-right text-indigo-400 font-bold">{row.qtyProcessed}</td>
-                    <td className="px-6 py-4 text-right text-emerald-400 font-bold">{row.qtyForwarded}</td>
-                    <td className="px-6 py-4 text-right text-rose-400 font-bold">{row.qtyRejected}</td>
+                safeData.map((row: any, i: number) => (
+                  <tr key={i} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3.5 px-4 font-mono font-bold text-slate-900 whitespace-nowrap">{row.date}</td>
+                    <td className="py-3.5 px-4 font-semibold text-slate-900">{row.stageName}</td>
+                    <td className="py-3.5 px-4 text-right font-mono text-slate-700">{row.qtyReceived?.toLocaleString()}</td>
+                    <td className="py-3.5 px-4 text-right font-mono font-bold text-blue-700">{row.qtyProcessed?.toLocaleString()}</td>
+                    <td className="py-3.5 px-4 text-right font-mono font-bold text-emerald-700">{row.qtyForwarded?.toLocaleString()}</td>
+                    <td className="py-3.5 px-4 text-right font-mono font-bold text-rose-700">{row.qtyRejected?.toLocaleString()}</td>
                   </tr>
                 ))
               )}

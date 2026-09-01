@@ -471,19 +471,69 @@ Every row written here also lands in the `notifications` table (per the DB schem
 
 ---
 
-## 12. Rate Limiting & Abuse Protection
+## 14. PDF Generation & Document Export Endpoints
+
+| Method | Endpoint | Description | Access |
+|---|---|---|---|
+| GET | `/job-cards/:id/traveler-pdf` | Download printable Job Card Traveler Sheet PDF (with QR Code & Stage Checklist) | `admin`, `production_manager`, `process_user` |
+| GET | `/dispatches/:id/delivery-challan-pdf` | Download printable Delivery Challan & Gate Pass PDF (with packing list & signature block) | `admin`, `production_manager`, `dispatch_user` |
+
+### 14.1 Job Card Traveler Sheet PDF Spec — `GET /job-cards/:id/traveler-pdf`
+
+Generates a physical "Job Card Traveler Sheet" PDF attached to the PCB panel bin on the shop floor.
+
+**Query Parameters:**
+* `includeQrImage=true` (boolean, default: true)
+* `paperSize=A4` (string: `A4` or `Letter`)
+
+**Response — 200 (Binary File Stream)**
+* Header: `Content-Type: application/pdf`
+* Header: `Content-Disposition: attachment; filename="Traveler_JC001.pdf"`
+
+**PDF Document Contents:**
+1. **Header Block:** Company Logo, Job Card No (`JC001`), Order Date, Launch Date, Target Completion Date.
+2. **Scannable QR Code:** Embedded QR Code image encoding `qrCodeValue` (scannable via mobile PWA or webcam scanner).
+3. **Customer & Order Summary:** Customer PO No (`P001`), Customer Code, Panel Order Quantity, Units per Panel.
+4. **PCB Specification Grid:** Spec Card No (`D001`), Revision No (`Rev-00`), Layers, Thickness (mm), Copper Weight (oz), Solder Mask Color, Legend Print Color, Surface Finish, Special Instructions.
+5. **Stage Execution Checklist Table:** Pre-filled ordered stages from `process_flow_steps`:
+   - Columns: `Stage Seq`, `Stage Name`, `Department`, `Qty Received`, `Qty Processed`, `Qty Rejected`, `Operator Sign / Date`, `QC Approval`.
+
+---
+
+### 14.2 Delivery Challan & Gate Pass PDF Spec — `GET /dispatches/:id/delivery-challan-pdf`
+
+Generates a formal "Delivery Challan & Gate Pass" PDF required for material exit at the factory gate and courier delivery.
+
+**Query Parameters:**
+* `duplicateCopy=true` (boolean, default: false — prints Customer Copy & Driver Copy)
+
+**Response — 200 (Binary File Stream)**
+* Header: `Content-Type: application/pdf`
+* Header: `Content-Disposition: attachment; filename="Delivery_Challan_DISP-001.pdf"`
+
+**PDF Document Contents:**
+1. **Header Block:** RF ELECTRO TECH Company Details, GSTIN, Dispatch No (`DISP-001`), Gate Pass Date/Time.
+2. **Consignee & Shipping Details:** Customer Company Name, Billing Address, Shipping Address, Contact Person & Phone.
+3. **Transport & Logistics Information:** Vehicle Number, Courier / Delivery Partner Name, Driver Name & Mobile, Tracking / LR Number.
+4. **Dispatch Item Table:**
+   - Columns: `S.No`, `Job Card No`, `PO No`, `PCB Description`, `HSN Code`, `Dispatched Qty (Panels)`, `Total Units`, `Remarks`.
+5. **Signatory & Gate Block:** Gate-out Time, Security Guard Stamp, Driver Signature, Authorized Signatory Box.
+
+---
+
+## 15. Rate Limiting & Abuse Protection
 
 | Endpoint group | Limit |
 |---|---|
 | `/auth/login`, `/portal/auth/login` | 5 attempts / 15 min / IP, lockout + captcha after |
 | `/sub-job-cards/:id/stage-update` | 300 / min / user — generous, sized for floor-level QR scanning volume |
-| `/reports/export` | 20 / min / user — exports can be heavy |
+| `/reports/export`, `/*/pdf` | 20 / min / user — PDF exports can be heavy |
 | `/portal/*` | 60 / min / customer account |
 | All other authenticated endpoints | 120 / min / user (default) |
 
 ---
 
-## 13. Versioning & Change Management
+## 16. Versioning & Change Management
 
 - All internal endpoints prefixed `/api/v1`; portal endpoints `/api/v1/portal`. Breaking changes go to `/api/v2` — the old version stays live until the client confirms mobile app migration is complete.
 - Additive changes (new optional fields) don't require a version bump.
@@ -491,21 +541,22 @@ Every row written here also lands in the `notifications` table (per the DB schem
 
 ---
 
-## 14. Open Items Affecting API Design
+## 17. Open Items Affecting API Design
 
 1. **Process flow editability** — §3.2's `PATCH /process-flows/:id` is listed as blocked once a product using that flow has active job cards, mirroring the DB schema doc's snapshot-at-launch design (§9 item there). Confirm this is the desired UX rather than versioning flows.
-2. **Notification channel** — email/SMS/WhatsApp/in-app is still TBD; affects whether a channel-dispatch integration (Twilio, WhatsApp Business API, etc.) needs to be scoped now or later.
+2. **Notification channel** — WhatsApp Cloud API & Twilio integration contracts added in TRD §14; confirm channel credentials with client.
 3. **Third-party delivery confirmation** — can a courier confirm delivery directly via a limited external-facing endpoint (e.g. a signed one-time link), or is `PATCH /dispatches/:id/confirm-delivery` strictly internal `dispatch_user` only? Affects the auth model for that one flow.
-4. **Export format priority** — PDF vs. Excel first — affects which library gets built first for `/reports/export`.
+4. **Export format priority** — PDF traveler & delivery challan endpoints added in §14; PDF renderer engine (Puppeteer / PDFKit / HTML-PDF) locked.
 5. **Custom roles at runtime** — confirm whether Phase 1 truly only needs the seeded roles (§10 note) or whether admins need to define new roles/permission sets without a deploy.
 
 ---
 
-## 15. Next Steps
+## 18. Next Steps
 
-1. Resolve §14 with the client before the backend team locks endpoint contracts.
+1. Resolve §17 with the client before the backend team locks endpoint contracts.
 2. Generate an OpenAPI/Swagger spec from this document for auto-generated API docs and frontend type generation.
 3. Build and unit-test `POST /sub-job-cards/:id/stage-update` (§6) first — highest-risk, highest-traffic endpoint in the system. Cover: partial forward + split, full forward without split, rejection with/without reason, stage-mismatch 403, and idempotent retry via `clientRequestId`.
-4. Build the launch-time auto-create-if-not-split logic (§5) as its own tested unit, since it's the one place two different upstream user actions converge on the same code path.
+4. Build PDF generation controllers for Job Card Traveler (`GET /job-cards/:id/traveler-pdf`) and Delivery Challan (`GET /dispatches/:id/delivery-challan-pdf`).
 5. Set up a Postman/Insomnia collection mirroring this doc for manual QA during development.
 6. Cross-check every endpoint here against `PCB_ERP_Database_Schema_MERGED.md` once implementation starts — table/column names should need zero translation given the camelCase↔snake_case convention in §1.
+

@@ -431,7 +431,69 @@ Cross-referenced to the PRD's Milestones (§11 of the PRD).
 
 ---
 
-## 14. Technical Risks to Flag Early
+## 14. Third-Party Notification Service Architecture & API Specs
+
+To notify customers, account managers, and logistics managers when a Job Card is dispatched or delivered, the ERP implements an asynchronous notification dispatcher via BullMQ & Redis queues.
+
+```mermaid
+graph LR
+    Event["⚡ Trigger Event<br/>(Dispatch / Delivery)"]
+    Queue["📥 BullMQ Notification Queue"]
+    Dispatcher["⚙️ Notification Dispatcher Engine"]
+    
+    WA["💬 WhatsApp Business API<br/>(Meta Cloud API / Interakt)"]
+    SMS["📱 SMS Gateway<br/>(Twilio / Fast2SMS)"]
+    Email["📧 Email Service<br/>(AWS SES / SendGrid)"]
+
+    Event --> Queue
+    Queue --> Dispatcher
+    Dispatcher --> WA
+    Dispatcher --> SMS
+    Dispatcher --> Email
+```
+
+### 14.1 Provider Integrations & Contracts:
+
+1. **WhatsApp Business API (Meta Cloud API / Interakt / Wati):**
+   - **Trigger Events:** `DISPATCH_ALERT` (Gate-out), `DELIVERY_CONFIRMED` (Delivery completed).
+   - **Template Namespace:** `rf_electro_erp`
+   - **Sample Payload — `POST https://graph.facebook.com/v18.0/{PHONE_NUMBER_ID}/messages`:**
+     ```json
+     {
+       "messaging_product": "whatsapp",
+       "to": "919876543210",
+       "type": "template",
+       "template": {
+         "name": "dispatch_gateout_alert",
+         "language": { "code": "en_US" },
+         "components": [
+           {
+             "type": "body",
+             "parameters": [
+               { "type": "text", "text": "Acme Electronics" },
+               { "type": "text", "text": "DISP-001" },
+               { "type": "text", "text": "P001" },
+               { "type": "text", "text": "1000 Panels" },
+               { "type": "text", "text": "MH-04-AB-1234" }
+             ]
+           }
+         ]
+       }
+     }
+     ```
+
+2. **SMS Gateway API (Twilio / Fast2SMS):**
+   - **Use Case:** Fallback urgent alert when WhatsApp delivery fails or mobile data is disabled.
+   - **API Endpoint:** `POST https://api.twilio.com/2010-04-01/Accounts/{AccountSid}/Messages.json`
+   - **Body:** `"RF ELECTRO ERP: Order P001 (Dispatch DISP-001) has departed factory via vehicle MH-04-AB-1234."`
+
+3. **Email Notification Service (AWS SES / SendGrid / Nodemailer):**
+   - **Use Case:** Official Dispatch Challan PDF & Job Card completion report sent to Customer Purchase Team & Accounts.
+   - **Attachment:** Automated PDF Delivery Challan (`Delivery_Challan_DISP-001.pdf`).
+
+---
+
+## 15. Technical Risks to Flag Early
 
 1. **Stage Engine correctness** — partial-quantity splitting logic is easy to get wrong, and data-integrity bugs here mean wrong production numbers company-wide. Write thorough unit tests before building any UI on top of it.
 2. **Offline sync conflicts** — if two operators update the same sub-job-card while offline (should offline support be pulled into Phase 1), a conflict-resolution strategy is needed.
@@ -441,20 +503,21 @@ Cross-referenced to the PRD's Milestones (§11 of the PRD).
 
 ---
 
-## 15. Open Technical Decisions
+## 16. Open Technical Decisions
 
 1. **Mobile stack:** confirm whether offline scan queuing is needed for Phase 1, given intermittent factory-floor connectivity — this decides PWA (§3 default) vs. React Native, and how much of §10's offline design gets built now vs. later.
 2. **Concurrent user count** on the shop floor — needed to size the DB connection pool and API instance count correctly.
 3. **Report export volume/frequency** — decides whether report generation stays synchronous or is fully offloaded to the background worker (§7).
-4. **Notification channel** — Push/Email vs. SMS/WhatsApp (Twilio) — pending the client's answer in PRD §14.
-5. **Rejected-quantity rework** — if the client confirms rework should be supported (PRD §14, item 1), the Stage Engine (§5) needs a defined re-entry path back into the same stage; not built by default.
+4. **Notification channel:** WhatsApp Cloud API (primary) + Email (Challan PDF attachment) + Twilio SMS (fallback) contract locked in §14.
+5. **Rejected-quantity rework:** Backward rework loop (`isRework = true`) and FPY isolation rule documented in Master App Flow §4.7.
 
 ---
 
-## 16. Next Steps
+## 17. Next Steps
 
-1. Resolve the PRD's Open Questions (§14 of the PRD) — several directly affect this schema (e.g. PO↔Product cardinality, rejected-qty rework logic, mobile stack per §15 above).
+1. Resolve the PRD's Open Questions (§14 of the PRD) — several directly affect this schema (e.g. PO↔Product cardinality, rejected-qty rework logic, mobile stack per §16 above).
 2. Set up the repo, CI/CD, and dev/staging environments.
 3. Build the DB schema (§4) and run through it with sample data manually before writing API code.
 4. Build and unit-test the **Stage Engine (§5)** in isolation first — it's the highest-risk component in the whole system.
 5. Proceed per the Milestone breakdown (§13).
+

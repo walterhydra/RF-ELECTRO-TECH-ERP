@@ -9,8 +9,9 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['var(--font-inter)', 'sans-serif'],
-        display: ['var(--font-plex-condensed)', 'sans-serif'],
+        sans: ['Satoshi', 'Quicksand', 'var(--font-quicksand)', 'sans-serif'],
+        quicksand: ['Quicksand', 'Satoshi', 'sans-serif'],
+        display: ['Satoshi', 'Quicksand', 'sans-serif'],
         mono: ['var(--font-plex-mono)', 'monospace'],
       },
       keyframes: {
