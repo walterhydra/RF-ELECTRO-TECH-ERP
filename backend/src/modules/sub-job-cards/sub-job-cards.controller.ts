@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RbacGuard } from '../../common/guards/rbac.guard';
 import { StageScopeGuard } from '../../common/guards/stage-scope.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 import { SubJobCardStatus } from '@prisma/client';
 import { StageUpdateDto } from './sub-job-cards.dto';
 
@@ -16,6 +17,7 @@ export class SubJobCardsController {
   constructor(private readonly subJobCardsService: SubJobCardsService) {}
 
   @Get('qr-lookup/:qrValue')
+  @Public()
   @ApiOperation({ summary: 'Resolve any QR string or Barcode to its Job Card or Sub Job Card record' })
   async findByQrValue(@Param('qrValue') qrValue: string) {
     return this.subJobCardsService.findByQrValue(decodeURIComponent(qrValue));
@@ -28,6 +30,7 @@ export class SubJobCardsController {
   }
 
   @Get(':id/qr')
+  @Public()
   @ApiOperation({ summary: 'Get PNG data URL QR sticker image for Sub Job Card' })
   async getQrCodeImage(@Param('id') id: string) {
     return this.subJobCardsService.getQrCodeImage(id);

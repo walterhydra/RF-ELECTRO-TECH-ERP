@@ -189,6 +189,76 @@ async function main() {
   }
   console.log('✅ Seeded Default Process Flow Master');
 
+  // 7. Seed Sample Products & Open Customer POs
+  const product1 = await prisma.product.upsert({
+    where: { code_revisionNo: { code: 'PCB-MB-V2', revisionNo: 'Rev-00' } },
+    update: {},
+    create: {
+      specCardNo: 'D001',
+      name: 'Main Motherboard V2',
+      code: 'PCB-MB-V2',
+      pcbSize: '100x150mm',
+      layers: 4,
+      thicknessMm: 1.6,
+      copperWeight: '1oz',
+      solderMask: 'Green',
+      legend: 'White',
+      surfaceFinish: 'ENIG',
+      processFlowId: defaultFlow.id,
+      createdById: adminUser.id,
+    },
+  });
+
+  const product2 = await prisma.product.upsert({
+    where: { code_revisionNo: { code: 'D3633', revisionNo: 'Rev-00' } },
+    update: {},
+    create: {
+      specCardNo: 'D3633',
+      name: '3.3KW NEW DAUGHTER BOARD',
+      code: 'D3633',
+      pcbSize: '25x45mm',
+      layers: 2,
+      thicknessMm: 1.6,
+      copperWeight: '1oz',
+      solderMask: 'Green',
+      legend: 'White',
+      surfaceFinish: 'HAL',
+      processFlowId: defaultFlow.id,
+      createdById: adminUser.id,
+    },
+  });
+
+  await prisma.customerPO.upsert({
+    where: { poNo: 'PO-2026-001' },
+    update: {},
+    create: {
+      poNo: 'PO-2026-001',
+      customerId: customer.id,
+      productId: product1.id,
+      orderQty: 2500,
+      poDate: new Date('2026-07-01'),
+      expectedDeliveryDate: new Date('2026-08-15'),
+      status: 'OPEN',
+      createdById: adminUser.id,
+    },
+  });
+
+  await prisma.customerPO.upsert({
+    where: { poNo: 'PO-2026-004' },
+    update: {},
+    create: {
+      poNo: 'PO-2026-004',
+      customerId: customer.id,
+      productId: product2.id,
+      orderQty: 3500,
+      poDate: new Date('2026-08-01'),
+      expectedDeliveryDate: new Date('2026-09-30'),
+      status: 'OPEN',
+      createdById: adminUser.id,
+    },
+  });
+  console.log('✅ Seeded Sample Products & Open Customer POs');
+
   console.log('🎉 Seeding completed successfully!');
 }
 

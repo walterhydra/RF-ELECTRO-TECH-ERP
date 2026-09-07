@@ -39,10 +39,13 @@ export class JobCardsService {
     });
 
     let nextNum = 1;
-    if (lastJc && lastJc.jobCardNo.startsWith('JC')) {
-      const parsed = parseInt(lastJc.jobCardNo.replace('JC', ''), 10);
-      if (!isNaN(parsed)) {
-        nextNum = parsed + 1;
+    if (lastJc && lastJc.jobCardNo) {
+      const match = lastJc.jobCardNo.match(/\d+$/);
+      if (match) {
+        const parsed = parseInt(match[0], 10);
+        if (!isNaN(parsed)) {
+          nextNum = parsed + 1;
+        }
       }
     }
     const jobCardNo = `JC${String(nextNum).padStart(3, '0')}`;
@@ -146,14 +149,31 @@ export class JobCardsService {
     return jobCard;
   }
 
-  async splitJobCard(id: string, splits: { qty: number }[], createdById: string) {
+  async splitJobCard(id: string, splitsInput: any, createdById: string) {
     const jobCard = await this.findOne(id);
 
     if (jobCard.status !== JobCardStatus.CREATED && jobCard.status !== JobCardStatus.NOT_LAUNCHED) {
       throw new BadRequestException(`Cannot split Job Card that is already in status "${jobCard.status}". Splits can only occur before production launch.`);
     }
 
-    if (!splits || !Array.isArray(splits) || splits.length === 0) {
+    // Normalize splits payload format ({ splits: [...] }, { quantities: [...] }, or raw Array)
+    let rawSplits: any[] = [];
+    if (Array.isArray(splitsInput)) {
+      rawSplits = splitsInput;
+    } else if (splitsInput && Array.isArray(splitsInput.splits)) {
+      rawSplits = splitsInput.splits;
+    } else if (splitsInput && Array.isArray(splitsInput.quantities)) {
+      rawSplits = splitsInput.quantities;
+    }
+
+    const splits = rawSplits.map((item) => {
+      if (typeof item === 'number') return { qty: item };
+      if (typeof item === 'string') return { qty: parseInt(item, 10) || 0 };
+      if (item && typeof item.qty !== 'undefined') return { qty: Number(item.qty) };
+      return { qty: 0 };
+    });
+
+    if (!splits || splits.length === 0) {
       throw new BadRequestException('splits array is required and cannot be empty');
     }
 
@@ -209,6 +229,10 @@ export class JobCardsService {
 
     const firstStep = jobCard.processFlowMaster?.steps?.[0];
     const firstStageId = firstStep?.stageId || null;
+
+    if (!firstStageId) {
+      throw new BadRequestException('Cannot launch Job Card: The associated manufacturing process flow has no process stages configured.');
+    }
 
     return this.prisma.$transaction(async (tx) => {
       if (!jobCard.subJobCards || jobCard.subJobCards.length === 0) {

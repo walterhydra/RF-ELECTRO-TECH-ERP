@@ -389,8 +389,8 @@ export class SubJobCardsService {
               qtyProcessed: 0,
               qtyHold: 0,
               qtyRejected: 0,
-              status: SubJobCardStatus.PENDING_LAUNCH,
-              qrCodeValue: `QR-${newSubCardNo}-${Date.now()}`,
+              status: SubJobCardStatus.IN_STAGE,
+              qrCodeValue: `RFE-SJC-${newSubCardNo}-${Date.now().toString().slice(-4)}`,
               createdById: userId,
             },
           });

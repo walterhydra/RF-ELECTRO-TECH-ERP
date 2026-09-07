@@ -32,13 +32,23 @@ export default function MobileScanPage() {
         throw new Error(errData.message || `QR lookup failed (${res.status})`);
       }
 
-      const data = await res.json();
-      setLastResult(data);
+      const response = await res.json();
+      const resolvedItem = response.data || response;
+      setLastResult(resolvedItem);
 
-      // Navigate to stage-update with the resolved sub-job-card ID
-      if (data.id) {
+      // Determine the sub-job-card ID to navigate to
+      let targetId = '';
+      if (response.type === 'SUB_JOB_CARD' && resolvedItem.id) {
+        targetId = resolvedItem.id;
+      } else if (response.type === 'JOB_CARD' && resolvedItem.subJobCards && resolvedItem.subJobCards.length > 0) {
+        targetId = resolvedItem.subJobCards[0].id;
+      } else if (resolvedItem.id) {
+        targetId = resolvedItem.id;
+      }
+
+      if (targetId) {
         setTimeout(() => {
-          router.push(`/stage-update/${data.id}`);
+          router.push(`/stage-update/${targetId}`);
         }, 600);
       }
     } catch (err: any) {

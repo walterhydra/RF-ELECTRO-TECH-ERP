@@ -7,6 +7,11 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
+  @Get('dashboard-summary')
+  getDashboardSummary() {
+    return this.reportsService.getDashboardSummary();
+  }
+
   @Get('rejection-summary')
   getRejectionSummary() {
     return this.reportsService.getRejectionSummary();

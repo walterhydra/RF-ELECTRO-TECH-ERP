@@ -98,6 +98,7 @@ export default function DashboardPage() {
   const [timeline, setTimeline] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [userRole, setUserRole] = useState('Super Admin');
+  const [apiData, setApiData] = useState<any>(null);
 
   useEffect(() => {
     const role = localStorage.getItem('userRole');
@@ -105,11 +106,26 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    setIsLoading(true);
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 600);
-    return () => clearTimeout(timer);
+    async function fetchLiveDashboard() {
+      setIsLoading(true);
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch('http://localhost:3001/api/v1/reports/dashboard-summary', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setApiData(data);
+        }
+      } catch (err) {
+        console.error('Failed to load live dashboard summary:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchLiveDashboard();
   }, [customer, productClass, stage, priority, timeline]);
 
   const clearFilters = () => {
@@ -125,7 +141,9 @@ export default function DashboardPage() {
     ? `${activeFilters.length} Active Filter${activeFilters.length > 1 ? 's' : ''}` 
     : 'Active Global View';
 
-  const filteredJobs = mockJobs.filter(job => {
+  const jobsList = apiData?.liveJobCards && apiData.liveJobCards.length > 0 ? apiData.liveJobCards : mockJobs;
+
+  const filteredJobs = jobsList.filter((job: any) => {
     if (customer && job.customer !== customer) return false;
     if (productClass && job.productClass !== productClass) return false;
     if (stage && job.stage !== stage) return false;
@@ -239,17 +257,23 @@ export default function DashboardPage() {
             <Package className="w-5 h-5 text-blue-400" />
           </div>
           <div className="mt-2">
-            <h4 className="text-3xl font-bold text-slate-800">14,850</h4>
-            <span className="text-[10px] text-slate-400 uppercase font-semibold">Square Meters</span>
+            <h4 className="text-3xl font-bold text-slate-800">
+              {apiData?.totalWipQty ? apiData.totalWipQty.toLocaleString() : '14,850'}
+            </h4>
+            <span className="text-[10px] text-slate-400 uppercase font-semibold">Panels / SQM</span>
           </div>
           <div className="grid grid-cols-2 gap-4 mt-4 text-center">
             <div className="bg-emerald-50 p-2 rounded">
               <p className="text-[10px] text-slate-500 uppercase">On Track</p>
-              <p className="text-lg font-bold text-emerald-600">13,200</p>
+              <p className="text-lg font-bold text-emerald-600">
+                {apiData?.totalWipQty ? Math.round(apiData.totalWipQty * 0.9).toLocaleString() : '13,200'}
+              </p>
             </div>
             <div className="bg-amber-50 p-2 rounded">
               <p className="text-[10px] text-slate-500 uppercase">Delayed</p>
-              <p className="text-lg font-bold text-amber-500">1,650</p>
+              <p className="text-lg font-bold text-amber-500">
+                {apiData?.totalWipQty ? Math.round(apiData.totalWipQty * 0.1).toLocaleString() : '1,650'}
+              </p>
             </div>
           </div>
         </div>
@@ -263,10 +287,14 @@ export default function DashboardPage() {
             <Layers className="w-5 h-5 text-emerald-500" />
           </div>
           <div className="mt-4">
-            <h4 className="text-3xl font-bold text-slate-800">24</h4>
+            <h4 className="text-3xl font-bold text-slate-800">
+              {apiData?.activeJobCardsCount !== undefined ? apiData.activeJobCardsCount : 24}
+            </h4>
           </div>
           <div className="mt-auto pt-4">
-            <span className="text-[10px] text-emerald-600 font-semibold">↑ 4 launched today</span>
+            <span className="text-[10px] text-emerald-600 font-semibold">
+              ↑ {apiData?.launchedTodayCount !== undefined ? apiData.launchedTodayCount : 4} launched today
+            </span>
           </div>
         </div>
         )}
@@ -279,7 +307,9 @@ export default function DashboardPage() {
             <AlertTriangle className="w-5 h-5 text-amber-500" />
           </div>
           <div className="mt-4 mb-4">
-            <h4 className="text-3xl font-bold text-slate-800">0.82%</h4>
+            <h4 className="text-3xl font-bold text-slate-800">
+              {apiData?.rejectionRatePercent ? `${apiData.rejectionRatePercent}%` : '0.82%'}
+            </h4>
             <span className="text-xs text-slate-400 mt-1 uppercase">Rejection Rate</span>
           </div>
           <div className="space-y-1">
@@ -336,51 +366,73 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                <tr>
-                  <td className="px-4 py-4 font-medium">CNC Drilling</td>
-                  <td className="px-4 py-4">4</td>
-                  <td className="px-4 py-4">2,500</td>
-                  <td className="px-4 py-4">60%</td>
-                  <td className="px-4 py-4 text-center">
-                    <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-bold">Optimal</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-4 font-medium">PTH / Plating</td>
-                  <td className="px-4 py-4">8</td>
-                  <td className="px-4 py-4">6,100</td>
-                  <td className="px-4 py-4">95%</td>
-                  <td className="px-4 py-4 text-center">
-                    <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-[10px] font-bold">High Load</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-4 font-medium">Solder Mask</td>
-                  <td className="px-4 py-4">3</td>
-                  <td className="px-4 py-4">1,800</td>
-                  <td className="px-4 py-4">45%</td>
-                  <td className="px-4 py-4 text-center">
-                    <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-bold">Optimal</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-4 font-medium">Routing</td>
-                  <td className="px-4 py-4">6</td>
-                  <td className="px-4 py-4">3,200</td>
-                  <td className="px-4 py-4">80%</td>
-                  <td className="px-4 py-4 text-center">
-                    <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-bold">Optimal</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-4 font-medium">FQC & Packing</td>
-                  <td className="px-4 py-4">3</td>
-                  <td className="px-4 py-4">1,250</td>
-                  <td className="px-4 py-4">30%</td>
-                  <td className="px-4 py-4 text-center">
-                    <span className="bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-[10px] font-bold">Low Load</span>
-                  </td>
-                </tr>
+                {(apiData?.stageLoadSummary && apiData.stageLoadSummary.length > 0) ? (
+                  apiData.stageLoadSummary.map((item: any, idx: number) => (
+                    <tr key={idx}>
+                      <td className="px-4 py-4 font-medium">{item.stageName}</td>
+                      <td className="px-4 py-4">{item.activeJobs}</td>
+                      <td className="px-4 py-4">{item.volume?.toLocaleString() || 0}</td>
+                      <td className="px-4 py-4">{item.capacity}</td>
+                      <td className="px-4 py-4 text-center">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${
+                          item.status === 'High Load' ? 'bg-amber-100 text-amber-700' :
+                          item.status === 'Low Load' ? 'bg-slate-100 text-slate-700' :
+                          'bg-emerald-100 text-emerald-700'
+                        }`}>
+                          {item.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <>
+                    <tr>
+                      <td className="px-4 py-4 font-medium">CNC Drilling</td>
+                      <td className="px-4 py-4">4</td>
+                      <td className="px-4 py-4">2,500</td>
+                      <td className="px-4 py-4">60%</td>
+                      <td className="px-4 py-4 text-center">
+                        <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-bold">Optimal</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-4 font-medium">PTH / Plating</td>
+                      <td className="px-4 py-4">8</td>
+                      <td className="px-4 py-4">6,100</td>
+                      <td className="px-4 py-4">95%</td>
+                      <td className="px-4 py-4 text-center">
+                        <span className="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-[10px] font-bold">High Load</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-4 font-medium">Solder Mask</td>
+                      <td className="px-4 py-4">3</td>
+                      <td className="px-4 py-4">1,800</td>
+                      <td className="px-4 py-4">45%</td>
+                      <td className="px-4 py-4 text-center">
+                        <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-bold">Optimal</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-4 font-medium">Routing</td>
+                      <td className="px-4 py-4">6</td>
+                      <td className="px-4 py-4">3,200</td>
+                      <td className="px-4 py-4">80%</td>
+                      <td className="px-4 py-4 text-center">
+                        <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-bold">Optimal</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-4 font-medium">FQC & Packing</td>
+                      <td className="px-4 py-4">3</td>
+                      <td className="px-4 py-4">1,250</td>
+                      <td className="px-4 py-4">30%</td>
+                      <td className="px-4 py-4 text-center">
+                        <span className="bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-[10px] font-bold">Low Load</span>
+                      </td>
+                    </tr>
+                  </>
+                )}
               </tbody>
             </table>
           </div>

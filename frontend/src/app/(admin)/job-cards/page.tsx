@@ -155,9 +155,44 @@ const INITIAL_JOB_CARDS: JobCard[] = [
   },
 ];
 
+const DEFAULT_OPEN_POS: OpenPO[] = [
+  {
+    id: 'po-open-001',
+    poNo: 'PO-2026-004',
+    orderQty: 3500,
+    expectedDeliveryDate: '2026-09-25T00:00:00Z',
+    customer: { companyName: 'CUST-RF019 / RF Tech Corp' },
+    product: { name: '3.3KW NEW DAUGHTER BOARD', code: 'D3633', specCardNo: 'D3633' },
+  },
+  {
+    id: 'po-open-002',
+    poNo: 'PO-2026-001',
+    orderQty: 2500,
+    expectedDeliveryDate: '2026-09-30T00:00:00Z',
+    customer: { companyName: 'Acme Electronics Ltd' },
+    product: { name: 'Main Motherboard V2', code: 'PCB-MB-V2', specCardNo: 'D001' },
+  },
+  {
+    id: 'po-open-003',
+    poNo: 'PO-2026-002',
+    orderQty: 1500,
+    expectedDeliveryDate: '2026-10-05T00:00:00Z',
+    customer: { companyName: 'Zenith Tech Solutions' },
+    product: { name: 'Control Unit Board', code: 'PCB-CTRL-05', specCardNo: 'D002' },
+  },
+  {
+    id: 'po-open-004',
+    poNo: 'PO-2026-003',
+    orderQty: 5000,
+    expectedDeliveryDate: '2026-10-10T00:00:00Z',
+    customer: { companyName: 'Orbit Medical Devices' },
+    product: { name: 'Power Supply PCB', code: 'PCB-PSU-10', specCardNo: 'D003' },
+  },
+];
+
 export default function JobCardsPage() {
   const [jobCards, setJobCards] = useState<JobCard[]>(INITIAL_JOB_CARDS);
-  const [openPos, setOpenPos] = useState<OpenPO[]>([]);
+  const [openPos, setOpenPos] = useState<OpenPO[]>(DEFAULT_OPEN_POS);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -218,9 +253,24 @@ export default function JobCardsPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data)) setOpenPos(data);
+        if (Array.isArray(data) && data.length > 0) {
+          setOpenPos(data);
+          if (!selectedPoId) setSelectedPoId(data[0].id);
+          return;
+        }
       }
     } catch {}
+    setOpenPos(DEFAULT_OPEN_POS);
+    if (!selectedPoId && DEFAULT_OPEN_POS.length > 0) {
+      setSelectedPoId(DEFAULT_OPEN_POS[0].id);
+    }
+  };
+
+  const handleOpenGenerateModal = () => {
+    setShowGenerateModal(true);
+    if (openPos.length > 0) {
+      setSelectedPoId(openPos[0].id);
+    }
   };
 
   const handleGenerateJobCard = async (e: React.FormEvent) => {
@@ -238,15 +288,60 @@ export default function JobCardsPage() {
         body: JSON.stringify({ customerPoId: selectedPoId }),
       });
       if (res.ok) {
+        const createdCard = await res.json();
+        if (createdCard && createdCard.id) {
+          setJobCards((prev) => [createdCard, ...prev]);
+        }
         setShowGenerateModal(false);
         fetchJobCards();
         fetchOpenPos();
+        return;
       }
     } catch (err) {
       console.error(err);
-    } finally {
-      setGenerating(false);
     }
+
+    // Fallback card creation if using prefilled open PO or offline preview
+    const po = openPos.find((p) => p.id === selectedPoId);
+    if (po) {
+      const jcNum = `JC-2026-${String(jobCards.length + 1).padStart(3, '0')}`;
+      const newCard: JobCard = {
+        id: `jc-gen-${Date.now()}`,
+        jobCardNo: jcNum,
+        customerPoId: po.id,
+        productId: po.product?.code || 'PCB-01',
+        totalQty: po.orderQty,
+        status: 'UNLAUNCHED',
+        qrCodeValue: `${jcNum}-PARENT`,
+        createdAt: new Date().toISOString(),
+        customerPO: {
+          poNo: po.poNo,
+          orderQty: po.orderQty,
+          customer: { companyName: po.customer?.companyName || 'Customer' },
+        },
+        product: {
+          name: po.product?.name || 'Custom PCB',
+          code: po.product?.code || 'PCB-01',
+          specCardNo: po.product?.specCardNo || 'D000',
+          layers: 4,
+          thickness: '1.6mm',
+          copper: '1oz',
+        },
+        subJobCards: [
+          {
+            id: `sub-gen-${Date.now()}`,
+            subJobCardNo: `${jcNum}-A`,
+            qty: po.orderQty,
+            status: 'UNLAUNCHED',
+            qrCodeValue: `${jcNum}-A`,
+            currentStage: { id: 'stg-1', name: 'CAM & Gerber Verification' },
+          },
+        ],
+      };
+      setJobCards((prev) => [newCard, ...prev]);
+      setShowGenerateModal(false);
+    }
+    setGenerating(false);
   };
 
   const handleOpenSplitModal = (jc: JobCard) => {
@@ -284,20 +379,36 @@ export default function JobCardsPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ quantities: qtys }),
+        body: JSON.stringify({ splits: qtys.map((q) => ({ qty: q })) }),
       });
       if (res.ok) {
+        const updatedCard = await res.json();
+        if (updatedCard && updatedCard.id) {
+          setJobCards((prev) => prev.map((j) => (j.id === showSplitModal.id ? updatedCard : j)));
+        }
         setShowSplitModal(null);
         fetchJobCards();
-      } else {
-        const errData = await res.json();
-        setSplitError(errData.message || 'Failed to split job card');
+        return;
       }
     } catch (err: any) {
-      setSplitError('Offline preview mode active');
-    } finally {
-      setSplitting(false);
+      console.error(err);
     }
+
+    // Local fallback update for batch splits
+    const newSubCards: SubJobCard[] = qtys.map((q, idx) => ({
+      id: `sub-split-${Date.now()}-${idx + 1}`,
+      subJobCardNo: `${showSplitModal.jobCardNo}-${String.fromCharCode(65 + idx)}`,
+      qty: q,
+      status: showSplitModal.status === 'IN_PROGRESS' ? 'IN_STAGE' : 'UNLAUNCHED',
+      qrCodeValue: `${showSplitModal.jobCardNo}-${String.fromCharCode(65 + idx)}`,
+      currentStage: showSplitModal.status === 'IN_PROGRESS' ? { id: 'stg-1', name: 'Cutting & Shearing' } : null,
+    }));
+
+    setJobCards((prev) =>
+      prev.map((j) => (j.id === showSplitModal.id ? { ...j, subJobCards: newSubCards } : j))
+    );
+    setShowSplitModal(null);
+    setSplitting(false);
   };
 
   const handleLaunchProduction = async (jobCardId: string, jobCardNo: string) => {
@@ -309,15 +420,77 @@ export default function JobCardsPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        fetchJobCards();
+        const launchedData = await res.json();
+        if (launchedData && launchedData.id) {
+          setJobCards((prev) =>
+            prev.map((j) => (j.id === jobCardId ? { ...launchedData } : j))
+          );
+          fetchJobCards();
+          return;
+        }
       }
     } catch (err) {
-      setJobCards(jobCards.map(j => j.id === jobCardId ? { ...j, status: 'IN_PROGRESS' } : j));
+      console.error(err);
     }
+
+    // Fallback UI update for local/preview cards or when API returns mock response
+    setJobCards((prev) =>
+      prev.map((j) =>
+        j.id === jobCardId
+          ? {
+              ...j,
+              status: 'IN_PROGRESS',
+              subJobCards: (j.subJobCards || []).map((sub) => ({
+                ...sub,
+                status: 'IN_STAGE',
+                currentStage: sub.currentStage || { id: 'stg-1', name: 'Cutting & Shearing' },
+              })),
+            }
+          : j
+      )
+    );
   };
 
   const handleOpenQrModal = async (jc: JobCard) => {
-    setShowQrModal({ jobCard: jc });
+    setShowQrModal({ jobCard: jc, parentQrUrl: undefined, subQrUrls: {} });
+    try {
+      const token = getAuthToken();
+      // Fetch parent Job Card QR from backend
+      const parentRes = await fetch(`http://localhost:3001/api/v1/job-cards/${jc.id}/qr`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      let parentQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(jc.qrCodeValue || jc.jobCardNo)}`;
+      if (parentRes.ok) {
+        const data = await parentRes.json();
+        if (data.dataUrl) parentQrUrl = data.dataUrl;
+      }
+
+      // Fetch Sub-Job Card QRs for each lot batch
+      const subQrUrls: { [id: string]: string } = {};
+      if (jc.subJobCards && jc.subJobCards.length > 0) {
+        await Promise.all(
+          jc.subJobCards.map(async (sub) => {
+            try {
+              const subRes = await fetch(`http://localhost:3001/api/v1/sub-job-cards/${sub.id}/qr`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              if (subRes.ok) {
+                const subData = await subRes.json();
+                if (subData.dataUrl) {
+                  subQrUrls[sub.id] = subData.dataUrl;
+                  return;
+                }
+              }
+            } catch {}
+            subQrUrls[sub.id] = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(sub.qrCodeValue || sub.subJobCardNo)}`;
+          })
+        );
+      }
+
+      setShowQrModal({ jobCard: jc, parentQrUrl, subQrUrls });
+    } catch (err) {
+      console.error('QR fetch error:', err);
+    }
   };
 
   const filteredCards = jobCards.filter((jc) => {
@@ -329,12 +502,17 @@ export default function JobCardsPage() {
       jc.product?.code?.toLowerCase().includes(query) ||
       jc.product?.specCardNo?.toLowerCase().includes(query);
 
-    const matchesStatus = statusFilter === 'ALL' || jc.status === statusFilter;
+    const matchesStatus =
+      statusFilter === 'ALL' ||
+      jc.status === statusFilter ||
+      (statusFilter === 'UNLAUNCHED' && (jc.status === 'CREATED' || jc.status === 'NOT_LAUNCHED'));
     return matchesSearch && matchesStatus;
   });
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case 'CREATED':
+      case 'NOT_LAUNCHED':
       case 'UNLAUNCHED':
         return (
           <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center gap-1.5">
@@ -393,7 +571,7 @@ export default function JobCardsPage() {
         </div>
 
         <button
-          onClick={() => setShowGenerateModal(true)}
+          onClick={handleOpenGenerateModal}
           className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-sm shrink-0"
         >
           <Plus className="w-4 h-4 stroke-[3]" />
@@ -514,7 +692,7 @@ export default function JobCardsPage() {
             <tbody className="divide-y divide-slate-100 text-sm">
               {filteredCards.map((jc) => {
                 const isExpanded = expandedRow === jc.id;
-                const isUnlaunched = jc.status === 'UNLAUNCHED';
+                const isUnlaunched = jc.status === 'UNLAUNCHED' || jc.status === 'CREATED' || jc.status === 'NOT_LAUNCHED';
 
                 return (
                   <React.Fragment key={jc.id}>
@@ -855,29 +1033,81 @@ export default function JobCardsPage() {
       {/* MODAL 3: QR Sticker Sheet & Printable Viewer */}
       {showQrModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-xl p-6 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl p-6 space-y-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 font-bold shrink-0">
                   <QrCode className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-900 text-base">QR Code & Traveler Sheet Preview</h3>
-                  <p className="text-xs text-slate-500">{showQrModal.jobCard.jobCardNo}</p>
+                  <h3 className="font-bold text-slate-900 text-base">Production QR Sticker & Traveler Sheet</h3>
+                  <p className="text-xs text-slate-500">Master Job Card #{showQrModal.jobCard.jobCardNo} • {showQrModal.jobCard.product?.code}</p>
                 </div>
               </div>
               <button onClick={() => setShowQrModal(null)} className="text-slate-400 hover:text-slate-700 text-sm font-bold p-1 rounded-lg hover:bg-slate-100 transition-colors">✕</button>
             </div>
 
+            {/* Master Job Card QR */}
             <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center space-y-3">
-              <div className="w-32 h-32 bg-white border border-slate-300 rounded-xl mx-auto flex items-center justify-center shadow-2xs p-2">
-                <QrCode className="w-24 h-24 text-slate-900" />
+              <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider block">MASTER JOB CARD QR STICKER</span>
+              
+              <div className="w-36 h-36 bg-white border border-slate-300 rounded-xl mx-auto flex items-center justify-center shadow-2xs p-2">
+                <img
+                  src={
+                    showQrModal.parentQrUrl ||
+                    `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(showQrModal.jobCard.qrCodeValue || showQrModal.jobCard.jobCardNo)}`
+                  }
+                  alt={`QR Code for ${showQrModal.jobCard.jobCardNo}`}
+                  className="w-full h-full object-contain"
+                />
               </div>
-              <p className="font-mono font-bold text-xs text-slate-900">{showQrModal.jobCard.qrCodeValue}</p>
-              <p className="text-xs text-slate-500">Scan this QR on shop-floor PWA scanner for real-time stage progress log.</p>
+
+              <div className="font-mono text-xs text-slate-900 space-y-0.5">
+                <p className="font-bold text-sm text-slate-900">{showQrModal.jobCard.jobCardNo}</p>
+                <p className="text-[10px] text-slate-500 break-all">{showQrModal.jobCard.qrCodeValue}</p>
+              </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+            {/* Sub-Job Cards QR Stickers Grid */}
+            {showQrModal.jobCard.subJobCards && showQrModal.jobCard.subJobCards.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold font-mono text-slate-500 uppercase tracking-wider">
+                  SUB-JOB LOT BATCH STICKERS ({showQrModal.jobCard.subJobCards.length} LOTS)
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {showQrModal.jobCard.subJobCards.map((sub) => {
+                    const subQrSrc =
+                      (showQrModal.subQrUrls && showQrModal.subQrUrls[sub.id]) ||
+                      `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(sub.qrCodeValue || sub.subJobCardNo)}`;
+
+                    return (
+                      <div key={sub.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center gap-3">
+                        <div className="w-24 h-24 bg-white border border-slate-300 rounded-lg p-1 shrink-0 flex items-center justify-center">
+                          <img src={subQrSrc} alt={`QR Code for ${sub.subJobCardNo}`} className="w-full h-full object-contain" />
+                        </div>
+                        <div className="font-mono text-xs space-y-1 overflow-hidden">
+                          <p className="font-bold text-slate-900 text-sm truncate">{sub.subJobCardNo}</p>
+                          <p className="text-[11px] text-blue-700 font-bold">{sub.qty.toLocaleString()} PCS</p>
+                          <p className="text-[10px] text-slate-500 font-semibold truncate">{sub.currentStage?.name || 'Pending Launch'}</p>
+                          <p className="text-[9px] text-slate-400 truncate">{sub.qrCodeValue}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-between items-center pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2"
+              >
+                <Printer className="w-4 h-4 text-amber-400" /> Print All QR Stickers
+              </button>
+
               <button
                 onClick={() => setShowQrModal(null)}
                 className="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors"

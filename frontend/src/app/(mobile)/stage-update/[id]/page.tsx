@@ -94,8 +94,9 @@ export default function StageUpdatePage() {
       if (!res.ok) throw new Error(`Failed to load stage info (${res.status})`);
       const data: StageInfo = await res.json();
       setStageInfo(data);
-      // Pre-fill received and forwarded from WIP
+      // Pre-fill received, processed, and forwarded from WIP lot quantity
       setQtyReceived(data.wip.qtyTotal);
+      setQtyProcessed(data.wip.qtyTotal);
       setQtyForwarded(data.wip.qtyTotal);
     } catch (err: any) {
       setError(err.message);

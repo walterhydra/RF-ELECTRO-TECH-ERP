@@ -4,6 +4,7 @@ import { JobCardsService } from './job-cards.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RbacGuard } from '../../common/guards/rbac.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 import { JobCardStatus } from '@prisma/client';
 
 @ApiTags('Job Cards')
@@ -12,8 +13,6 @@ import { JobCardStatus } from '@prisma/client';
 @ApiBearerAuth()
 export class JobCardsController {
   constructor(private readonly jobCardsService: JobCardsService) {}
-
-
 
   @Get()
   @ApiOperation({ summary: 'List all Job Cards with optional status and search filters' })
@@ -27,13 +26,22 @@ export class JobCardsController {
     return this.jobCardsService.findOne(id);
   }
 
+  @Post('generate')
+  @RequirePermissions('job_cards.manage', 'production.manage')
+  @ApiOperation({ summary: 'Generate Job Card from Customer Purchase Order' })
+  @ApiResponse({ status: 201, description: 'Job Card generated successfully' })
+  async generateFromPo(@Body() body: { customerPoId: string }, @Req() req: any) {
+    const createdById = req.user?.sub || req.user?.id || req.user?.userId;
+    return this.jobCardsService.generateFromPo(body.customerPoId, createdById);
+  }
+
   @Post(':id/split')
   @RequirePermissions('job_cards.manage', 'production.manage')
   @ApiOperation({ summary: 'Split a Job Card into multiple Sub-Job Cards before launch' })
   @ApiResponse({ status: 201, description: 'Job Card split successfully' })
-  async splitJobCard(@Param('id') id: string, @Body() body: { splits: { qty: number }[] }, @Req() req: any) {
+  async splitJobCard(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     const createdById = req.user?.sub || req.user?.id || req.user?.userId;
-    return this.jobCardsService.splitJobCard(id, body.splits, createdById);
+    return this.jobCardsService.splitJobCard(id, body, createdById);
   }
 
   @Post(':id/launch')
@@ -52,6 +60,7 @@ export class JobCardsController {
   }
 
   @Get(':id/qr')
+  @Public()
   @ApiOperation({ summary: 'Get high-resolution PNG QR Code data URL for Job Card sticker printing' })
   async getQrCodeImage(@Param('id') id: string) {
     return this.jobCardsService.getQrCodeImage(id);
