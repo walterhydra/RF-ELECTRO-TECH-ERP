@@ -329,6 +329,18 @@ model JobCard {
   createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz
   updatedAt            DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
+  photoUrl             String?       @map("photo_url") @db.Text
+  customerPartNo       String?       @map("customer_part_no") @db.VarChar(150)
+  rfePartCode          String?       @map("rfe_part_code") @db.VarChar(50)
+  customerCode         String?       @map("customer_code") @db.VarChar(50)
+  targetDate           DateTime?     @map("target_date") @db.Date
+  priority             String?       @default("NORMAL") @db.VarChar(30)
+  prodPnlQty           Int?          @map("prod_pnl_qty")
+  custPnlQty           Int?          @map("cust_pnl_qty")
+  totalPcbQty          Int?          @map("total_pcb_qty")
+  prodPnlAreaSqm       Float?        @map("prod_pnl_area_sqm")
+  custPnlAreaSqm       Float?        @map("cust_pnl_area_sqm")
+
   customerPO           CustomerPO        @relation(fields: [customerPoId], references: [id])
   product              Product           @relation(fields: [productId], references: [id])
   processFlowMaster    ProcessFlowMaster @relation(fields: [processFlowMasterId], references: [id])
@@ -359,6 +371,12 @@ model SubJobCard {
   createdById         String           @map("created_by") @db.Uuid
   createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  prodPnlQty          Int?             @map("prod_pnl_qty")
+  custPnlQty          Int?             @map("cust_pnl_qty")
+  totalPcbQty         Int?             @map("total_pcb_qty")
+  prodPnlAreaSqm      Float?           @map("prod_pnl_area_sqm")
+  custPnlAreaSqm      Float?           @map("cust_pnl_area_sqm")
 
   jobCard             JobCard          @relation(fields: [jobCardId], references: [id], onDelete: Cascade)
   parentSubJobCard    SubJobCard?      @relation("SubJobCardSplitLineage", fields: [parentSubJobCardId], references: [id])
