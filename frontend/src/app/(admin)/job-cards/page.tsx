@@ -37,6 +37,8 @@ import {
   Download,
   Share2
 } from 'lucide-react';
+import { Portal } from '@/components/ui/Portal';
+
 
 // Process Flow PF-01 19 Predefined Stages
 const PF01_STAGES = [
@@ -1224,7 +1226,8 @@ export default function JobCardsPage() {
 
       {/* MODAL 1: ADD NEW JOB CARD */}
       {showGenerateModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4 overflow-y-auto">
+        <Portal>
+          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-xl p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900">
             
             {/* Modal Header */}
@@ -1388,11 +1391,13 @@ export default function JobCardsPage() {
             </form>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* MODAL 2: JOB MOVEMENT OPTIONS (Three Categories: A. View, B. Full, C. Split) */}
       {selectedMovementJob && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4 overflow-y-auto">
+        <Portal>
+          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-xl p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div>
@@ -1636,11 +1641,13 @@ export default function JobCardsPage() {
             )}
           </div>
         </div>
+        </Portal>
       )}
 
       {/* MODAL 3: QR CODE STICKER / TAG PRINT MODAL */}
       {showQrModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 overflow-y-auto">
+        <Portal>
+          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
@@ -1663,16 +1670,18 @@ export default function JobCardsPage() {
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* MODAL 4: WIP & Daily Movement Report Drawer */}
       {showReportDrawer && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex justify-end animate-in fade-in duration-200">
-          {/* Backdrop Click Handler */}
-          <div className="absolute inset-0" onClick={() => setShowReportDrawer(false)} />
+        <Portal>
+          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md z-[9999] flex justify-end animate-in fade-in duration-200">
+            {/* Backdrop Click Handler */}
+            <div className="absolute inset-0" onClick={() => setShowReportDrawer(false)} />
 
-          {/* Drawer Panel */}
-          <div className="relative bg-white border-l border-slate-200 w-full max-w-xl h-full flex flex-col shadow-2xl text-slate-900 font-sans z-10">
+            {/* Drawer Panel */}
+            <div className="relative bg-white border-l border-slate-200 w-full max-w-2xl h-screen flex flex-col shadow-2xl text-slate-900 font-sans z-10">
             
             {/* 1. Fixed Drawer Header (Never Scrolls, Never Clipped) */}
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 shadow-2xs">
@@ -1847,6 +1856,7 @@ export default function JobCardsPage() {
 
           </div>
         </div>
+        </Portal>
       )}
 
       {/* Simple Round Loading Overlay with Blurred Background */}
