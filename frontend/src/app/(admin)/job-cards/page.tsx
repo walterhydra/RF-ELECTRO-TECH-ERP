@@ -808,37 +808,39 @@ export default function JobCardsPage() {
     <div className="space-y-6 p-6 max-w-[1400px] mx-auto pb-16 bg-slate-100 min-h-screen text-slate-900 font-sans">
       
       {/* Top Banner & Header */}
-      <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-        <div className="flex items-center gap-4 min-w-0">
-          <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0">
-            <Layers className="w-6 h-6" />
+      <div className="bg-white border border-slate-200/90 p-4 sm:p-5 rounded-2xl shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+        {/* Left Info Column */}
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className="w-11 h-11 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0 shadow-2xs">
+            <Layers className="w-5 h-5" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl font-extrabold text-slate-900 tracking-tight whitespace-nowrap">Job Cards & Job Movement Flow</h1>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-blue-50 text-blue-700 font-semibold border border-blue-200 whitespace-nowrap">
-                Launch to Packing (PF-01)
+              <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">Job Cards & Movement Flow</h1>
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-blue-50 text-blue-700 font-bold border border-blue-200 whitespace-nowrap">
+                PF-01 FLOW
               </span>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-emerald-50 text-emerald-700 font-extrabold border border-emerald-300 whitespace-nowrap flex items-center gap-1.5 shadow-2xs">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                LIVE UPDATING
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-emerald-50 text-emerald-700 font-extrabold border border-emerald-300 whitespace-nowrap flex items-center gap-1.5 shadow-2xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                LIVE
               </span>
             </div>
-            <p className="text-xs text-slate-500 mt-0.5 truncate">
-              Launch Job Cards, print QR tags, perform Full or Split stage movement, scan barcodes & view WIP reports.
+            <p className="text-xs text-slate-500 font-medium leading-normal">
+              Track PCB Job Cards, scan barcodes, execute full or split stage movement from Launch to Packing.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap shrink-0">
+        {/* Right Actions & Controls Row */}
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap lg:flex-nowrap shrink-0 border-t xl:border-t-0 border-slate-100 pt-3 xl:pt-0">
           {/* RBAC Role Switcher */}
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs whitespace-nowrap">
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs shadow-2xs">
             <UserCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span className="text-slate-500 font-medium hidden sm:inline">Role:</span>
+            <span className="text-slate-500 font-bold text-[11px] hidden sm:inline">Role:</span>
             <select
               value={userRole}
               onChange={(e: any) => setUserRole(e.target.value)}
-              className="bg-white text-slate-900 font-bold rounded-lg px-2 py-1 border border-slate-200 outline-none text-xs cursor-pointer"
+              className="bg-white text-slate-900 font-bold rounded-lg px-2 py-1 border border-slate-200 text-xs focus:outline-none focus:border-amber-500 cursor-pointer shadow-2xs"
             >
               <option value="MASTER">Master ID (Full Control)</option>
               <option value="SUPER_USER">Super User (All Stages)</option>
@@ -849,7 +851,7 @@ export default function JobCardsPage() {
               <select
                 value={assignedStage}
                 onChange={(e) => setAssignedStage(e.target.value)}
-                className="bg-amber-50 text-amber-900 font-bold rounded-lg px-2 py-1 border border-amber-300 text-xs cursor-pointer"
+                className="bg-amber-50 text-amber-900 font-bold rounded-lg px-2 py-1 border border-amber-300 text-xs cursor-pointer focus:outline-none"
               >
                 {PF01_STAGES.map((s) => (
                   <option key={s} value={s}>
@@ -860,20 +862,22 @@ export default function JobCardsPage() {
             )}
           </div>
 
+          {/* WIP & Daily Report Button */}
           <button
             onClick={() => setShowReportDrawer(true)}
-            className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 border border-slate-200 transition-all whitespace-nowrap shrink-0 cursor-pointer"
+            className="bg-slate-50 hover:bg-slate-100 text-slate-800 font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-2 border border-slate-200 transition-all whitespace-nowrap cursor-pointer shadow-2xs hover:border-slate-300"
           >
             <BarChart3 className="w-4 h-4 text-blue-600 shrink-0" />
-            <span className="whitespace-nowrap">WIP & Daily Report</span>
+            <span>WIP & Daily Report</span>
           </button>
 
+          {/* ADD NEW JOB CARD Primary Action */}
           <button
             onClick={() => setShowGenerateModal(true)}
-            className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold px-5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer"
+            className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black px-4 sm:px-5 py-2 rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer active:scale-95"
           >
-            <Plus className="w-4 h-4 stroke-[3] shrink-0" />
-            <span className="whitespace-nowrap">ADD NEW JOB CARD</span>
+            <Plus className="w-4 h-4 stroke-[3] shrink-0 text-slate-950" />
+            <span>ADD NEW JOB CARD</span>
           </button>
         </div>
       </div>
