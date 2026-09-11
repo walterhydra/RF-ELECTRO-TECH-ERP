@@ -1224,7 +1224,7 @@ export default function JobCardsPage() {
 
       {/* MODAL 1: ADD NEW JOB CARD */}
       {showGenerateModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-xl p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900">
             
             {/* Modal Header */}
@@ -1392,7 +1392,7 @@ export default function JobCardsPage() {
 
       {/* MODAL 2: JOB MOVEMENT OPTIONS (Three Categories: A. View, B. Full, C. Split) */}
       {selectedMovementJob && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-xl p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
               <div>
@@ -1640,7 +1640,7 @@ export default function JobCardsPage() {
 
       {/* MODAL 3: QR CODE STICKER / TAG PRINT MODAL */}
       {showQrModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
@@ -1667,11 +1667,11 @@ export default function JobCardsPage() {
 
       {/* MODAL 4: WIP & Daily Movement Report Drawer */}
       {showReportDrawer && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-end animate-in fade-in duration-200">
-          <div className="bg-white border-l border-slate-200 w-full max-w-xl h-full p-6 overflow-y-auto space-y-6 shadow-2xl text-slate-900 font-sans">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[200] flex items-center justify-end animate-in fade-in duration-200">
+          <div className="bg-white border-l border-slate-200 w-full max-w-xl h-full p-6 pt-8 overflow-y-auto space-y-6 shadow-2xl text-slate-900 font-sans">
             
-            {/* Drawer Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            {/* Drawer Header (Sticky Top) */}
+            <div className="sticky top-0 bg-white z-20 pb-4 border-b border-slate-100 flex items-center justify-between -mt-2 pt-2">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 font-bold shrink-0">
                   <BarChart3 className="w-5 h-5" />
