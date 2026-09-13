@@ -894,6 +894,7 @@ export default function JobCardsPage() {
 
   const [statusRadio, setStatusRadio] = useState<'All' | 'Unstarted' | 'Active' | 'Pending' | 'Done'>('All');
   const [globalSearch, setGlobalSearch] = useState('');
+  const [showColFilters, setShowColFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -1217,6 +1218,20 @@ export default function JobCardsPage() {
               {jobCards.filter((j) => j.status === 'COMPLETED').length}
             </span>
           </button>
+
+          {/* Toggle Column Filters Button */}
+          <button
+            onClick={() => setShowColFilters(!showColFilters)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border ${
+              showColFilters
+                ? 'bg-blue-50 text-blue-700 border-blue-300 shadow-2xs font-extrabold'
+                : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+            }`}
+            title="Toggle per-column search filter inputs"
+          >
+            <Filter className="w-3.5 h-3.5" />
+            <span>{showColFilters ? 'Hide Column Filters' : 'Column Filters'}</span>
+          </button>
         </div>
 
       </div>
@@ -1243,106 +1258,108 @@ export default function JobCardsPage() {
                 <th className="py-2.5 px-3 text-center min-w-[75px] whitespace-nowrap">Req</th>
               </tr>
 
-              {/* Row 2: Per-Column Filter Inputs */}
-              <tr className="bg-slate-50/90 border-b border-slate-300">
-                <td className="p-1 border-r border-slate-300">
-                  <input
-                    type="text"
-                    value={colFilters.wipNo}
-                    onChange={(e) => setColFilters({ ...colFilters, wipNo: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
-                  />
-                </td>
-                <td className="p-1 border-r border-slate-300">
-                  <input
-                    type="text"
-                    value={colFilters.product}
-                    onChange={(e) => setColFilters({ ...colFilters, product: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 shadow-2xs"
-                  />
-                </td>
-                <td className="p-1 border-r border-slate-300">
-                  <input
-                    type="text"
-                    value={colFilters.productCode}
-                    onChange={(e) => setColFilters({ ...colFilters, productCode: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
-                  />
-                </td>
-                <td className="p-1 border-r border-slate-300">
-                  <input
-                    type="text"
-                    value={colFilters.customer}
-                    onChange={(e) => setColFilters({ ...colFilters, customer: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 shadow-2xs"
-                  />
-                </td>
-                <td className="p-1 border-r border-slate-300">
-                  <input
-                    type="text"
-                    value={colFilters.launch}
-                    onChange={(e) => setColFilters({ ...colFilters, launch: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
-                  />
-                </td>
-                <td className="p-1 border-r border-slate-300">
-                  <input
-                    type="text"
-                    value={colFilters.target}
-                    onChange={(e) => setColFilters({ ...colFilters, target: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
-                  />
-                </td>
-                <td className="p-1 border-r border-slate-300">
-                  <input
-                    type="text"
-                    value={colFilters.priority}
-                    onChange={(e) => setColFilters({ ...colFilters, priority: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 shadow-2xs"
-                  />
-                </td>
-                <td className="p-1 border-r border-slate-300">
-                  <input
-                    type="text"
-                    value={colFilters.pndg}
-                    onChange={(e) => setColFilters({ ...colFilters, pndg: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
-                  />
-                </td>
-                <td className="p-1 border-r border-slate-300">
-                  <input
-                    type="text"
-                    value={colFilters.unit}
-                    onChange={(e) => setColFilters({ ...colFilters, unit: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 shadow-2xs"
-                  />
-                </td>
-                <td className="p-1 border-r border-slate-300">
-                  <input
-                    type="text"
-                    value={colFilters.area}
-                    onChange={(e) => setColFilters({ ...colFilters, area: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
-                  />
-                </td>
-                <td className="p-1 border-r border-slate-300">
-                  <input
-                    type="text"
-                    value={colFilters.stage}
-                    onChange={(e) => setColFilters({ ...colFilters, stage: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 shadow-2xs"
-                  />
-                </td>
-                <td className="p-1 border-r border-slate-300">
-                  <input
-                    type="text"
-                    value={colFilters.progress}
-                    onChange={(e) => setColFilters({ ...colFilters, progress: e.target.value })}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 shadow-2xs"
-                  />
-                </td>
-                <td className="p-1 text-center bg-slate-50"></td>
-              </tr>
+              {/* Row 2: Per-Column Filter Inputs (Optionally toggled) */}
+              {showColFilters && (
+                <tr className="bg-slate-50/90 border-b border-slate-300">
+                  <td className="p-1 border-r border-slate-300">
+                    <input
+                      type="text"
+                      value={colFilters.wipNo}
+                      onChange={(e) => setColFilters({ ...colFilters, wipNo: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
+                    />
+                  </td>
+                  <td className="p-1 border-r border-slate-300">
+                    <input
+                      type="text"
+                      value={colFilters.product}
+                      onChange={(e) => setColFilters({ ...colFilters, product: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 shadow-2xs"
+                    />
+                  </td>
+                  <td className="p-1 border-r border-slate-300">
+                    <input
+                      type="text"
+                      value={colFilters.productCode}
+                      onChange={(e) => setColFilters({ ...colFilters, productCode: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
+                    />
+                  </td>
+                  <td className="p-1 border-r border-slate-300">
+                    <input
+                      type="text"
+                      value={colFilters.customer}
+                      onChange={(e) => setColFilters({ ...colFilters, customer: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 shadow-2xs"
+                    />
+                  </td>
+                  <td className="p-1 border-r border-slate-300">
+                    <input
+                      type="text"
+                      value={colFilters.launch}
+                      onChange={(e) => setColFilters({ ...colFilters, launch: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
+                    />
+                  </td>
+                  <td className="p-1 border-r border-slate-300">
+                    <input
+                      type="text"
+                      value={colFilters.target}
+                      onChange={(e) => setColFilters({ ...colFilters, target: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
+                    />
+                  </td>
+                  <td className="p-1 border-r border-slate-300">
+                    <input
+                      type="text"
+                      value={colFilters.priority}
+                      onChange={(e) => setColFilters({ ...colFilters, priority: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 shadow-2xs"
+                    />
+                  </td>
+                  <td className="p-1 border-r border-slate-300">
+                    <input
+                      type="text"
+                      value={colFilters.pndg}
+                      onChange={(e) => setColFilters({ ...colFilters, pndg: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
+                    />
+                  </td>
+                  <td className="p-1 border-r border-slate-300">
+                    <input
+                      type="text"
+                      value={colFilters.unit}
+                      onChange={(e) => setColFilters({ ...colFilters, unit: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 shadow-2xs"
+                    />
+                  </td>
+                  <td className="p-1 border-r border-slate-300">
+                    <input
+                      type="text"
+                      value={colFilters.area}
+                      onChange={(e) => setColFilters({ ...colFilters, area: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
+                    />
+                  </td>
+                  <td className="p-1 border-r border-slate-300">
+                    <input
+                      type="text"
+                      value={colFilters.stage}
+                      onChange={(e) => setColFilters({ ...colFilters, stage: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 shadow-2xs"
+                    />
+                  </td>
+                  <td className="p-1 border-r border-slate-300">
+                    <input
+                      type="text"
+                      value={colFilters.progress}
+                      onChange={(e) => setColFilters({ ...colFilters, progress: e.target.value })}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 shadow-2xs"
+                    />
+                  </td>
+                  <td className="p-1 text-center bg-slate-50"></td>
+                </tr>
+              )}
             </thead>
 
             <tbody className="divide-y divide-slate-200">
