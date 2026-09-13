@@ -48,18 +48,27 @@ async function main() {
   }
   console.log(`✅ Seeded ${roles.length} Roles`);
 
-  // 3. Process Stages (Standard 10-Stage Multilayer Flow vocabulary)
+  // 3. Process Stages (Standard 19-Stage Multilayer Flow vocabulary for PF-01)
   const stages = [
-    { name: 'Cutting & Shearing', defaultOrder: 1, description: 'Raw copper laminate cutting' },
-    { name: 'Inner Layer Printing & Etching', defaultOrder: 2, description: 'DES line processing' },
-    { name: 'AOI Testing (Inner)', defaultOrder: 3, description: 'Automated optical inspection for inner layers' },
-    { name: 'Multilayer Lamination & Pressing', defaultOrder: 4, description: 'Pressing layers together' },
-    { name: 'CNC Drilling', defaultOrder: 5, description: 'Through-hole and via drilling' },
-    { name: 'Electroless Copper & Plating', defaultOrder: 6, description: 'PTH plating' },
-    { name: 'Outer Layer Imaging & Etching', defaultOrder: 7, description: 'Outer circuit formation' },
-    { name: 'Solder Mask & Legend Printing', defaultOrder: 8, description: 'Green/Blue solder mask and white silkscreen' },
-    { name: 'Surface Finish (ENIG / HAL)', defaultOrder: 9, description: 'Gold immersion or Hot Air Leveling' },
-    { name: 'Final QC & E-Test', defaultOrder: 10, description: 'Electrical continuity testing and visual inspection' },
+    { name: 'SHEARING', defaultOrder: 1, description: 'Cutting and Shearing' },
+    { name: 'DRILLING', defaultOrder: 2, description: 'CNC Drilling' },
+    { name: 'DRL-QC', defaultOrder: 3, description: 'Drilling Quality Control' },
+    { name: 'PTH', defaultOrder: 4, description: 'Plating Through Hole' },
+    { name: 'PTH-QC', defaultOrder: 5, description: 'PTH Quality Control' },
+    { name: 'PHOTO PRINTING', defaultOrder: 6, description: 'Photo Printing / Imaging' },
+    { name: 'PHOTO-QC', defaultOrder: 7, description: 'Photo Quality Control' },
+    { name: 'PATTERN PLATING', defaultOrder: 8, description: 'Pattern Plating' },
+    { name: 'ETCHING', defaultOrder: 9, description: 'Etching Line' },
+    { name: 'ETCHING-QC', defaultOrder: 10, description: 'Etching Quality Control' },
+    { name: 'SOLDER MASK', defaultOrder: 11, description: 'Solder Masking' },
+    { name: 'SOLDER MASK-QC', defaultOrder: 12, description: 'Solder Mask Quality Control' },
+    { name: 'LEGEND PRINTING', defaultOrder: 13, description: 'Legend / Silkscreen Printing' },
+    { name: 'HAL / ENIG', defaultOrder: 14, description: 'Hot Air Leveling / Gold Immersion' },
+    { name: 'PUNCHING / ROUTING', defaultOrder: 15, description: 'Punching and Routing' },
+    { name: 'E-TESTING', defaultOrder: 16, description: 'Electrical Testing' },
+    { name: 'FINAL QC', defaultOrder: 17, description: 'Final Quality Control' },
+    { name: 'PACKING', defaultOrder: 18, description: 'Packing' },
+    { name: 'DISPATCH', defaultOrder: 19, description: 'Finished Goods Dispatch' },
   ];
 
   const stageMap: Record<string, string> = {};
@@ -71,7 +80,7 @@ async function main() {
     });
     stageMap[stg.name] = created.id;
   }
-  console.log('✅ Seeded 10 Process Stages');
+  console.log(`✅ Seeded ${stages.length} Process Stages`);
 
   // 4. Default Users
   const adminUser = await prisma.user.upsert({
@@ -159,13 +168,13 @@ async function main() {
   });
   console.log('✅ Seeded Default Customer & Portal Access');
 
-  // 6. Default Process Flow Master
+  // 6. Default Process Flow Master (PF-01)
   const defaultFlow = await prisma.processFlowMaster.upsert({
-    where: { name: 'Standard 10-Stage Multilayer Flow' },
-    update: {},
+    where: { name: 'PF-01' },
+    update: { totalSteps: 19 },
     create: {
-      name: 'Standard 10-Stage Multilayer Flow',
-      totalSteps: 10,
+      name: 'PF-01',
+      totalSteps: 19,
       isActive: true,
       createdById: adminUser.id,
     },
@@ -185,9 +194,9 @@ async function main() {
         },
       });
     }
-    console.log('✅ Seeded Default Process Flow Steps');
+    console.log('✅ Seeded PF-01 Process Flow Steps (19 stages)');
   }
-  console.log('✅ Seeded Default Process Flow Master');
+  console.log('✅ Seeded Default Process Flow Master (PF-01)');
 
   // 7. Seed Sample Products & Open Customer POs
   const product1 = await prisma.product.upsert({

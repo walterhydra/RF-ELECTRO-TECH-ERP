@@ -356,5 +356,147 @@ export class ReportsService {
       upcomingDispatches
     };
   }
+
+  async getDailyMovementWipReport(dateStr?: string, overdelayedDaysParam = 3) {
+    const targetDate = dateStr ? new Date(dateStr) : new Date();
+    const startOfDay = new Date(targetDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(targetDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const overdelayedThreshold = new Date(today);
+    const overdelayDays = Number(overdelayedDaysParam) || 3;
+    overdelayedThreshold.setDate(overdelayedThreshold.getDate() - overdelayDays);
+
+    // Section 1: Stage-Wise Job Status (Group active sub_job_cards by currentStage)
+    const stages = await this.prisma.processStage.findMany({
+      orderBy: { defaultOrder: 'asc' },
+    });
+
+    const activeLots = await this.prisma.subJobCard.findMany({
+      where: {
+        status: { in: ['IN_STAGE', 'PENDING_LAUNCH', 'ON_HOLD'] },
+      },
+      include: {
+        currentStage: true,
+        jobCard: { select: { jobCardNo: true } },
+      },
+    });
+
+    const stageStatusTable = stages.map((stage) => {
+      const lotsAtStage = activeLots.filter((l) => l.currentStageId === stage.id);
+      const totalJobs = new Set(lotsAtStage.map((l) => l.jobCardId)).size;
+      const totalPnlQty = lotsAtStage.reduce((acc, l) => acc + (l.prodPnlQty || l.qty || 0), 0);
+      const totalSqm = Number(lotsAtStage.reduce((acc, l) => acc + (l.prodPnlAreaSqm || 0), 0).toFixed(2));
+      const currentWipSqm = totalSqm;
+
+      return {
+        stageId: stage.id,
+        stageName: stage.name,
+        totalJobs,
+        totalPnlQty,
+        totalSqm,
+        currentWipSqm,
+      };
+    });
+
+    // Section 2: Delay Monitoring
+    const activeJobCards = await this.prisma.jobCard.findMany({
+      where: {
+        status: { in: ['CREATED', 'NOT_LAUNCHED', 'IN_PROGRESS', 'LAUNCHED'] },
+      },
+      include: {
+        subJobCards: { include: { currentStage: true } },
+        product: true,
+        customerPO: { include: { customer: true } },
+      },
+    });
+
+    const overdueJobs = activeJobCards.filter((jc) => jc.targetDate && new Date(jc.targetDate) < today);
+    const overdelayedJobs = activeJobCards.filter(
+      (jc) => jc.targetDate && new Date(jc.targetDate) <= overdelayedThreshold,
+    );
+
+    const jobsExceedingTargetDate = overdueJobs.map((jc) => {
+      const targetDateObj = new Date(jc.targetDate!);
+      const diffMs = today.getTime() - targetDateObj.getTime();
+      const daysOverdue = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+      const currentStage = jc.subJobCards?.[0]?.currentStage?.name || '1. SHEARING';
+
+      return {
+        id: jc.id,
+        jobCardNo: jc.jobCardNo,
+        customerPartNo: jc.customerPartNo || jc.product?.code || 'N/A',
+        rfePartCode: jc.rfePartCode || jc.product?.specCardNo || 'N/A',
+        customerCode: jc.customerCode || jc.customerPO?.customer?.code || 'N/A',
+        stage: currentStage,
+        targetDate: jc.targetDate ? new Date(jc.targetDate).toISOString().split('T')[0] : 'N/A',
+        daysOverdue,
+        priority: jc.priority || 'NORMAL',
+        prodPnlQty: jc.prodPnlQty || jc.totalQty || 40,
+        prodPnlAreaSqm: jc.prodPnlAreaSqm || 50,
+      };
+    });
+
+    // Section 3: Quality / Loss Monitoring for selected date
+    const dateMovements = await this.prisma.stageMovementLog.findMany({
+      where: {
+        createdAt: {
+          gte: startOfDay,
+          lte: endOfDay,
+        },
+      },
+      include: { stage: true },
+    });
+
+    let totalReworkCount = 0;
+    let totalReworkQty = 0;
+    let totalRejectionCount = 0;
+    let totalRejectionQty = 0;
+    let totalProcessIssueCount = 0;
+    let totalOtherCount = 0;
+
+    for (const m of dateMovements) {
+      const text = (m.remarks || '').toLowerCase();
+      const isRejection = text.includes('rejection') || (m.qtyRejected || 0) > 0;
+      const isRework = text.includes('rework') || m.isRework;
+      const isProcessIssue = text.includes('process issue');
+
+      if (isRejection) {
+        totalRejectionCount += 1;
+        totalRejectionQty += m.qtyRejected || m.qtyForwarded || 1;
+      } else if (isRework) {
+        totalReworkCount += 1;
+        totalReworkQty += m.qtyForwarded || m.qtyProcessed || 1;
+      } else if (isProcessIssue) {
+        totalProcessIssueCount += 1;
+      } else {
+        totalOtherCount += 1;
+      }
+    }
+
+    return {
+      selectedDate: startOfDay.toISOString().split('T')[0],
+      overdelayDaysConfigured: overdelayDays,
+      section1_stageStatusTable: stageStatusTable,
+      section2_delayMonitoring: {
+        overdueJobsCount: overdueJobs.length,
+        overdelayedJobsCount: overdelayedJobs.length,
+        jobsExceedingTargetDate,
+      },
+      section3_qualityLossMonitoring: {
+        totalReworkCount,
+        totalReworkQty,
+        totalRejectionCount,
+        totalRejectionQty,
+        totalProcessIssueCount,
+        totalOtherCount,
+        totalMovementsOnDate: dateMovements.length,
+      },
+    };
+  }
 }
 

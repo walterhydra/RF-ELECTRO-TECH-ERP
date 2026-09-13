@@ -52,6 +52,14 @@ export class ReportsController {
     return this.reportsService.getTraceability(jobCardNo);
   }
 
+  @Get('daily-movement-wip')
+  getDailyMovementWipReport(
+    @Query('date') date?: string,
+    @Query('overdelayDays') overdelayDays?: number,
+  ) {
+    return this.reportsService.getDailyMovementWipReport(date, overdelayDays);
+  }
+
   @Get('export')
   async exportData(@Query('type') type: string, @Res() res: any) {
     const data = await this.reportsService.exportData(type);

@@ -35,7 +35,7 @@ export default function RootLayout({
         <link href="https://api.fontshare.com/v2/css?f[]=satoshi@900,700,500,400&display=swap" rel="stylesheet" />
         <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet" />
       </head>
-      <body className="min-h-screen bg-slate-100 text-slate-900 font-sans antialiased">
+      <body className="min-h-screen bg-slate-100 text-slate-900 font-quicksand antialiased">
         {children}
       </body>
     </html>

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { 
   Layers, 
   Split, 
@@ -35,7 +36,9 @@ import {
   Check,
   Eye,
   Download,
-  Share2
+  Share2,
+  Scan,
+  Upload
 } from 'lucide-react';
 import { Portal } from '@/components/ui/Portal';
 
@@ -111,6 +114,7 @@ interface JobCard {
     copper: string;
   };
   subJobCards: SubJobCard[];
+  isNewlyCreated?: boolean;
 }
 
 interface OpenPO {
@@ -455,12 +459,13 @@ export default function JobCardsPage() {
   const [userRole, setUserRole] = useState<'MASTER' | 'SUPER_USER' | 'NORMAL'>('MASTER');
   const [assignedStage, setAssignedStage] = useState<string>('2. DRILLING');
 
-  // Modals
+  // Modals & Lightbox
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [selectedMovementJob, setSelectedMovementJob] = useState<JobCard | null>(null);
   const [movementTab, setMovementTab] = useState<'VIEW' | 'FULL' | 'PARTIAL'>('VIEW');
   const [showReportDrawer, setShowReportDrawer] = useState(false);
   const [showQrModal, setShowQrModal] = useState<JobCard | null>(null);
+  const [photoLightbox, setPhotoLightbox] = useState<string | null>(null);
 
   // Toast Notification State (Replaces native browser alerts)
   const [toast, setToast] = useState<{ id: string; type: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -485,10 +490,10 @@ export default function JobCardsPage() {
     }, delayMs);
   };
 
-  // New Job Card Form (PDF 13 Fields)
+  // New Job Card Form (Full PDF 13 Fields & Pre-Launch Split Options)
   const [launchForm, setLaunchForm] = useState({
     jobCardNo: '26-27-1731',
-    photoUrl: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=800&auto=format&fit=crop&q=60',
+    photoUrl: '',
     customerPartNo: 'EV-900W-WP-TO247-VORS-25082026',
     rfePartCode: 'D3625',
     customerCode: 'CUST-RF045',
@@ -501,7 +506,69 @@ export default function JobCardsPage() {
     custPnlAreaSqm: 45,
     jobFlowSelection: 'PF-01',
     autoLaunch: false,
+    enablePreSplit: false,
+    splitCount: 2,
+    customSplits: [{ subNo: '26-27-1731-1', qty: 20 }, { subNo: '26-27-1731-2', qty: 20 }],
   });
+
+  // Sync state from backend API if available
+  useEffect(() => {
+    const fetchBackendJobCards = async () => {
+      try {
+        const res = await fetch('http://localhost:3001/api/v1/job-cards', {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            const mapped: JobCard[] = data.map((j: any) => ({
+              id: j.id,
+              jobCardNo: j.jobCardNo,
+              photoUrl: j.photoUrl || '',
+              customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
+              rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
+              customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
+              targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
+              priority: j.priority || 'NORMAL',
+              prodPnlQty: j.prodPnlQty || j.totalQty || 40,
+              custPnlQty: j.custPnlQty || (j.totalQty * 2) || 80,
+              totalPcbQty: j.totalPcbQty || (j.totalQty * 4) || 160,
+              prodPnlAreaSqm: j.prodPnlAreaSqm || 50,
+              custPnlAreaSqm: j.custPnlAreaSqm || 45,
+              jobFlowSelection: j.processFlowMaster?.name || 'PF-01',
+              currentStageIndex: 0,
+              currentStageName: j.subJobCards?.[0]?.currentStage?.name || PF01_STAGES[0],
+              customerPoId: j.customerPoId,
+              productId: j.productId,
+              totalQty: j.totalQty || 40,
+              status: j.status === 'CREATED' ? 'UNLAUNCHED' : j.status,
+              qrCodeValue: j.qrCodeValue || `${j.jobCardNo}-PARENT`,
+              launchedAt: j.launchedAt,
+              completedAt: j.completedAt,
+              createdAt: j.createdAt,
+              customerPO: j.customerPO,
+              product: j.product,
+              subJobCards: (j.subJobCards || []).map((sub: any) => ({
+                id: sub.id,
+                subJobCardNo: sub.subJobCardNo,
+                qty: sub.qty,
+                status: sub.status,
+                qrCodeValue: sub.qrCodeValue,
+                currentStage: sub.currentStage,
+              })),
+            }));
+            setJobCards(mapped);
+          }
+        }
+      } catch (err) {
+        // Retain client-side fallback state smoothly
+      }
+    };
+    fetchBackendJobCards();
+  }, []);
 
   // Movement Form
   const [fullMoveRemarkType, setFullMoveRemarkType] = useState('Process issue');
@@ -572,7 +639,7 @@ export default function JobCardsPage() {
   };
 
   // Launch New Job Card Form Submit
-  const handleLaunchJobCard = (e: React.FormEvent) => {
+  const handleLaunchJobCard = async (e: React.FormEvent) => {
     e.preventDefault();
     if (userRole === 'NORMAL') {
       showToast('Permission Denied: Normal Users cannot launch new Job Cards.', 'error');
@@ -580,8 +647,44 @@ export default function JobCardsPage() {
     }
 
     const jcNo = launchForm.jobCardNo || `26-27-${Math.floor(1000 + Math.random() * 9000)}`;
+    const totalPnl = Number(launchForm.prodPnlQty) || 40;
 
-    runWithLoading('Creating New Job Card & Generating Barcode Tag...', () => {
+    // Validate pre-splits if enabled
+    let subJobCardsList: SubJobCard[] = [];
+    let apiSplits: number[] = [];
+
+    if (launchForm.enablePreSplit && launchForm.customSplits.length > 0) {
+      const splitSum = launchForm.customSplits.reduce((acc, curr) => acc + (Number(curr.qty) || 0), 0);
+      if (splitSum !== totalPnl) {
+        showToast(`Pre-split quantity sum (${splitSum} PNL) must equal Total Production PNL (${totalPnl} PNL).`, 'error');
+        return;
+      }
+
+      subJobCardsList = launchForm.customSplits.map((item, idx) => ({
+        id: `sub-${Date.now()}-${idx}`,
+        subJobCardNo: item.subNo || `${jcNo}-${idx + 1}`,
+        qty: Number(item.qty),
+        status: launchForm.autoLaunch ? 'IN_PROGRESS' : 'UNLAUNCHED',
+        qrCodeValue: `${item.subNo || `${jcNo}-${idx + 1}`}`,
+        currentStage: { id: `stg-${idx + 1}`, name: PF01_STAGES[0] },
+      }));
+
+      apiSplits = launchForm.customSplits.map((s) => Number(s.qty));
+    } else {
+      subJobCardsList = [
+        {
+          id: `sub-${Date.now()}`,
+          subJobCardNo: `${jcNo}-1`,
+          qty: totalPnl,
+          status: launchForm.autoLaunch ? 'IN_PROGRESS' : 'UNLAUNCHED',
+          qrCodeValue: `${jcNo}-1`,
+          currentStage: { id: 'stg-1', name: PF01_STAGES[0] },
+        },
+      ];
+      apiSplits = [totalPnl];
+    }
+
+    runWithLoading('Creating New Job Card & Generating Barcode Tag...', async () => {
       const newJobCard: JobCard = {
         id: `jc-${Date.now()}`,
         jobCardNo: jcNo,
@@ -591,22 +694,22 @@ export default function JobCardsPage() {
         customerCode: launchForm.customerCode,
         targetDate: launchForm.targetDate,
         priority: launchForm.priority,
-        prodPnlQty: Number(launchForm.prodPnlQty) || 40,
-        custPnlQty: Number(launchForm.custPnlQty) || 80,
-        totalPcbQty: Number(launchForm.totalPcbQty) || 160,
+        prodPnlQty: totalPnl,
+        custPnlQty: Number(launchForm.custPnlQty) || totalPnl * 2,
+        totalPcbQty: Number(launchForm.totalPcbQty) || totalPnl * 4,
         prodPnlAreaSqm: Number(launchForm.prodPnlAreaSqm) || 50,
         custPnlAreaSqm: Number(launchForm.custPnlAreaSqm) || 45,
         jobFlowSelection: launchForm.jobFlowSelection,
         currentStageIndex: 0,
         currentStageName: PF01_STAGES[0],
-        totalQty: Number(launchForm.prodPnlQty) || 40,
+        totalQty: totalPnl,
         status: launchForm.autoLaunch ? 'IN_PROGRESS' : 'UNLAUNCHED',
         launchedAt: launchForm.autoLaunch ? new Date().toISOString() : null,
         qrCodeValue: `${jcNo}-PARENT`,
         createdAt: new Date().toISOString(),
         customerPO: {
           poNo: `PO-${launchForm.customerCode}`,
-          orderQty: Number(launchForm.prodPnlQty) || 40,
+          orderQty: totalPnl,
           customer: { companyName: launchForm.customerCode },
         },
         product: {
@@ -617,24 +720,47 @@ export default function JobCardsPage() {
           thickness: '1.6mm',
           copper: '1oz',
         },
-        subJobCards: [
-          {
-            id: `sub-${Date.now()}`,
-            subJobCardNo: `${jcNo}-A`,
-            qty: Number(launchForm.prodPnlQty) || 40,
-            status: launchForm.autoLaunch ? 'IN_PROGRESS' : 'UNLAUNCHED',
-            qrCodeValue: `${jcNo}-A`,
-            currentStage: { id: 'stg-1', name: PF01_STAGES[0] },
-          },
-        ],
+        subJobCards: subJobCardsList,
+        isNewlyCreated: true,
       };
 
+      // Try Backend POST API sync
+      try {
+        await fetch('http://localhost:3001/api/v1/job-cards/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+          },
+          body: JSON.stringify({
+            jobCardNo: jcNo,
+            photoUrl: launchForm.photoUrl,
+            customerPartNo: launchForm.customerPartNo,
+            rfePartCode: launchForm.rfePartCode,
+            customerCode: launchForm.customerCode,
+            targetDate: launchForm.targetDate,
+            priority: launchForm.priority,
+            prodPnlQty: totalPnl,
+            custPnlQty: launchForm.custPnlQty,
+            totalPcbQty: launchForm.totalPcbQty,
+            prodPnlAreaSqm: launchForm.prodPnlAreaSqm,
+            custPnlAreaSqm: launchForm.custPnlAreaSqm,
+            jobFlowSelection: launchForm.jobFlowSelection,
+            autoLaunch: launchForm.autoLaunch,
+            splits: apiSplits,
+          }),
+        });
+      } catch (err) {
+        // Fallback to client state
+      }
+
       setJobCards((prev) => [newJobCard, ...prev]);
+      setStatusRadio('All');
       setShowGenerateModal(false);
       setShowQrModal(newJobCard);
 
       showToast(
-        `Job Card ${newJobCard.jobCardNo} created successfully! ${
+        `Job Card ${newJobCard.jobCardNo} created with ${subJobCardsList.length} sub-lot(s)! ${
           launchForm.autoLaunch ? 'Launched into Stage 1.' : 'Status is UNLAUNCHED.'
         }`,
         'success'
@@ -750,479 +876,656 @@ export default function JobCardsPage() {
     window.print();
   };
 
-  // Filtered Cards
-  const filteredCards = jobCards.filter((jc) => {
-    const query = searchQuery.toLowerCase();
-    const matchesSearch =
-      !query ||
-      jc.jobCardNo.toLowerCase().includes(query) ||
-      jc.customerPartNo?.toLowerCase().includes(query) ||
-      jc.rfePartCode?.toLowerCase().includes(query) ||
-      jc.customerCode?.toLowerCase().includes(query);
-
-    const matchesStatus =
-      statusFilter === 'ALL' ||
-      jc.status === statusFilter ||
-      (statusFilter === 'UNLAUNCHED' && (jc.status === 'CREATED' || jc.status === 'UNLAUNCHED'));
-    return matchesSearch && matchesStatus;
+  // Per-column Search Filters
+  const [colFilters, setColFilters] = useState({
+    wipNo: '',
+    product: '',
+    productCode: '',
+    customer: '',
+    launch: '',
+    target: '',
+    priority: '',
+    pndg: '',
+    unit: '',
+    area: '',
+    stage: '',
+    progress: '',
   });
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'CREATED':
-      case 'NOT_LAUNCHED':
-      case 'UNLAUNCHED':
-        return (
-          <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black bg-sky-50 text-sky-800 border border-sky-300 inline-flex items-center gap-1 shadow-2xs whitespace-nowrap">
-            <Clock className="w-3 h-3 text-sky-600 shrink-0" /> UNLAUNCHED
-          </span>
-        );
-      case 'IN_PROGRESS':
-        return (
-          <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black bg-amber-50 text-amber-900 border border-amber-300 inline-flex items-center gap-1 shadow-2xs whitespace-nowrap">
-            <Cpu className="w-3 h-3 text-amber-700 shrink-0" /> IN PROGRESS
-          </span>
-        );
-      case 'COMPLETED':
-        return (
-          <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black bg-emerald-50 text-emerald-800 border border-emerald-300 inline-flex items-center gap-1 shadow-2xs whitespace-nowrap">
-            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" /> COMPLETED
-          </span>
-        );
-      default:
-        return <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black bg-slate-100 text-slate-700 border border-slate-300">{status}</span>;
-    }
-  };
+  const [statusRadio, setStatusRadio] = useState<'All' | 'Unstarted' | 'Active' | 'Pending' | 'Done'>('All');
+  const [globalSearch, setGlobalSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Filtered Cards based on per-column filters, global search, and radio status
+  const filteredCards = jobCards.filter((jc) => {
+    const matchesWip = !colFilters.wipNo || jc.jobCardNo.toLowerCase().includes(colFilters.wipNo.toLowerCase());
+    const matchesProduct = !colFilters.product || jc.customerPartNo?.toLowerCase().includes(colFilters.product.toLowerCase());
+    const matchesCode = !colFilters.productCode || jc.rfePartCode?.toLowerCase().includes(colFilters.productCode.toLowerCase());
+    const matchesCust = !colFilters.customer || jc.customerCode?.toLowerCase().includes(colFilters.customer.toLowerCase());
+    const matchesStage = !colFilters.stage || (jc.currentStageName || '').toLowerCase().includes(colFilters.stage.toLowerCase());
+    const matchesPriority = !colFilters.priority || jc.priority.toLowerCase().includes(colFilters.priority.toLowerCase());
+    
+    const matchesGlobal =
+      !globalSearch ||
+      jc.jobCardNo.toLowerCase().includes(globalSearch.toLowerCase()) ||
+      (jc.customerPartNo || '').toLowerCase().includes(globalSearch.toLowerCase()) ||
+      (jc.rfePartCode || '').toLowerCase().includes(globalSearch.toLowerCase()) ||
+      (jc.customerCode || '').toLowerCase().includes(globalSearch.toLowerCase()) ||
+      (jc.currentStageName || '').toLowerCase().includes(globalSearch.toLowerCase());
+
+    const matchesRadio =
+      statusRadio === 'All'
+        ? true
+        : statusRadio === 'Active'
+        ? jc.status === 'IN_PROGRESS'
+        : statusRadio === 'Unstarted'
+        ? jc.status === 'UNLAUNCHED' || jc.status === 'CREATED'
+        : statusRadio === 'Done'
+        ? jc.status === 'COMPLETED'
+        : true;
+
+    return matchesWip && matchesProduct && matchesCode && matchesCust && matchesStage && matchesPriority && matchesGlobal && matchesRadio;
+  });
 
   const totalMasterCards = jobCards.length;
   const inProgressCount = jobCards.filter((j) => j.status === 'IN_PROGRESS').length;
-  const unlaunchedCount = jobCards.filter((j) => j.status === 'UNLAUNCHED').length;
-  const completedCount = jobCards.filter((j) => j.status === 'COMPLETED').length;
-  const totalSubLots = jobCards.reduce((acc, curr) => acc + (curr.subJobCards?.length || (curr.status === 'IN_PROGRESS' ? 1 : 0)), 0);
+  const totalSubLots = jobCards.reduce((acc, j) => acc + (j.subJobCards?.length || 1), 0);
+  const activePnlCount = jobCards.reduce((acc, j) => acc + (j.prodPnlQty || 0), 0);
+  const activeSqmArea = jobCards.reduce((acc, j) => acc + (j.prodPnlAreaSqm || 0), 0);
 
-  const totalPnlCount = jobCards.reduce((acc, curr) => acc + (curr.prodPnlQty || curr.totalQty || 0), 0);
-  const activePnlCount = jobCards.filter((j) => j.status === 'IN_PROGRESS').reduce((acc, curr) => acc + (curr.prodPnlQty || curr.totalQty || 0), 0);
+  const getStatusBadge = (status?: string) => {
+    switch (status) {
+      case 'DONE':
+      case 'COMPLETED':
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">DONE</span>;
+      case 'IN_PROGRESS':
+      case 'ACTIVE':
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">ACTIVE</span>;
+      case 'PENDING':
+      case 'PAUSED':
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">PENDING</span>;
+      default:
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">UNSTARTED</span>;
+    }
+  };
 
-  const totalSqmArea = jobCards.reduce((acc, curr) => acc + (curr.prodPnlAreaSqm || 50), 0);
-  const activeSqmArea = jobCards.filter((j) => j.status === 'IN_PROGRESS').reduce((acc, curr) => acc + (curr.prodPnlAreaSqm || 50), 0);
+  const formatDateDisplay = (dateStr?: string) => {
+    if (!dateStr) return '08-Sep-26';
+    if (dateStr.includes('-') && dateStr.length >= 10) {
+      const clean = dateStr.split('T')[0];
+      const parts = clean.split('-');
+      if (parts.length === 3 && parts[0].length === 4) {
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const mIdx = parseInt(parts[1], 10) - 1;
+        const yr = parts[0].slice(2);
+        return `${parts[2]}-${months[mIdx] || parts[1]}-${yr}`;
+      }
+    }
+    return dateStr;
+  };
 
   return (
-    <div className="space-y-6 p-6 max-w-[1400px] mx-auto pb-16 bg-slate-100 min-h-screen text-slate-900 font-sans">
+    <div className="space-y-5 p-3 sm:p-5 w-full max-w-[1600px] mx-auto pb-16 bg-slate-50/50 min-h-screen text-slate-900 font-sans">
       
-      {/* Top Banner & Header */}
-      <div className="bg-white border border-slate-200/90 p-4 sm:p-5 rounded-2xl shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-        {/* Left Info Column */}
-        <div className="flex items-center gap-3.5 min-w-0">
-          <div className="w-11 h-11 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0 shadow-2xs">
-            <Layers className="w-5 h-5" />
+      {/* 1. TOP HEADER BANNER CARD (Clean & Perfectly Aligned Layout) */}
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+        <div className="flex items-start sm:items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center font-bold shrink-0 shadow-2xs">
+            <Layers className="w-6 h-6 stroke-[2.2]" />
           </div>
-          <div className="min-w-0 space-y-1">
+          <div className="space-y-1.5">
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">Job Cards & Movement Flow</h1>
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-blue-50 text-blue-700 font-bold border border-blue-200 whitespace-nowrap">
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                Job Cards & Movement Flow
+              </h1>
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wider font-mono">
                 PF-01 FLOW
               </span>
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-emerald-50 text-emerald-700 font-extrabold border border-emerald-300 whitespace-nowrap flex items-center gap-1.5 shadow-2xs">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wider inline-flex items-center gap-1 font-mono">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                 LIVE
               </span>
             </div>
-            <p className="text-xs text-slate-500 font-medium leading-normal">
+            <p className="text-xs text-slate-500 font-medium">
               Track PCB Job Cards, scan barcodes, execute full or split stage movement from Launch to Packing.
             </p>
+
+            {/* Sub Quick Navigation Shortcuts */}
+            <div className="flex items-center gap-2 pt-1 flex-wrap">
+              <Link
+                href="/job-cards/launch"
+                onClick={(e) => {
+                  // Allow opening inline launch modal directly if on desktop
+                  if (!e.ctrlKey && !e.metaKey) {
+                    // navigate to launch page
+                  }
+                }}
+                className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition-all border border-amber-600 whitespace-nowrap cursor-pointer active:scale-95"
+              >
+                <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                <span>Launch Page ↗</span>
+              </Link>
+
+              <Link
+                href="/job-cards/movement"
+                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition-all border border-blue-700 whitespace-nowrap cursor-pointer active:scale-95"
+              >
+                <ArrowRight className="w-3.5 h-3.5 stroke-[3]" />
+                <span>Movement Center ↗</span>
+              </Link>
+            </div>
           </div>
         </div>
 
-        {/* Right Actions & Controls Row */}
-        <div className="flex items-center gap-2 sm:gap-3 flex-wrap lg:flex-nowrap shrink-0 border-t xl:border-t-0 border-slate-100 pt-3 xl:pt-0">
-          {/* RBAC Role Switcher */}
-          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-xs shadow-2xs">
+        {/* Right Actions: Role Selector, WIP Report Drawer, Add Job Card */}
+        <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+          {/* RBAC Role Switcher Pill */}
+          <div className="flex items-center gap-1.5 bg-slate-100/80 border border-slate-200 px-3 py-2 rounded-xl text-xs">
             <UserCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span className="text-slate-500 font-bold text-[11px] hidden sm:inline">Role:</span>
+            <span className="text-slate-500 font-medium">Role:</span>
             <select
               value={userRole}
               onChange={(e: any) => setUserRole(e.target.value)}
-              className="bg-white text-slate-900 font-bold rounded-lg px-2 py-1 border border-slate-200 text-xs focus:outline-none focus:border-amber-500 cursor-pointer shadow-2xs"
+              className="bg-transparent font-bold text-slate-900 cursor-pointer outline-none text-xs"
             >
               <option value="MASTER">Master ID (Full Control)</option>
               <option value="SUPER_USER">Super User (All Stages)</option>
-              <option value="NORMAL">Normal User (Stage Rights)</option>
+              <option value="NORMAL">Normal User ({assignedStage})</option>
             </select>
-
-            {userRole === 'NORMAL' && (
-              <select
-                value={assignedStage}
-                onChange={(e) => setAssignedStage(e.target.value)}
-                className="bg-amber-50 text-amber-900 font-bold rounded-lg px-2 py-1 border border-amber-300 text-xs cursor-pointer focus:outline-none"
-              >
-                {PF01_STAGES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            )}
           </div>
 
-          {/* WIP & Daily Report Button */}
+          {/* Report Drawer Button */}
           <button
             onClick={() => setShowReportDrawer(true)}
-            className="bg-slate-50 hover:bg-slate-100 text-slate-800 font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-2 border border-slate-200 transition-all whitespace-nowrap cursor-pointer shadow-2xs hover:border-slate-300"
+            className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer whitespace-nowrap"
           >
-            <BarChart3 className="w-4 h-4 text-blue-600 shrink-0" />
+            <BarChart3 className="w-4 h-4 text-blue-600" />
             <span>WIP & Daily Report</span>
           </button>
 
-          {/* ADD NEW JOB CARD Primary Action */}
+          {/* Add New Job Card Button */}
           <button
             onClick={() => setShowGenerateModal(true)}
-            className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black px-4 sm:px-5 py-2 rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-sm shrink-0 whitespace-nowrap cursor-pointer active:scale-95"
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-md hover:shadow-lg transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-amber-600"
           >
-            <Plus className="w-4 h-4 stroke-[3] shrink-0 text-slate-950" />
-            <span>ADD NEW JOB CARD</span>
+            <Plus className="w-4 h-4 stroke-[3]" />
+            <span>+ ADD NEW JOB CARD</span>
           </button>
         </div>
       </div>
 
-      {/* Barcode Scanner & Metrics Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Barcode Lookup Input */}
-        <div className="lg:col-span-5 bg-white border border-slate-200 p-4 rounded-xl shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
-              <QrCode className="w-4 h-4 text-blue-600" />
-              Barcode Scanner / Fast Job Movement
-            </label>
-            <span className="text-[10px] text-slate-400">e.g. 26-27-1729</span>
+      {/* 2. SECOND ROW SUMMARY CARDS & BARCODE SCANNER */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5 items-stretch">
+        
+        {/* Card 1: Barcode Scanner / Fast Job Movement */}
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex flex-col justify-between space-y-2.5 min-h-[96px]">
+          <div className="flex items-center justify-between gap-1">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider min-w-0">
+              <Scan className="w-4 h-4 text-blue-600 shrink-0" />
+              <span className="truncate">FAST BARCODE SCANNER</span>
+            </div>
+            <span className="text-[10px] font-mono font-bold text-slate-400 shrink-0 bg-slate-100 px-1.5 py-0.5 rounded">
+              26-27-1729
+            </span>
           </div>
 
-          <form onSubmit={handleBarcodeSubmit} className="flex gap-2">
+          <form onSubmit={handleBarcodeSubmit} className="flex items-center gap-2">
             <input
               type="text"
-              placeholder="Scan or type Job Card No. (e.g. 26-27-1729)..."
               value={barcodeInput}
               onChange={(e) => setBarcodeInput(e.target.value)}
-              className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-amber-500"
+              placeholder="Scan code (e.g. 1729)..."
+              className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white placeholder-slate-400 shadow-2xs"
             />
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center gap-1 shadow-sm cursor-pointer"
+              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl transition-all cursor-pointer shadow-xs inline-flex items-center gap-1 shrink-0 active:scale-95"
             >
-              <Zap className="w-3.5 h-3.5" />
-              Scan
+              <Zap className="w-3.5 h-3.5 fill-current" />
+              <span>Scan</span>
             </button>
           </form>
         </div>
 
-        {/* Live Metrics Cards Grid */}
-        <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* Card 1: Active Job Cards */}
-          <div className="bg-gradient-to-br from-white to-blue-50/40 border border-blue-100 p-3.5 rounded-xl flex items-center gap-3 shadow-2xs relative overflow-hidden transition-all hover:border-blue-300">
-            <div className="w-10 h-10 rounded-xl bg-blue-600/10 border border-blue-200 flex items-center justify-center text-blue-700 shrink-0 shadow-2xs">
-              <Layers className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <p className="text-[11px] font-bold tracking-tight text-slate-500 uppercase">Active Job Cards</p>
-                <span className="flex h-2 w-2 relative shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-              </div>
-              <p className="text-base font-black text-slate-900 mt-0.5 font-mono tracking-tight">{totalMasterCards} Master Cards</p>
-              <p className="text-[10px] font-semibold text-blue-700 mt-0.5 truncate flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-600 inline-block" />
-                {inProgressCount} Active in Prod ({totalSubLots} Lots)
-              </p>
-            </div>
+        {/* Card 2: Active Job Cards */}
+        <div className="bg-white border border-blue-100 rounded-2xl p-4 shadow-xs flex items-center gap-3 min-h-[96px]">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
+            <Layers className="w-5 h-5" />
           </div>
-
-          {/* Card 2: Total Production PNL */}
-          <div className="bg-gradient-to-br from-white to-emerald-50/40 border border-emerald-100 p-3.5 rounded-xl flex items-center gap-3 shadow-2xs relative overflow-hidden transition-all hover:border-emerald-300">
-            <div className="w-10 h-10 rounded-xl bg-emerald-600/10 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0 shadow-2xs">
-              <Cpu className="w-5 h-5" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">ACTIVE JOB CARDS</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
             </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <p className="text-[11px] font-bold tracking-tight text-slate-500 uppercase">Total Production PNL</p>
-                <span className="flex h-2 w-2 relative shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-              </div>
-              <p className="text-base font-black text-slate-900 mt-0.5 font-mono tracking-tight">{totalPnlCount} PNL Qty</p>
-              <p className="text-[10px] font-semibold text-emerald-700 mt-0.5 truncate flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 inline-block" />
-                {activePnlCount} PNL In-Progress
-              </p>
+            <div className="text-base sm:text-lg font-black text-slate-900 font-mono mt-0.5 truncate">
+              {totalMasterCards} Master Cards
             </div>
-          </div>
-
-          {/* Card 3: Total WIP Area */}
-          <div className="bg-gradient-to-br from-white to-purple-50/40 border border-purple-100 p-3.5 rounded-xl flex items-center gap-3 shadow-2xs relative overflow-hidden transition-all hover:border-purple-300">
-            <div className="w-10 h-10 rounded-xl bg-purple-600/10 border border-purple-200 flex items-center justify-center text-purple-700 shrink-0 shadow-2xs">
-              <Split className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <p className="text-[11px] font-bold tracking-tight text-slate-500 uppercase">Total WIP Area</p>
-                <span className="flex h-2 w-2 relative shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-purple-500"></span>
-                </span>
-              </div>
-              <p className="text-base font-black text-slate-900 mt-0.5 font-mono tracking-tight">{totalSqmArea.toFixed(1)} Sqm</p>
-              <p className="text-[10px] font-semibold text-purple-700 mt-0.5 truncate flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-600 inline-block" />
-                {activeSqmArea.toFixed(1)} Sqm Active Floor
-              </p>
+            <div className="text-[11px] text-blue-700 font-semibold truncate">
+              • {inProgressCount} Active in Prod ({totalSubLots} Lots)
             </div>
           </div>
         </div>
+
+        {/* Card 3: Total Production PNL */}
+        <div className="bg-white border border-emerald-100 rounded-2xl p-4 shadow-xs flex items-center gap-3 min-h-[96px]">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
+            <Cpu className="w-5 h-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">TOTAL PRODUCTION PNL</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+            </div>
+            <div className="text-base sm:text-lg font-black text-slate-900 font-mono mt-0.5 truncate">
+              {activePnlCount} PNL Qty
+            </div>
+            <div className="text-[11px] text-emerald-700 font-semibold truncate">
+              • {activePnlCount} PNL In-Progress
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Total WIP Area */}
+        <div className="bg-white border border-purple-100 rounded-2xl p-4 shadow-xs flex items-center gap-3 min-h-[96px]">
+          <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold shrink-0">
+            <Split className="w-5 h-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">TOTAL WIP AREA</span>
+              <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0"></span>
+            </div>
+            <div className="text-base sm:text-lg font-black text-slate-900 font-mono mt-0.5 truncate">
+              {activeSqmArea.toFixed(1)} Sqm
+            </div>
+            <div className="text-[11px] text-purple-700 font-semibold truncate">
+              • {activeSqmArea.toFixed(1)} Sqm Active Floor
+            </div>
+          </div>
+        </div>
+
       </div>
 
-      {/* Filter & Search Bar */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
-        <div className="relative flex-1 max-w-md">
+      {/* 3. THIRD ROW SEARCH BAR & STATUS COUNT PILLS (Matching Screenshot 2) */}
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-3 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        
+        {/* Search Bar Input */}
+        <div className="flex-1 max-w-xl relative">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
+            value={globalSearch}
+            onChange={(e) => setGlobalSearch(e.target.value)}
             placeholder="Search by Job Card # (e.g. 26-27-1729), Part Code, Customer..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 py-2 text-xs text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-amber-500"
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-900 font-medium focus:bg-white focus:outline-none focus:border-amber-500 placeholder-slate-400 shadow-2xs"
           />
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-          <span className="text-xs text-slate-500 font-medium whitespace-nowrap mr-1">Status:</span>
-          {['ALL', 'UNLAUNCHED', 'IN_PROGRESS', 'COMPLETED'].map((st) => {
-            const count =
-              st === 'ALL'
-                ? jobCards.length
-                : jobCards.filter((j) => {
-                    if (st === 'UNLAUNCHED') return j.status === 'UNLAUNCHED' || j.status === 'CREATED';
-                    return j.status === st;
-                  }).length;
-            const isSelected = statusFilter === st;
+        {/* Status Count Pills */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-bold text-slate-500 mr-1">Status:</span>
 
-            return (
-              <button
-                key={st}
-                onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
-                  isSelected
-                    ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
-                }`}
-              >
-                <span>{st === 'ALL' ? 'All Cards' : st.replace('_', ' ')}</span>
-                <span
-                  className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${
-                    isSelected ? 'bg-slate-950/20 text-slate-950 font-extrabold' : 'bg-slate-200 text-slate-700 font-bold'
-                  }`}
-                >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
+          <button
+            onClick={() => setStatusRadio('All')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              statusRadio === 'All'
+                ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            <span>All Cards</span>
+            <span className="px-1.5 py-0.2 bg-slate-950/10 rounded font-mono text-[11px]">{totalMasterCards}</span>
+          </button>
+
+          <button
+            onClick={() => setStatusRadio('Unstarted')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              statusRadio === 'Unstarted'
+                ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            <span>UNLAUNCHED</span>
+            <span className="px-1.5 py-0.2 bg-slate-950/10 rounded font-mono text-[11px]">
+              {jobCards.filter((j) => j.status === 'UNLAUNCHED' || j.status === 'CREATED').length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setStatusRadio('Active')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              statusRadio === 'Active'
+                ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            <span>IN PROGRESS</span>
+            <span className="px-1.5 py-0.2 bg-slate-950/10 rounded font-mono text-[11px]">{inProgressCount}</span>
+          </button>
+
+          <button
+            onClick={() => setStatusRadio('Done')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              statusRadio === 'Done'
+                ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            <span>COMPLETED</span>
+            <span className="px-1.5 py-0.2 bg-slate-950/10 rounded font-mono text-[11px]">
+              {jobCards.filter((j) => j.status === 'COMPLETED').length}
+            </span>
+          </button>
         </div>
+
       </div>
 
-      {/* Main Job Cards Data Table - Responsive & No Horizontal Scroll Required */}
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-        <div className="w-full">
-          <table className="w-full text-left border-collapse table-auto">
+      {/* 4. FOURTH ROW: PRODUCTION JOBS (WIP) DATA TABLE (Matching Screenshot 1 & PDF Specs) */}
+      <div className="border border-slate-300/80 rounded-2xl overflow-hidden shadow-xs bg-white">
+        <div className="w-full overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs font-sans">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/90 text-[10px] font-mono uppercase tracking-wider text-slate-500">
-                <th className="py-3 px-3 w-[14%]">Job Card #</th>
-                <th className="py-3 px-3 w-[24%]">Customer & Part Details</th>
-                <th className="py-3 px-3 w-[14%] text-center">PNL & PCB Qty</th>
-                <th className="py-3 px-3 w-[8%] text-center">Area (Sqm)</th>
-                <th className="py-3 px-3 w-[11%] text-center">Status</th>
-                <th className="py-3 px-3 w-[9%] text-center">Priority</th>
-                <th className="py-3 px-3 w-[10%] text-center">Current Stage</th>
-                <th className="py-3 px-3 w-[10%] text-right">Actions</th>
+              {/* Row 1: Column Header Titles */}
+              <tr className="bg-slate-100 border-b border-slate-300 text-[11px] font-bold text-slate-700">
+                <th className="py-2.5 px-3 border-r border-slate-300 min-w-[140px]">WIP No.</th>
+                <th className="py-2.5 px-3 border-r border-slate-300 min-w-[180px]">Product</th>
+                <th className="py-2.5 px-3 border-r border-slate-300 min-w-[100px]">Product Code</th>
+                <th className="py-2.5 px-3 border-r border-slate-300 min-w-[110px]">Customer</th>
+                <th className="py-2.5 px-3 border-r border-slate-300 min-w-[90px] whitespace-nowrap">Launch</th>
+                <th className="py-2.5 px-3 border-r border-slate-300 min-w-[90px] whitespace-nowrap">Target</th>
+                <th className="py-2.5 px-3 border-r border-slate-300 min-w-[65px] whitespace-nowrap">Priority</th>
+                <th className="py-2.5 px-3 border-r border-slate-300 min-w-[60px] text-right whitespace-nowrap">Pndg</th>
+                <th className="py-2.5 px-3 border-r border-slate-300 min-w-[50px] whitespace-nowrap">Unit</th>
+                <th className="py-2.5 px-3 border-r border-slate-300 min-w-[65px] text-right whitespace-nowrap">Area</th>
+                <th className="py-2.5 px-3 border-r border-slate-300 min-w-[110px] whitespace-nowrap">Stage</th>
+                <th className="py-2.5 px-3 border-r border-slate-300 min-w-[110px] whitespace-nowrap">Progress</th>
+                <th className="py-2.5 px-3 text-center min-w-[75px] whitespace-nowrap">Req</th>
+              </tr>
+
+              {/* Row 2: Per-Column Filter Inputs */}
+              <tr className="bg-slate-50/90 border-b border-slate-300">
+                <td className="p-1 border-r border-slate-300">
+                  <input
+                    type="text"
+                    value={colFilters.wipNo}
+                    onChange={(e) => setColFilters({ ...colFilters, wipNo: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
+                  />
+                </td>
+                <td className="p-1 border-r border-slate-300">
+                  <input
+                    type="text"
+                    value={colFilters.product}
+                    onChange={(e) => setColFilters({ ...colFilters, product: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 shadow-2xs"
+                  />
+                </td>
+                <td className="p-1 border-r border-slate-300">
+                  <input
+                    type="text"
+                    value={colFilters.productCode}
+                    onChange={(e) => setColFilters({ ...colFilters, productCode: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
+                  />
+                </td>
+                <td className="p-1 border-r border-slate-300">
+                  <input
+                    type="text"
+                    value={colFilters.customer}
+                    onChange={(e) => setColFilters({ ...colFilters, customer: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 shadow-2xs"
+                  />
+                </td>
+                <td className="p-1 border-r border-slate-300">
+                  <input
+                    type="text"
+                    value={colFilters.launch}
+                    onChange={(e) => setColFilters({ ...colFilters, launch: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
+                  />
+                </td>
+                <td className="p-1 border-r border-slate-300">
+                  <input
+                    type="text"
+                    value={colFilters.target}
+                    onChange={(e) => setColFilters({ ...colFilters, target: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
+                  />
+                </td>
+                <td className="p-1 border-r border-slate-300">
+                  <input
+                    type="text"
+                    value={colFilters.priority}
+                    onChange={(e) => setColFilters({ ...colFilters, priority: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 shadow-2xs"
+                  />
+                </td>
+                <td className="p-1 border-r border-slate-300">
+                  <input
+                    type="text"
+                    value={colFilters.pndg}
+                    onChange={(e) => setColFilters({ ...colFilters, pndg: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
+                  />
+                </td>
+                <td className="p-1 border-r border-slate-300">
+                  <input
+                    type="text"
+                    value={colFilters.unit}
+                    onChange={(e) => setColFilters({ ...colFilters, unit: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 shadow-2xs"
+                  />
+                </td>
+                <td className="p-1 border-r border-slate-300">
+                  <input
+                    type="text"
+                    value={colFilters.area}
+                    onChange={(e) => setColFilters({ ...colFilters, area: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
+                  />
+                </td>
+                <td className="p-1 border-r border-slate-300">
+                  <input
+                    type="text"
+                    value={colFilters.stage}
+                    onChange={(e) => setColFilters({ ...colFilters, stage: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 shadow-2xs"
+                  />
+                </td>
+                <td className="p-1 border-r border-slate-300">
+                  <input
+                    type="text"
+                    value={colFilters.progress}
+                    onChange={(e) => setColFilters({ ...colFilters, progress: e.target.value })}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 shadow-2xs"
+                  />
+                </td>
+                <td className="p-1 text-center bg-slate-50"></td>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-xs">
-              {filteredCards.map((jc) => {
-                const isExpanded = expandedRow === jc.id;
-                const isUnlaunched = jc.status === 'UNLAUNCHED' || jc.status === 'CREATED';
 
-                return (
-                  <React.Fragment key={jc.id}>
-                    <tr className="hover:bg-slate-50/80 transition-colors">
-                      {/* Job Card No */}
-                      <td className="py-3 px-3 font-mono">
+            <tbody className="divide-y divide-slate-200">
+              {filteredCards.length === 0 ? (
+                <tr>
+                  <td colSpan={13} className="py-12 text-center text-slate-400 text-xs font-mono">
+                    No production jobs found matching filters.
+                  </td>
+                </tr>
+              ) : (
+                filteredCards.map((jc, idx) => {
+                  const stageIndex = PF01_STAGES.indexOf(jc.currentStageName || PF01_STAGES[0]);
+                  const progressPct = Math.round(((stageIndex + 1) / PF01_STAGES.length) * 100);
+
+                  return (
+                    <tr
+                      key={jc.id}
+                      className={`hover:bg-amber-50/50 transition-colors ${
+                        jc.isNewlyCreated
+                          ? 'bg-emerald-50/80 border-l-4 border-l-emerald-500 font-medium'
+                          : idx % 2 === 0
+                          ? 'bg-white'
+                          : 'bg-slate-50/60'
+                      }`}
+                    >
+                      {/* WIP No. with Printer Icon */}
+                      <td className="py-2.5 px-3 border-r border-slate-200 font-mono font-bold text-slate-900 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
                           <button
-                            onClick={() => setExpandedRow(isExpanded ? null : jc.id)}
-                            className="p-1 rounded-md hover:bg-slate-200 text-slate-500 transition-colors cursor-pointer shrink-0"
+                            onClick={() => setShowQrModal(jc)}
+                            title="Print QR Sticker Tag"
+                            className="text-amber-800 hover:text-amber-950 cursor-pointer p-0.5 shrink-0"
                           >
-                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-amber-600" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            <Printer className="w-3.5 h-3.5" />
                           </button>
-
-                          <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0">
-                            <FileText className="w-3.5 h-3.5" />
-                          </div>
-
-                          <span className="font-bold text-slate-900 px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 font-mono text-xs whitespace-nowrap">
-                            {jc.jobCardNo}
-                          </span>
+                          <span>{jc.jobCardNo}</span>
+                          {jc.isNewlyCreated && (
+                            <span className="px-1.5 py-0.5 bg-emerald-600 text-white font-black text-[9px] rounded uppercase tracking-wider animate-pulse shrink-0 shadow-2xs">
+                              NEW
+                            </span>
+                          )}
+                          {jc.subJobCards && jc.subJobCards.length > 1 && (
+                            <span className="text-[10px] text-slate-500 font-normal">({jc.subJobCards.length} Lots)</span>
+                          )}
                         </div>
                       </td>
 
-                      {/* Customer & Part Details */}
-                      <td className="py-3 px-3 min-w-0">
-                        <div className="font-extrabold text-slate-900 text-xs truncate" title={jc.customerPartNo || jc.product?.name}>
-                          {jc.customerPartNo || jc.product?.name}
-                        </div>
-                        <div className="text-[10px] text-slate-500 flex items-center gap-1.5 mt-0.5 font-mono truncate">
-                          <span className="text-blue-700 font-bold">RFE: {jc.rfePartCode || 'D3625'}</span>
-                          <span>•</span>
-                          <span className="truncate">Cust: {jc.customerCode || 'CUST-RF045'}</span>
-                        </div>
+                      {/* Product */}
+                      <td className="py-2.5 px-3 border-r border-slate-200 text-slate-900 truncate max-w-[200px]" title={jc.customerPartNo}>
+                        {jc.customerPartNo}
                       </td>
 
-                      {/* PNL & PCB Qty */}
-                      <td className="py-3 px-3 text-center font-mono">
-                        <div className="font-extrabold text-slate-900 text-xs whitespace-nowrap">
-                          {jc.prodPnlQty || jc.totalQty} <span className="text-[10px] font-medium text-slate-500">Prod PNL</span>
-                        </div>
-                        <div className="text-[10px] text-slate-500 mt-0.5 whitespace-nowrap">
-                          {jc.custPnlQty || (jc.prodPnlQty * 2)} Cust • {jc.totalPcbQty || (jc.prodPnlQty * 4)} PCB
-                        </div>
+                      {/* Product Code */}
+                      <td className="py-2.5 px-3 border-r border-slate-200 font-mono font-bold text-slate-800 whitespace-nowrap">
+                        {jc.rfePartCode}
                       </td>
 
-                      {/* Area Sqm */}
-                      <td className="py-3 px-3 text-center font-mono font-bold text-emerald-700 text-xs whitespace-nowrap">
-                        {jc.prodPnlAreaSqm || 50} Sqm
+                      {/* Customer */}
+                      <td className="py-2.5 px-3 border-r border-slate-200 text-slate-700 font-medium whitespace-nowrap">
+                        {jc.customerCode}
                       </td>
 
-                      {/* Status */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        {getStatusBadge(jc.status)}
+                      {/* Launch */}
+                      <td className="py-2.5 px-3 border-r border-slate-200 font-mono text-[11px] text-slate-600 whitespace-nowrap">
+                        31-Aug-26
+                      </td>
+
+                      {/* Target */}
+                      <td className="py-2.5 px-3 border-r border-slate-200 font-mono text-[11px] text-slate-600 whitespace-nowrap">
+                        {formatDateDisplay(jc.targetDate)}
                       </td>
 
                       {/* Priority */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                      <td className="py-2.5 px-3 border-r border-slate-200 whitespace-nowrap">
                         <span
-                          className={`inline-block text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider whitespace-nowrap shadow-2xs ${
-                            jc.priority === 'MOST URGENT'
-                              ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                              : jc.priority === 'HIGH'
-                              ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                              : 'bg-slate-100 text-slate-700 border border-slate-300'
+                          className={`font-bold text-[11px] ${
+                            jc.priority === 'MOST URGENT' || jc.priority === 'HIGH'
+                              ? 'text-rose-600'
+                              : 'text-slate-700'
                           }`}
                         >
-                          {jc.priority || 'NORMAL'}
+                          {jc.priority === 'MOST URGENT' ? 'Top' : jc.priority || 'Normal'}
                         </span>
                       </td>
 
-                      {/* Current Stage */}
-                      <td className="py-3 px-3 text-center">
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 inline-flex items-center gap-1 whitespace-nowrap">
-                          <Workflow className="w-3 h-3 shrink-0" />
-                          <span>{jc.currentStageName || PF01_STAGES[0]}</span>
-                        </span>
+                      {/* Pndg */}
+                      <td className="py-2.5 px-3 border-r border-slate-200 font-mono text-right font-bold text-slate-900 whitespace-nowrap">
+                        {jc.totalPcbQty || jc.prodPnlQty * 4}
                       </td>
 
-                      {/* Action Buttons */}
-                      <td className="py-3 px-3 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          {/* QR Code Icon Button */}
-                          <button
-                            onClick={() => setShowQrModal(jc)}
-                            title="View & Print QR Sticker Tag"
-                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-lg border border-slate-200 text-xs transition-all cursor-pointer shrink-0"
-                          >
-                            <QrCode className="w-3.5 h-3.5 text-blue-600" />
-                          </button>
+                      {/* Unit */}
+                      <td className="py-2.5 px-3 border-r border-slate-200 text-slate-600 whitespace-nowrap">
+                        PCBs
+                      </td>
 
-                          {/* Launch Button (If Unlaunched) */}
-                          {isUnlaunched && (
-                            <button
-                              onClick={() => handleLaunchExistingJobCard(jc.id)}
-                              title="Launch Job Card into Stage 1 Production"
-                              className="px-2 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-lg text-xs transition-all shadow-xs inline-flex items-center gap-1 cursor-pointer animate-pulse shrink-0"
-                            >
-                              <Play className="w-3 h-3 fill-current" />
-                              <span>Launch</span>
-                            </button>
-                          )}
+                      {/* Area */}
+                      <td className="py-2.5 px-3 border-r border-slate-200 font-mono text-right font-bold text-emerald-700 whitespace-nowrap">
+                        {jc.prodPnlAreaSqm ? jc.prodPnlAreaSqm.toFixed(2) : '50.00'}
+                      </td>
 
-                          {/* Movement Options Button */}
-                          <button
-                            onClick={() => {
-                              setSelectedMovementJob(jc);
-                              setMovementTab('VIEW');
-                            }}
-                            className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold rounded-lg text-xs transition-all shadow-xs inline-flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
+                      {/* Stage */}
+                      <td className="py-2.5 px-3 border-r border-slate-200 font-bold text-slate-900 whitespace-nowrap">
+                        {jc.currentStageName || PF01_STAGES[0]}
+                      </td>
+
+                      {/* Progress Bar */}
+                      <td className="py-2.5 px-3 border-r border-slate-200">
+                        <div className="w-full bg-slate-200 rounded-full h-4 relative overflow-hidden border border-slate-300/80">
+                          <div
+                            className={`h-full text-[9px] font-extrabold text-white flex items-center justify-center transition-all px-1 whitespace-nowrap ${
+                              progressPct >= 100
+                                ? 'bg-emerald-600'
+                                : progressPct >= 50
+                                ? 'bg-amber-500'
+                                : 'bg-rose-500'
+                            }`}
+                            style={{ width: `${Math.max(20, progressPct)}%` }}
                           >
-                            <span>Move</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </button>
+                            {progressPct}%
+                          </div>
                         </div>
                       </td>
+
+                      {/* Req (Action Button for Job Movement Modal) */}
+                      <td className="py-2 px-3 text-center whitespace-nowrap">
+                        <button
+                          onClick={() => {
+                            setSelectedMovementJob(jc);
+                            setMovementTab('VIEW');
+                          }}
+                          title="Open Job Movement Options Modal"
+                          className="h-7 px-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-lg border border-amber-600 text-[10px] inline-flex items-center justify-center gap-1 cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap"
+                        >
+                          <FileText className="w-3 h-3 stroke-[2.5]" />
+                          <span>Req</span>
+                        </button>
+                      </td>
                     </tr>
-
-                    {/* Expandable History & Sub Cards */}
-                    {isExpanded && (
-                      <tr className="bg-slate-50/80 border-b border-slate-200">
-                        <td colSpan={8} className="p-4">
-                          <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 text-xs shadow-2xs">
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                              <div className="font-bold text-slate-900 flex items-center gap-2">
-                                <Workflow className="w-4 h-4 text-blue-600" />
-                                Job Process Flow (PF-01) Details & Sub-Job Cards
-                              </div>
-                              <button
-                                onClick={() => setShowQrModal(jc)}
-                                className="text-blue-600 hover:underline font-bold flex items-center gap-1 text-[11px]"
-                              >
-                                <QrCode className="w-3.5 h-3.5" /> Print Job Sticker
-                              </button>
-                            </div>
-
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px] text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                              <div>Job Card No: <strong className="text-slate-900 font-mono">{jc.jobCardNo}</strong></div>
-                              <div>Customer: <strong className="text-slate-900">{jc.customerCode || 'CUST-RF045'}</strong></div>
-                              <div>Prod PNL Qty: <strong className="text-blue-700">{jc.prodPnlQty} PNL</strong></div>
-                              <div>Total Area: <strong className="text-emerald-700">{jc.prodPnlAreaSqm} Sqm</strong></div>
-                            </div>
-
-                            {/* Sub Job Cards List */}
-                            {jc.subJobCards && jc.subJobCards.length > 0 && (
-                              <div className="space-y-1.5 pt-1">
-                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Split Batches / Sub Cards</div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  {jc.subJobCards.map((sub) => (
-                                    <div key={sub.id} className="bg-slate-100 p-2 rounded-lg border border-slate-200 flex items-center justify-between font-mono text-[11px]">
-                                      <div>
-                                        <span className="font-bold text-slate-900">{sub.subJobCardNo}</span>
-                                        <span className="text-slate-500 ml-2">({sub.qty} PNL)</span>
-                                      </div>
-                                      <span className="text-[10px] px-2 py-0.5 bg-white border border-slate-300 rounded font-sans text-blue-700 font-bold">
-                                        {sub.currentStage?.name || jc.currentStageName}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
-                );
-              })}
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
+
+        {/* Footer Bar: Export to Excel & Pagination Controls */}
+        <div className="bg-slate-100/90 border-t border-slate-300 p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-sans text-slate-700">
+          <div>
+            <button
+              onClick={() => showToast('Exporting production WIP report to Excel...', 'info')}
+              className="px-3.5 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all"
+            >
+              <Download className="w-4 h-4 text-emerald-600" /> Export to Excel
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3 font-mono text-[11px] flex-wrap">
+            <div>
+              Page <input type="text" value={currentPage} readOnly className="w-8 text-center bg-white border border-slate-300 rounded py-0.5 font-bold" /> of 40
+            </div>
+            <div className="flex items-center gap-1">
+              <button className="px-2 py-0.5 bg-white border border-slate-300 rounded font-bold hover:bg-slate-50 cursor-pointer">|&lt;&lt;</button>
+              <button className="px-2 py-0.5 bg-white border border-slate-300 rounded font-bold hover:bg-slate-50 cursor-pointer">&lt;</button>
+              <button className="px-2 py-0.5 bg-white border border-slate-300 rounded font-bold hover:bg-slate-50 cursor-pointer">&gt;</button>
+              <button className="px-2 py-0.5 bg-white border border-slate-300 rounded font-bold hover:bg-slate-50 cursor-pointer">&gt;&gt;|</button>
+            </div>
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-bold cursor-pointer"
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+            </select>
+            <div>
+              View 1 - {filteredCards.length} of {totalMasterCards}
+            </div>
+          </div>
+        </div>
       </div>
+
+
 
       {/* MODAL 1: ADD NEW JOB CARD */}
       {showGenerateModal && (
@@ -1246,6 +1549,86 @@ export default function JobCardsPage() {
 
             <form onSubmit={handleLaunchJobCard} className="space-y-4 text-xs">
               
+              {/* Job Card Photo Attachment Field */}
+              <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-2xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-blue-600" />
+                    <span>Job Card Photo (Attach Original Physical Job Card Photo) *</span>
+                  </label>
+                  {launchForm.photoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setPhotoLightbox(launchForm.photoUrl)}
+                      className="text-[11px] font-bold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" /> Preview Full
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-2 font-sans">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      id="jobCardPhotoFileInput"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (uploadEvt) => {
+                            const res = uploadEvt.target?.result as string;
+                            if (res) {
+                              setLaunchForm({ ...launchForm, photoUrl: res });
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="hidden"
+                    />
+
+                    <label
+                      htmlFor="jobCardPhotoFileInput"
+                      className="flex-1 py-2 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer transition-all shadow-2xs"
+                    >
+                      <Upload className="w-4 h-4 text-blue-600" />
+                      <span>Upload Photo from Device / Camera</span>
+                    </label>
+
+                    {launchForm.photoUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setLaunchForm({ ...launchForm, photoUrl: '' })}
+                        className="py-2 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-extrabold flex items-center gap-1 cursor-pointer transition-all"
+                      >
+                        <X className="w-4 h-4 text-rose-600" />
+                        <span>Remove</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      value={launchForm.photoUrl}
+                      onChange={(e) => setLaunchForm({ ...launchForm, photoUrl: e.target.value })}
+                      className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:border-amber-500"
+                      placeholder="Or paste image URL directly..."
+                    />
+                    {launchForm.photoUrl && (
+                      <img
+                        src={launchForm.photoUrl}
+                        alt="Job Card Photo Preview"
+                        className="w-9 h-9 rounded-lg object-cover border border-slate-300 shadow-2xs shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => setPhotoLightbox(launchForm.photoUrl)}
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Row 1: Job Card No & Target Date */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -1311,10 +1694,10 @@ export default function JobCardsPage() {
                 </div>
               </div>
 
-              {/* Row 3: Priority & Production PNL Qty */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Row 3: Priority, Prod PNL, Cust PNL, PCB Qty */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Priority Level *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Priority *</label>
                   <select
                     value={launchForm.priority}
                     onChange={(e: any) => setLaunchForm({ ...launchForm, priority: e.target.value })}
@@ -1327,7 +1710,7 @@ export default function JobCardsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-extrabold text-slate-900 mb-1">Production PNL Qty *</label>
+                  <label className="block text-xs font-extrabold text-slate-900 mb-1">Prod PNL Qty *</label>
                   <input
                     type="number"
                     required
@@ -1347,13 +1730,216 @@ export default function JobCardsPage() {
                     placeholder="40"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Cust PNL Qty</label>
+                  <input
+                    type="number"
+                    value={launchForm.custPnlQty}
+                    onChange={(e) => setLaunchForm({ ...launchForm, custPnlQty: Number(e.target.value) })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Total PCB Qty</label>
+                  <input
+                    type="number"
+                    value={launchForm.totalPcbQty}
+                    onChange={(e) => setLaunchForm({ ...launchForm, totalPcbQty: Number(e.target.value) })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900"
+                  />
+                </div>
               </div>
 
-              {/* Row 4: Auto-Calculated Details Summary */}
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 grid grid-cols-3 gap-2 text-[11px] text-slate-600">
-                <div>Cust PNL: <strong className="text-slate-900">{launchForm.custPnlQty}</strong></div>
-                <div>PCB Qty: <strong className="text-slate-900">{launchForm.totalPcbQty}</strong></div>
-                <div>Area: <strong className="text-emerald-700 font-bold">{launchForm.prodPnlAreaSqm} Sqm</strong></div>
+              {/* Row 4: Prod Area Sqm, Cust Area Sqm, Job Flow Selection */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Prod Area (Sqm)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={launchForm.prodPnlAreaSqm}
+                    onChange={(e) => setLaunchForm({ ...launchForm, prodPnlAreaSqm: Number(e.target.value) })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Cust Area (Sqm)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={launchForm.custPnlAreaSqm}
+                    onChange={(e) => setLaunchForm({ ...launchForm, custPnlAreaSqm: Number(e.target.value) })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Job Flow Selection *</label>
+                  <select
+                    value={launchForm.jobFlowSelection}
+                    onChange={(e) => setLaunchForm({ ...launchForm, jobFlowSelection: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900"
+                  >
+                    <option value="PF-01">PF-01 Standard Flow (19 Stages)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Pre-Launch Sub-Job Card Split Builder (PDF Section 3) */}
+              <div className="bg-amber-50/70 border border-amber-200 p-3.5 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Split className="w-4 h-4 text-amber-700" />
+                    <span className="font-extrabold text-amber-950 text-xs">Pre-Launch Sub-Job Card Lot Splitting</span>
+                  </div>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={launchForm.enablePreSplit}
+                      onChange={(e) => {
+                        const enabled = e.target.checked;
+                        const total = launchForm.prodPnlQty || 40;
+                        const half = Math.floor(total / 2);
+                        setLaunchForm({
+                          ...launchForm,
+                          enablePreSplit: enabled,
+                          customSplits: enabled
+                            ? [
+                                { subNo: `${launchForm.jobCardNo}-1`, qty: half },
+                                { subNo: `${launchForm.jobCardNo}-2`, qty: total - half },
+                              ]
+                            : [],
+                        });
+                      }}
+                      className="w-4 h-4 text-amber-600 rounded cursor-pointer"
+                    />
+                    <span className="text-[11px] font-bold text-amber-900">Divide into Sub-Job Cards</span>
+                  </label>
+                </div>
+
+                {launchForm.enablePreSplit && (
+                  <div className="space-y-2.5 pt-1">
+                    {/* Quick Preset Buttons */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-amber-800 font-bold uppercase font-mono">Quick Presets:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const total = launchForm.prodPnlQty || 40;
+                          const h = Math.floor(total / 2);
+                          setLaunchForm({
+                            ...launchForm,
+                            customSplits: [
+                              { subNo: `${launchForm.jobCardNo}-1`, qty: h },
+                              { subNo: `${launchForm.jobCardNo}-2`, qty: total - h },
+                            ],
+                          });
+                        }}
+                        className="px-2 py-0.5 bg-amber-200 hover:bg-amber-300 text-amber-950 text-[10px] font-bold rounded cursor-pointer"
+                      >
+                        Split 2 Lots
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const total = launchForm.prodPnlQty || 40;
+                          const part = Math.floor(total / 4);
+                          const rem = total - part * 3;
+                          setLaunchForm({
+                            ...launchForm,
+                            customSplits: [
+                              { subNo: `${launchForm.jobCardNo}-1`, qty: part },
+                              { subNo: `${launchForm.jobCardNo}-2`, qty: part },
+                              { subNo: `${launchForm.jobCardNo}-3`, qty: part },
+                              { subNo: `${launchForm.jobCardNo}-4`, qty: rem },
+                            ],
+                          });
+                        }}
+                        className="px-2 py-0.5 bg-amber-200 hover:bg-amber-300 text-amber-950 text-[10px] font-bold rounded cursor-pointer"
+                      >
+                        Split 4 Lots
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const count = launchForm.customSplits.length + 1;
+                          setLaunchForm({
+                            ...launchForm,
+                            customSplits: [
+                              ...launchForm.customSplits,
+                              { subNo: `${launchForm.jobCardNo}-${count}`, qty: 5 },
+                            ],
+                          });
+                        }}
+                        className="px-2 py-0.5 bg-amber-600 text-white text-[10px] font-bold rounded cursor-pointer"
+                      >
+                        + Add Lot
+                      </button>
+                    </div>
+
+                    {/* Sub-Job Cards Items List */}
+                    <div className="space-y-1.5">
+                      {launchForm.customSplits.map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-amber-200">
+                          <input
+                            type="text"
+                            value={item.subNo}
+                            onChange={(e) => {
+                              const updated = [...launchForm.customSplits];
+                              updated[idx].subNo = e.target.value;
+                              setLaunchForm({ ...launchForm, customSplits: updated });
+                            }}
+                            className="w-32 bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs font-mono font-bold"
+                          />
+                          <div className="flex items-center gap-1 font-mono text-xs">
+                            <span>Qty:</span>
+                            <input
+                              type="number"
+                              value={item.qty}
+                              onChange={(e) => {
+                                const updated = [...launchForm.customSplits];
+                                updated[idx].qty = Number(e.target.value);
+                                setLaunchForm({ ...launchForm, customSplits: updated });
+                              }}
+                              className="w-20 bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs font-bold text-blue-700"
+                            />
+                            <span>PNL</span>
+                          </div>
+                          {launchForm.customSplits.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = launchForm.customSplits.filter((_, i) => i !== idx);
+                                setLaunchForm({ ...launchForm, customSplits: updated });
+                              }}
+                              className="text-rose-500 hover:text-rose-700 text-xs font-bold px-1.5 py-0.5 rounded cursor-pointer ml-auto"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Sum Validation Warning */}
+                    {(() => {
+                      const sum = launchForm.customSplits.reduce((acc, curr) => acc + (Number(curr.qty) || 0), 0);
+                      const target = launchForm.prodPnlQty || 40;
+                      const isValid = sum === target;
+                      return (
+                        <div className={`p-2 rounded-lg text-[11px] font-bold flex items-center justify-between ${isValid ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' : 'bg-rose-100 text-rose-900 border border-rose-300'}`}>
+                          <span>Sum of Sub-Lots: {sum} PNL / Total: {target} PNL</span>
+                          <span>{isValid ? '✓ Valid Split' : '⚠️ Must equal Total PNL'}</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
 
               {/* Checkbox: Auto Launch into Production */}
@@ -1385,7 +1971,7 @@ export default function JobCardsPage() {
                   className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="w-4 h-4 stroke-[3]" />
-                  <span>{launchForm.autoLaunch ? 'CREATE & LAUNCH NOW' : 'CREATE JOB CARD'}</span>
+                  <span>LAUNCH JOB</span>
                 </button>
               </div>
             </form>
@@ -1448,27 +2034,108 @@ export default function JobCardsPage() {
             {/* TAB A: JOB CARD VIEW */}
             {movementTab === 'VIEW' && (
               <div className="space-y-4 text-xs">
+                {/* Job Card Photo View (PDF Requirement Section 3A) */}
+                {selectedMovementJob.photoUrl && (
+                  <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={selectedMovementJob.photoUrl}
+                        alt="Job Card Photo"
+                        className="w-12 h-12 rounded-lg object-cover border border-slate-300 shadow-2xs shrink-0 cursor-pointer"
+                        onClick={() => setPhotoLightbox(selectedMovementJob.photoUrl || null)}
+                      />
+                      <div>
+                        <p className="font-extrabold text-slate-900 text-xs flex items-center gap-1">
+                          <Camera className="w-3.5 h-3.5 text-blue-600" /> Original Job Card Photo
+                        </p>
+                        <p className="text-[10px] text-slate-500">Verify original physical hard-copy Job Card</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setPhotoLightbox(selectedMovementJob.photoUrl || null)}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs flex items-center gap-1 cursor-pointer shadow-2xs"
+                    >
+                      <Eye className="w-3.5 h-3.5" /> View Photo
+                    </button>
+                  </div>
+                )}
+
                 {/* Details Card */}
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 font-sans">
                   <div className="font-bold text-slate-900 text-sm border-b border-slate-200 pb-2 flex items-center justify-between">
                     <span className="flex items-center gap-2">
                       <FileText className="w-4 h-4 text-amber-600" />
-                      Job Card Details Summary
+                      Job Card Full Specifications & Details
                     </span>
                     {getStatusBadge(selectedMovementJob.status)}
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div>Job Card No: <strong className="text-slate-900 font-mono">{selectedMovementJob.jobCardNo}</strong></div>
-                    <div>Current Stage: <strong className="text-blue-700 font-bold">{selectedMovementJob.currentStageName || PF01_STAGES[0]}</strong></div>
-                    <div>Customer Code: <strong className="text-slate-900">{selectedMovementJob.customerCode || 'CUST-RF045'}</strong></div>
-                    <div>Customer Part No: <strong className="text-slate-900">{selectedMovementJob.customerPartNo}</strong></div>
-                    <div>R.F.E. Part Code: <strong className="text-slate-900">{selectedMovementJob.rfePartCode || 'D3625'}</strong></div>
-                    <div>Target Date: <strong className="text-slate-900">{selectedMovementJob.targetDate}</strong></div>
-                    <div>Production PNL Qty: <strong className="text-blue-700 font-bold">{selectedMovementJob.prodPnlQty} PNL</strong></div>
-                    <div>Total Area: <strong className="text-emerald-700 font-bold">{selectedMovementJob.prodPnlAreaSqm} Sqm</strong></div>
+                  <div className="grid grid-cols-2 sm:grid-cols-2 gap-3 text-xs">
+                    <div><span className="text-[10px] text-slate-400 font-mono uppercase block font-bold">JOB CARD NO</span><strong className="text-slate-900 font-mono text-sm">{selectedMovementJob.jobCardNo}</strong></div>
+                    <div><span className="text-[10px] text-slate-400 font-mono uppercase block font-bold">CURRENT STAGE</span><strong className="text-blue-700 font-bold">{selectedMovementJob.currentStageName || PF01_STAGES[0]}</strong></div>
+                    <div><span className="text-[10px] text-slate-400 font-mono uppercase block font-bold">CUSTOMER CODE</span><strong className="text-slate-900 font-semibold">{selectedMovementJob.customerCode || 'CUST-RF045'}</strong></div>
+                    <div><span className="text-[10px] text-slate-400 font-mono uppercase block font-bold">CUSTOMER PART NO</span><strong className="text-slate-900 font-semibold">{selectedMovementJob.customerPartNo}</strong></div>
+                    <div><span className="text-[10px] text-slate-400 font-mono uppercase block font-bold">R.F.E. PART CODE</span><strong className="text-slate-900 font-mono font-bold text-blue-800">{selectedMovementJob.rfePartCode || 'D3625'}</strong></div>
+                    <div><span className="text-[10px] text-slate-400 font-mono uppercase block font-bold">PRIORITY</span><span className="inline-block font-mono font-bold text-[10px] px-2 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200">{selectedMovementJob.priority || 'NORMAL'}</span></div>
+                    <div><span className="text-[10px] text-slate-400 font-mono uppercase block font-bold">TARGET DATE</span><strong className="text-slate-900 font-mono">{selectedMovementJob.targetDate}</strong></div>
+                    <div><span className="text-[10px] text-slate-400 font-mono uppercase block font-bold">PROD PNL QTY</span><strong className="text-blue-700 font-mono font-black">{selectedMovementJob.prodPnlQty} PNL ({selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || 0} PCB)</strong></div>
+                    <div><span className="text-[10px] text-slate-400 font-mono uppercase block font-bold">WIP AREA</span><strong className="text-emerald-700 font-mono font-black">{selectedMovementJob.prodPnlAreaSqm} Sqm</strong></div>
+                    <div><span className="text-[10px] text-slate-400 font-mono uppercase block font-bold">JOB FLOW</span><strong className="text-slate-800 font-mono">{selectedMovementJob.jobFlowSelection || 'PF-01 Standard'}</strong></div>
                   </div>
+
+                  {/* Customer PO & Product Specs if available */}
+                  {(selectedMovementJob.customerPO || selectedMovementJob.product) && (
+                    <div className="pt-2 border-t border-slate-200/80 grid grid-cols-2 gap-2 text-[11px] font-sans">
+                      {selectedMovementJob.customerPO && (
+                        <div className="bg-white p-2 rounded-lg border border-slate-200">
+                          <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">CUSTOMER PO</span>
+                          <p className="font-bold text-slate-800">{selectedMovementJob.customerPO.poNo}</p>
+                          <p className="text-[10px] text-slate-500">{selectedMovementJob.customerPO.customer?.companyName}</p>
+                        </div>
+                      )}
+                      {selectedMovementJob.product && (
+                        <div className="bg-white p-2 rounded-lg border border-slate-200">
+                          <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">PRODUCT SPECS</span>
+                          <p className="font-bold text-slate-800">{selectedMovementJob.product.name}</p>
+                          <p className="text-[10px] text-slate-500">{selectedMovementJob.product.layers} Layers • {selectedMovementJob.product.thickness} • {selectedMovementJob.product.copper}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
+
+                {/* Sub-Job Cards Breakdown List (if sub-lots exist) */}
+                {selectedMovementJob.subJobCards && selectedMovementJob.subJobCards.length > 0 && (
+                  <div className="bg-amber-50/70 border border-amber-200 p-3.5 rounded-xl space-y-2 font-sans">
+                    <div className="flex items-center justify-between border-b border-amber-200/80 pb-1.5">
+                      <h5 className="text-xs font-black text-amber-950 uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                        <Split className="w-3.5 h-3.5 text-amber-700" />
+                        SUB-JOB LOTS BREAKDOWN ({selectedMovementJob.subJobCards.length} LOTS)
+                      </h5>
+                      <span className="text-[10px] text-amber-800 font-mono font-bold">Total: {selectedMovementJob.prodPnlQty} PNL</span>
+                    </div>
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                      {selectedMovementJob.subJobCards.map((sub) => (
+                        <div key={sub.id} className="bg-white p-2 rounded-lg border border-amber-200/80 flex items-center justify-between text-xs font-sans shadow-2xs">
+                          <div>
+                            <span className="font-mono font-black text-slate-900 bg-amber-100 px-1.5 py-0.5 rounded text-[11px] border border-amber-300">
+                              {sub.subJobCardNo}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-mono ml-2 font-semibold">
+                              QR: {sub.qrCodeValue}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 font-mono">
+                            <span className="font-bold text-blue-700 text-xs">{sub.qty} PNL</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold border border-slate-200">
+                              {sub.currentStage?.name || selectedMovementJob.currentStageName || PF01_STAGES[0]}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* If UNLAUNCHED, provide immediate Launch action inside tab */}
                 {(selectedMovementJob.status === 'UNLAUNCHED' || selectedMovementJob.status === 'CREATED') && (
@@ -1491,7 +2158,7 @@ export default function JobCardsPage() {
                 )}
 
                 {/* Quick Actions */}
-                <div className="space-y-2">
+                <div className="space-y-2 font-sans">
                   {selectedMovementJob.status === 'IN_PROGRESS' && (
                     <button
                       onClick={() => handleMarkAsCompleted(selectedMovementJob.id)}
@@ -1824,20 +2491,57 @@ export default function JobCardsPage() {
                 </div>
               </div>
 
-              {/* Delay & Overdue Monitoring Notice */}
-              <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-2 mb-4">
-                <h5 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-amber-600" />
-                  DELAY & OVERDUE MONITORING
+              {/* Delay Monitoring Section */}
+              <div className="bg-rose-50/70 border border-rose-200 p-4 rounded-xl space-y-2">
+                <h5 className="text-xs font-black text-rose-900 uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                  <Clock className="w-4 h-4 text-rose-600" />
+                  DELAY MONITORING & TARGET DATE COMPLIANCE
                 </h5>
-                <div className="text-xs text-slate-600 space-y-1 font-sans">
-                  <div className="flex justify-between items-center border-b border-slate-200 pb-1">
-                    <span>Jobs Target Date Active:</span>
-                    <strong className="text-slate-900 font-mono">{jobCards.length} Jobs On Schedule</strong>
+                <div className="text-xs text-rose-950 space-y-1.5 font-sans">
+                  <div className="flex justify-between items-center border-b border-rose-200/80 pb-1">
+                    <span>Overdue Jobs (Target Date Expired):</span>
+                    <strong className="text-rose-700 font-mono font-black">
+                      {jobCards.filter((j) => j.status === 'IN_PROGRESS' && new Date(j.targetDate) < new Date()).length} Jobs
+                    </strong>
+                  </div>
+                  <div className="flex justify-between items-center border-b border-rose-200/80 pb-1">
+                    <span>Over-Delayed Jobs (&gt; 3 Days Late):</span>
+                    <strong className="text-rose-800 font-mono font-black">
+                      {jobCards.filter((j) => {
+                        const target = new Date(j.targetDate);
+                        const today = new Date();
+                        const diffDays = (today.getTime() - target.getTime()) / (1000 * 3600 * 24);
+                        return j.status === 'IN_PROGRESS' && diffDays > 3;
+                      }).length} Jobs
+                    </strong>
                   </div>
                   <div className="flex justify-between items-center pt-0.5">
-                    <span>Daily Movement Loss/Rejection:</span>
-                    <strong className="text-emerald-700 font-mono">0 Rejections (100% Yield)</strong>
+                    <span>Jobs Exceeding Target Date:</span>
+                    <strong className="text-rose-900 font-mono font-black">
+                      {jobCards.filter((j) => j.status === 'IN_PROGRESS' && new Date(j.targetDate) < new Date()).length} Jobs Exceeded
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quality / Loss Monitoring Section */}
+              <div className="bg-emerald-50/70 border border-emerald-200 p-4 rounded-xl space-y-2 mb-4">
+                <h5 className="text-xs font-black text-emerald-900 uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                  <ShieldAlert className="w-4 h-4 text-emerald-600" />
+                  QUALITY & LOSS MONITORING (DAILY MOVEMENT)
+                </h5>
+                <div className="text-xs text-emerald-950 space-y-1.5 font-sans">
+                  <div className="flex justify-between items-center border-b border-emerald-200/80 pb-1">
+                    <span>Total Daily Rework Jobs:</span>
+                    <strong className="text-amber-800 font-mono font-black">0 Jobs Reworked</strong>
+                  </div>
+                  <div className="flex justify-between items-center border-b border-emerald-200/80 pb-1">
+                    <span>Total Daily Rejection / Scrap PNL:</span>
+                    <strong className="text-emerald-800 font-mono font-black">0 PNL Scrap (100% Quality Yield)</strong>
+                  </div>
+                  <div className="flex justify-between items-center pt-0.5">
+                    <span>Overall Factory Production Yield:</span>
+                    <strong className="text-emerald-700 font-mono font-black">100% Yield Efficiency</strong>
                   </div>
                 </div>
               </div>
@@ -1893,6 +2597,80 @@ export default function JobCardsPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* MODAL 6: PRINTABLE JOB CARD QR & BARCODE TRAVELER TAG */}
+      {showQrModal && (
+        <Portal>
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-5 space-y-4 shadow-2xl relative my-auto">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Printer className="w-5 h-5 text-amber-600" />
+                  <h3 className="font-extrabold text-slate-900 text-sm font-mono">Job Card Traveler Tag & QR</h3>
+                </div>
+                <button
+                  onClick={() => setShowQrModal(null)}
+                  className="text-slate-400 hover:text-slate-900 text-sm font-bold p-1 rounded-lg hover:bg-slate-100 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <JobCardQrTag
+                jobCard={showQrModal}
+                onPrint={() => window.print()}
+              />
+
+              <div className="flex justify-end pt-1">
+                <button
+                  onClick={() => setShowQrModal(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </Portal>
+      )}
+
+      {/* MODAL 5: ORIGINAL JOB CARD PHOTO LIGHTBOX */}
+      {photoLightbox && (
+        <Portal>
+          <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[9999] flex items-center justify-center p-4">
+            <div className="relative bg-white border border-slate-200 rounded-3xl max-w-3xl w-full p-4 space-y-3 shadow-2xl overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div className="flex items-center gap-2">
+                  <Camera className="w-5 h-5 text-blue-600" />
+                  <h3 className="font-extrabold text-slate-900 text-sm font-mono">Original Job Card Physical Photo</h3>
+                </div>
+                <button
+                  onClick={() => setPhotoLightbox(null)}
+                  className="text-slate-400 hover:text-slate-900 text-sm font-bold p-1 rounded-lg hover:bg-slate-100 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="max-h-[75vh] overflow-auto flex items-center justify-center bg-slate-950 rounded-2xl p-2">
+                <img
+                  src={photoLightbox}
+                  alt="Original Job Card High-Res Photo"
+                  className="max-h-[70vh] w-auto object-contain rounded-xl shadow-lg"
+                />
+              </div>
+              <div className="flex items-center justify-between text-xs text-slate-500 font-mono">
+                <span>Verification of Original Hard Copy Physical Job Card</span>
+                <button
+                  onClick={() => window.open(photoLightbox, '_blank')}
+                  className="text-blue-600 hover:underline font-bold"
+                >
+                  Open Original Image ↗
+                </button>
+              </div>
+            </div>
+          </div>
+        </Portal>
       )}
 
     </div>

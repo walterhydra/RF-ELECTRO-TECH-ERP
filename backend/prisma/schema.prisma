@@ -406,6 +406,7 @@ model StageMovementLog {
   qtyHold              Int          @default(0) @map("qty_hold")
   rejectionReason      String?      @map("rejection_reason") @db.VarChar(255)
   remarks              String?      @db.Text
+  remarkType           String?      @default("NONE") @map("remark_type") @db.VarChar(50)
   qcReviewStatus       String?      @default("NOT_APPLICABLE") @map("qc_review_status") @db.VarChar(30)
   qcReviewedById       String?      @map("qc_reviewed_by") @db.Uuid
   qcReviewedAt         DateTime?    @map("qc_reviewed_at") @db.Timestamptz

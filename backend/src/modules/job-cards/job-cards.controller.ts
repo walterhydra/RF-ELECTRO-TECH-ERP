@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JobCardsService } from './job-cards.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -33,6 +33,15 @@ export class JobCardsController {
   async generateFromPo(@Body() body: { customerPoId: string }, @Req() req: any) {
     const createdById = req.user?.sub || req.user?.id || req.user?.userId;
     return this.jobCardsService.generateFromPo(body.customerPoId, createdById);
+  }
+
+  @Post('create')
+  @RequirePermissions('job_cards.manage', 'production.manage')
+  @ApiOperation({ summary: 'Create a new Job Card with full 13 PDF metadata fields & pre-launch split options' })
+  @ApiResponse({ status: 201, description: 'Job Card created successfully' })
+  async createJobCard(@Body() body: any, @Req() req: any) {
+    const createdById = req.user?.sub || req.user?.id || req.user?.userId;
+    return this.jobCardsService.createJobCard(body, createdById);
   }
 
   @Post(':id/split')
@@ -70,5 +79,30 @@ export class JobCardsController {
   @ApiOperation({ summary: 'Get full chronological traceability timeline for Job Card and all its Sub Job Cards' })
   async getTraceabilityHistory(@Param('id') id: string, @Req() req: any) {
     return this.jobCardsService.getTraceabilityHistory(id, req.user);
+  }
+
+  @Post(':id/move-full')
+  @RequirePermissions('job_cards.manage', 'production.manage')
+  @ApiOperation({ summary: 'Execute Full Job Movement to next process stage' })
+  async moveFull(@Param('id') id: string, @Body() body: { remark?: string }, @Req() req: any) {
+    return this.jobCardsService.moveFull(id, body, req.user);
+  }
+
+  @Post(':id/move-partial')
+  @RequirePermissions('job_cards.manage', 'production.manage')
+  @ApiOperation({ summary: 'Execute Uncompleted / Partial Job Movement to next process stage' })
+  async movePartial(
+    @Param('id') id: string,
+    @Body() body: { qtyToMove: number; areaToMove?: number; remark?: string },
+    @Req() req: any,
+  ) {
+    return this.jobCardsService.movePartial(id, body, req.user);
+  }
+
+  @Delete(':id')
+  @RequirePermissions('job_cards.manage', 'production.manage')
+  @ApiOperation({ summary: 'Delete Job Card (Master role restricted)' })
+  async deleteJobCard(@Param('id') id: string, @Req() req: any) {
+    return this.jobCardsService.deleteJobCard(id, req.user);
   }
 }

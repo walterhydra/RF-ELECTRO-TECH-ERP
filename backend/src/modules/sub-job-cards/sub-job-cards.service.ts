@@ -44,12 +44,16 @@ export class SubJobCardsService {
       throw new NotFoundException('QR Code value parameter is empty');
     }
 
-    // First try SubJobCard
-    const subCard = await this.prisma.subJobCard.findFirst({
+    const cleanQuery = qrValue.trim();
+
+    // 1. Exact or partial match on SubJobCard
+    const subCards = await this.prisma.subJobCard.findMany({
       where: {
         OR: [
-          { qrCodeValue: { equals: qrValue, mode: 'insensitive' } },
-          { subJobCardNo: { equals: qrValue, mode: 'insensitive' } },
+          { qrCodeValue: { equals: cleanQuery, mode: 'insensitive' } },
+          { subJobCardNo: { equals: cleanQuery, mode: 'insensitive' } },
+          { subJobCardNo: { contains: cleanQuery, mode: 'insensitive' } },
+          { qrCodeValue: { contains: cleanQuery, mode: 'insensitive' } },
         ],
       },
       include: {
@@ -57,15 +61,10 @@ export class SubJobCardsService {
         jobCard: {
           include: {
             product: true,
-            customerPO: {
-              include: { customer: true },
-            },
+            customerPO: { include: { customer: true } },
             processFlowMaster: {
               include: {
-                steps: {
-                  include: { stage: true },
-                  orderBy: { stepOrder: 'asc' },
-                },
+                steps: { include: { stage: true }, orderBy: { stepOrder: 'asc' } },
               },
             },
           },
@@ -73,32 +72,29 @@ export class SubJobCardsService {
       },
     });
 
-    if (subCard) {
+    if (subCards.length > 0) {
       return {
-        type: 'SUB_JOB_CARD',
-        data: subCard,
+        type: 'SUB_JOB_CARD_LIST',
+        count: subCards.length,
+        data: subCards.length === 1 ? subCards[0] : subCards,
       };
     }
 
-    // Fallback: Check Parent JobCard
+    // 2. Check Parent JobCard
     const jobCard = await this.prisma.jobCard.findFirst({
       where: {
         OR: [
-          { qrCodeValue: { equals: qrValue, mode: 'insensitive' } },
-          { jobCardNo: { equals: qrValue, mode: 'insensitive' } },
+          { qrCodeValue: { equals: cleanQuery, mode: 'insensitive' } },
+          { jobCardNo: { equals: cleanQuery, mode: 'insensitive' } },
+          { jobCardNo: { contains: cleanQuery, mode: 'insensitive' } },
         ],
       },
       include: {
         product: true,
-        customerPO: {
-          include: { customer: true },
-        },
+        customerPO: { include: { customer: true } },
         processFlowMaster: {
           include: {
-            steps: {
-              include: { stage: true },
-              orderBy: { stepOrder: 'asc' },
-            },
+            steps: { include: { stage: true }, orderBy: { stepOrder: 'asc' } },
           },
         },
         subJobCards: {
@@ -115,7 +111,7 @@ export class SubJobCardsService {
       };
     }
 
-    throw new NotFoundException(`No Job Card or Sub-Job Card found matching QR or Barcode "${qrValue}"`);
+    throw new NotFoundException(`No Job Card or Sub-Job Card found matching QR or Barcode "${cleanQuery}"`);
   }
 
   async getQrCodeImage(id: string) {
@@ -359,10 +355,17 @@ export class SubJobCardsService {
       } else if (dto.qtyForwarded > 0) {
         splitOccurred = true;
         const remainingQty = subCard.qty - dto.qtyForwarded - (dto.qtyRejected || 0);
+        const originalQty = subCard.qty || 1;
+        const areaPerPnl = subCard.prodPnlAreaSqm ? subCard.prodPnlAreaSqm / originalQty : 0;
+        const custAreaPerPnl = subCard.custPnlAreaSqm ? subCard.custPnlAreaSqm / originalQty : 0;
+
         await tx.subJobCard.update({
           where: { id: subCard.id },
           data: {
             qty: Math.max(0, remainingQty),
+            prodPnlQty: Math.max(0, remainingQty),
+            prodPnlAreaSqm: Number((Math.max(0, remainingQty) * areaPerPnl).toFixed(2)),
+            custPnlAreaSqm: Number((Math.max(0, remainingQty) * custAreaPerPnl).toFixed(2)),
             qtyReceived: Math.max(0, dto.qtyReceived - dto.qtyForwarded - (dto.qtyRejected || 0)),
             qtyProcessed: Math.max(0, dto.qtyProcessed - dto.qtyForwarded - (dto.qtyRejected || 0)),
             qtyHold: dto.qtyHold || 0,
@@ -385,6 +388,9 @@ export class SubJobCardsService {
               parentSubJobCardId: subCard.id,
               currentStageId: nextStep.stageId,
               qty: dto.qtyForwarded,
+              prodPnlQty: dto.qtyForwarded,
+              prodPnlAreaSqm: Number((dto.qtyForwarded * areaPerPnl).toFixed(2)),
+              custPnlAreaSqm: Number((dto.qtyForwarded * custAreaPerPnl).toFixed(2)),
               qtyReceived: 0,
               qtyProcessed: 0,
               qtyHold: 0,
