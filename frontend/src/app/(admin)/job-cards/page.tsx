@@ -1997,397 +1997,407 @@ export default function JobCardsPage() {
         </Portal>
       )}
 
-      {/* MODAL 2: JOB MOVEMENT OPTIONS (Three Categories: A. View, B. Full, C. Split) */}
+      {/* MODAL 2: JOB MOVEMENT OPTIONS (Wide Horizontal Landscape Dashboard View) */}
       {selectedMovementJob && (
         <Portal>
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[9999] flex items-center justify-center p-3 sm:p-4 overflow-hidden">
-            <div className="bg-white border border-slate-200/90 rounded-3xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900 overflow-hidden font-sans">
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[9999] flex items-center justify-center p-3 sm:p-5 overflow-hidden">
+            <div className="bg-white border border-slate-200/90 rounded-3xl w-full max-w-6xl max-h-[92vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900 overflow-hidden font-sans">
               
-              {/* 1. Fixed Sticky Header (High-Tech Dark Slate Header) */}
-              <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white shrink-0 shadow-md">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                    <span className="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-widest block">
-                      JOB CARD MOVEMENT & SPECS
-                    </span>
+              {/* 1. Fixed Sticky Header (High-Tech Wide Header with Integrated Tab Switcher) */}
+              <div className="p-4 sm:p-5 border-b border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white shrink-0 shadow-md">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5 text-amber-400" />
                   </div>
-                  <h3 className="font-black text-white text-lg sm:text-xl flex items-center gap-2.5 mt-1 font-mono tracking-tight">
-                    <span className="text-amber-300">{selectedMovementJob.jobCardNo}</span>
-                    <span className="text-xs px-3 py-1 rounded-full bg-blue-950/90 text-blue-300 border border-blue-500/40 font-bold font-sans flex items-center gap-1.5 shadow-xs">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
-                      Stage: {selectedMovementJob.currentStageName || PF01_STAGES[0]}
-                    </span>
-                  </h3>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                      <span className="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-widest block">
+                        JOB CARD DASHBOARD & MOVEMENT
+                      </span>
+                    </div>
+                    <h3 className="font-black text-white text-xl sm:text-2xl flex items-center gap-3 mt-0.5 font-mono tracking-tight">
+                      <span className="text-amber-300">{selectedMovementJob.jobCardNo}</span>
+                      <span className="text-xs px-3 py-1 rounded-full bg-blue-950/90 text-blue-300 border border-blue-500/40 font-bold font-sans flex items-center gap-1.5 shadow-xs">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                        Stage: {selectedMovementJob.currentStageName || PF01_STAGES[0]}
+                      </span>
+                    </h3>
+                  </div>
                 </div>
-                <button
-                  onClick={() => setSelectedMovementJob(null)}
-                  className="text-slate-400 hover:text-white text-sm font-bold p-2.5 rounded-xl hover:bg-slate-800/80 cursor-pointer transition-all shrink-0 border border-slate-800/80 flex items-center justify-center w-9 h-9 active:scale-95"
-                >
-                  ✕
-                </button>
+
+                {/* Horizontal Segmented Pill Tab Switcher in Header */}
+                <div className="flex items-center gap-3">
+                  <div className="flex bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800 gap-1.5 text-xs font-sans shadow-inner">
+                    <button
+                      onClick={() => setMovementTab('VIEW')}
+                      className={`py-2 px-3 sm:px-4 rounded-xl font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                        movementTab === 'VIEW'
+                          ? 'bg-amber-400 text-slate-950 shadow-md font-black'
+                          : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      }`}
+                    >
+                      <ImageIcon className="w-4 h-4 shrink-0" />
+                      <span>A. Job Card View</span>
+                    </button>
+
+                    <button
+                      onClick={() => setMovementTab('FULL')}
+                      className={`py-2 px-3 sm:px-4 rounded-xl font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                        movementTab === 'FULL'
+                          ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
+                          : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      }`}
+                    >
+                      <ArrowRight className="w-4 h-4 shrink-0" />
+                      <span>B. Full Movement</span>
+                    </button>
+
+                    <button
+                      onClick={() => setMovementTab('PARTIAL')}
+                      className={`py-2 px-3 sm:px-4 rounded-xl font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                        movementTab === 'PARTIAL'
+                          ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                          : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                      }`}
+                    >
+                      <Split className="w-4 h-4 shrink-0" />
+                      <span>C. Uncompleted / Split</span>
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => setSelectedMovementJob(null)}
+                    className="text-slate-400 hover:text-white text-sm font-bold p-2.5 rounded-xl hover:bg-slate-800/80 cursor-pointer transition-all shrink-0 border border-slate-800/80 flex items-center justify-center w-10 h-10 active:scale-95"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
 
-              {/* 2. Scrollable Body Content */}
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 bg-slate-50/40">
+              {/* 2. Scrollable Body Content (Horizontal Multi-Column Layout) */}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/40">
 
-                {/* Modern Segmented Pill Tab Switcher */}
-                <div className="grid grid-cols-3 bg-slate-100 p-1.5 rounded-2xl border border-slate-200/90 gap-1.5 text-xs font-sans shadow-inner">
-                  <button
-                    onClick={() => setMovementTab('VIEW')}
-                    className={`py-2.5 px-2 sm:px-3 rounded-xl font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                      movementTab === 'VIEW'
-                        ? 'bg-slate-900 text-amber-300 shadow-md border border-slate-800'
-                        : 'text-slate-600 hover:text-slate-950 hover:bg-white/70 font-bold'
-                    }`}
-                  >
-                    <ImageIcon className="w-4 h-4 text-blue-400 shrink-0" />
-                    <span className="truncate">A. Job Card View</span>
-                  </button>
-
-                  <button
-                    onClick={() => setMovementTab('FULL')}
-                    className={`py-2.5 px-2 sm:px-3 rounded-xl font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                      movementTab === 'FULL'
-                        ? 'bg-emerald-950 text-emerald-300 shadow-md border border-emerald-800'
-                        : 'text-slate-600 hover:text-slate-950 hover:bg-white/70 font-bold'
-                    }`}
-                  >
-                    <ArrowRight className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span className="truncate">B. Full Movement</span>
-                  </button>
-
-                  <button
-                    onClick={() => setMovementTab('PARTIAL')}
-                    className={`py-2.5 px-2 sm:px-3 rounded-xl font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                      movementTab === 'PARTIAL'
-                        ? 'bg-amber-950 text-amber-300 shadow-md border border-amber-800'
-                        : 'text-slate-600 hover:text-slate-950 hover:bg-white/70 font-bold'
-                    }`}
-                  >
-                    <Split className="w-4 h-4 text-amber-400 shrink-0" />
-                    <span className="truncate">C. Uncompleted / Split</span>
-                  </button>
-                </div>
-
-                {/* TAB A: JOB CARD VIEW */}
+                {/* TAB A: JOB CARD VIEW (HORIZONTAL 2-COLUMN SIDE-BY-SIDE LAYOUT) */}
                 {movementTab === 'VIEW' && (
-                  <div className="space-y-4 text-xs font-sans">
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 font-sans">
                     
-                    {/* Photo View Card */}
-                    {selectedMovementJob.photoUrl && (
-                      <div className="bg-gradient-to-r from-blue-50/90 via-indigo-50/50 to-blue-50/80 border border-blue-200/90 p-3.5 rounded-2xl flex items-center justify-between gap-3 shadow-xs hover:shadow-md transition-all">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="relative group shrink-0">
-                            <img
-                              src={selectedMovementJob.photoUrl}
-                              alt="Job Card Photo"
-                              className="w-12 h-12 rounded-xl object-cover border border-blue-300/80 shadow-2xs cursor-pointer group-hover:scale-105 transition-transform"
-                              onClick={() => setPhotoLightbox(selectedMovementJob.photoUrl || null)}
-                            />
-                            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 rounded-xl transition-opacity flex items-center justify-center pointer-events-none">
-                              <Eye className="w-4 h-4 text-white" />
-                            </div>
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5">
-                              <Camera className="w-4 h-4 text-blue-600 shrink-0" />
-                              <span>Original Job Card Physical Photo</span>
-                            </p>
-                            <p className="text-[11px] text-slate-500 truncate mt-0.5 font-medium">Verified physical hard-copy record attached</p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => setPhotoLightbox(selectedMovementJob.photoUrl || null)}
-                          className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-all shrink-0 active:scale-95 border border-blue-500/40"
-                        >
-                          <Eye className="w-4 h-4" />
-                          <span>View Photo</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Specifications Grid Container */}
-                    <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 space-y-4 font-sans shadow-xs">
-                      <div className="font-bold text-slate-900 text-sm border-b border-slate-100 pb-3 flex items-center justify-between">
-                        <span className="flex items-center gap-2 font-extrabold text-slate-900 tracking-tight">
-                          <FileText className="w-4.5 h-4.5 text-amber-600 shrink-0" />
-                          Job Card Specifications & Details
-                        </span>
-                        {getStatusBadge(selectedMovementJob.status)}
-                      </div>
+                    {/* LEFT COLUMN: Physical Photo + Specs Grid + PO/Product Info (7 Cols) */}
+                    <div className="lg:col-span-7 space-y-4">
                       
-                      {/* Grid Items */}
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 text-xs">
-                        <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
-                          <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">JOB CARD NO</span>
-                          <strong className="text-slate-900 font-mono text-sm block mt-0.5 font-black">{selectedMovementJob.jobCardNo}</strong>
-                        </div>
-
-                        <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
-                          <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">CURRENT STAGE</span>
-                          <span className="inline-block mt-0.5 font-extrabold text-xs text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-200/80">
-                            {selectedMovementJob.currentStageName || PF01_STAGES[0]}
-                          </span>
-                        </div>
-
-                        <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
-                          <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">CUSTOMER CODE</span>
-                          <strong className="text-slate-900 font-bold block mt-0.5 truncate">{selectedMovementJob.customerCode || 'CUST-RF045'}</strong>
-                        </div>
-
-                        <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
-                          <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">CUSTOMER PART NO</span>
-                          <strong className="text-slate-900 font-bold block mt-0.5 truncate" title={selectedMovementJob.customerPartNo}>
-                            {selectedMovementJob.customerPartNo}
-                          </strong>
-                        </div>
-
-                        <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
-                          <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">R.F.E. PART CODE</span>
-                          <strong className="text-blue-800 font-mono font-bold block mt-0.5 text-xs bg-blue-50/60 px-2 py-0.5 rounded border border-blue-100 inline-block">
-                            {selectedMovementJob.rfePartCode || 'D3625'}
-                          </strong>
-                        </div>
-
-                        <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
-                          <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">PRIORITY</span>
-                          <span className={`inline-block mt-0.5 font-mono font-bold text-[10px] px-2.5 py-0.5 rounded-lg border ${
-                            selectedMovementJob.priority === 'MOST URGENT'
-                              ? 'bg-rose-100 text-rose-800 border-rose-300'
-                              : selectedMovementJob.priority === 'HIGH'
-                              ? 'bg-amber-100 text-amber-800 border-amber-300'
-                              : 'bg-slate-100 text-slate-700 border-slate-200'
-                          }`}>
-                            {selectedMovementJob.priority || 'NORMAL'}
-                          </span>
-                        </div>
-
-                        <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
-                          <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">TARGET DATE</span>
-                          <strong className="text-slate-900 font-mono block mt-0.5 font-bold">{selectedMovementJob.targetDate}</strong>
-                        </div>
-
-                        <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
-                          <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">PROD PNL QTY</span>
-                          <strong className="text-indigo-700 font-mono font-black block mt-0.5">
-                            {selectedMovementJob.prodPnlQty} PNL <span className="text-indigo-500/90 text-[11px] font-semibold">({selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || 0} PCB)</span>
-                          </strong>
-                        </div>
-
-                        <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
-                          <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">WIP AREA</span>
-                          <strong className="text-emerald-700 font-mono font-black block mt-0.5">{selectedMovementJob.prodPnlAreaSqm} Sqm</strong>
-                        </div>
-
-                        <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
-                          <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">JOB FLOW</span>
-                          <strong className="text-slate-800 font-mono block mt-0.5 font-bold">{selectedMovementJob.jobFlowSelection || 'PF-01 Standard'}</strong>
-                        </div>
-                      </div>
-
-                      {/* Customer PO & Product Specs Cards */}
-                      {(selectedMovementJob.customerPO || selectedMovementJob.product) && (
-                        <div className="pt-3 border-t border-slate-100 grid grid-cols-2 gap-2.5 text-[11px]">
-                          {selectedMovementJob.customerPO && (
-                            <div className="bg-slate-50/90 p-3 rounded-xl border border-slate-200/80 shadow-2xs">
-                              <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold tracking-wider">CUSTOMER PO</span>
-                              <p className="font-extrabold text-slate-900 text-xs mt-0.5 font-mono">{selectedMovementJob.customerPO.poNo}</p>
-                              <p className="text-[10px] text-slate-500 font-medium truncate mt-0.5">{selectedMovementJob.customerPO.customer?.companyName}</p>
+                      {/* Photo View Card */}
+                      {selectedMovementJob.photoUrl && (
+                        <div className="bg-gradient-to-r from-blue-50/90 via-indigo-50/50 to-blue-50/80 border border-blue-200/90 p-3.5 rounded-2xl flex items-center justify-between gap-3 shadow-xs hover:shadow-md transition-all">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="relative group shrink-0">
+                              <img
+                                src={selectedMovementJob.photoUrl}
+                                alt="Job Card Photo"
+                                className="w-12 h-12 rounded-xl object-cover border border-blue-300/80 shadow-2xs cursor-pointer group-hover:scale-105 transition-transform"
+                                onClick={() => setPhotoLightbox(selectedMovementJob.photoUrl || null)}
+                              />
+                              <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 rounded-xl transition-opacity flex items-center justify-center pointer-events-none">
+                                <Eye className="w-4 h-4 text-white" />
+                              </div>
                             </div>
-                          )}
-                          {selectedMovementJob.product && (
-                            <div className="bg-slate-50/90 p-3 rounded-xl border border-slate-200/80 shadow-2xs">
-                              <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold tracking-wider">PRODUCT SPECS</span>
-                              <p className="font-extrabold text-slate-900 text-xs mt-0.5 truncate">{selectedMovementJob.product.name}</p>
-                              <p className="text-[10px] text-slate-500 font-medium truncate mt-0.5">
-                                {selectedMovementJob.product.layers} Layers • {selectedMovementJob.product.thickness} • {selectedMovementJob.product.copper}
+                            <div className="min-w-0">
+                              <p className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5">
+                                <Camera className="w-4 h-4 text-blue-600 shrink-0" />
+                                <span>Original Job Card Physical Photo</span>
                               </p>
+                              <p className="text-[11px] text-slate-500 truncate mt-0.5 font-medium">Verified physical hard-copy record attached</p>
                             </div>
-                          )}
+                          </div>
+                          <button
+                            onClick={() => setPhotoLightbox(selectedMovementJob.photoUrl || null)}
+                            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-all shrink-0 active:scale-95 border border-blue-500/40"
+                          >
+                            <Eye className="w-4 h-4" />
+                            <span>View Photo</span>
+                          </button>
                         </div>
                       )}
-                    </div>
 
-                    {/* Sub-Job Lots Breakdown Box */}
-                    {selectedMovementJob.subJobCards && selectedMovementJob.subJobCards.length > 0 && (
-                      <div className="bg-gradient-to-br from-amber-50/90 via-amber-50/50 to-orange-50/40 border border-amber-300/80 p-4 rounded-2xl space-y-3 font-sans shadow-xs">
-                        <div className="flex items-center justify-between border-b border-amber-200 pb-2">
-                          <h5 className="text-xs font-black text-amber-950 uppercase tracking-wider flex items-center gap-1.5 font-mono">
-                            <Split className="w-4 h-4 text-amber-700 shrink-0" />
-                            SUB-JOB LOTS BREAKDOWN ({selectedMovementJob.subJobCards.length} LOTS)
-                          </h5>
-                          <span className="text-xs text-amber-900 font-mono font-black bg-amber-200/80 px-2.5 py-0.5 rounded-lg border border-amber-400/80 shadow-2xs">
-                            Total: {selectedMovementJob.prodPnlQty} PNL
+                      {/* Specifications Main Container */}
+                      <div className="bg-white p-5 rounded-2xl border border-slate-200/90 space-y-4 font-sans shadow-xs">
+                        <div className="font-bold text-slate-900 text-sm border-b border-slate-100 pb-3 flex items-center justify-between">
+                          <span className="flex items-center gap-2 font-extrabold text-slate-900 tracking-tight">
+                            <FileText className="w-4.5 h-4.5 text-amber-600 shrink-0" />
+                            Job Card Specifications & Details
                           </span>
+                          {getStatusBadge(selectedMovementJob.status)}
                         </div>
-                        <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
-                          {selectedMovementJob.subJobCards.map((sub) => (
-                            <div key={sub.id} className="bg-white p-3 rounded-xl border border-slate-200 flex items-center justify-between text-xs font-sans shadow-2xs hover:border-amber-400 transition-all">
-                              <div className="flex items-center gap-2.5">
-                                <span className="font-mono font-black text-slate-950 bg-amber-100 px-2.5 py-1 rounded-lg text-xs border border-amber-300 shadow-2xs">
-                                  {sub.subJobCardNo}
-                                </span>
-                                <span className="text-[11px] text-slate-500 font-mono font-semibold hidden sm:inline-block">
-                                  QR: {sub.qrCodeValue}
-                                </span>
+                        
+                        {/* 4-Column Horizontal Grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 text-xs">
+                          <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
+                            <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">JOB CARD NO</span>
+                            <strong className="text-slate-900 font-mono text-sm block mt-0.5 font-black">{selectedMovementJob.jobCardNo}</strong>
+                          </div>
+
+                          <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
+                            <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">CURRENT STAGE</span>
+                            <span className="inline-block mt-0.5 font-extrabold text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-200/80">
+                              {selectedMovementJob.currentStageName || PF01_STAGES[0]}
+                            </span>
+                          </div>
+
+                          <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
+                            <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">CUSTOMER CODE</span>
+                            <strong className="text-slate-900 font-bold block mt-0.5 truncate">{selectedMovementJob.customerCode || 'CUST-RF045'}</strong>
+                          </div>
+
+                          <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
+                            <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">CUSTOMER PART NO</span>
+                            <strong className="text-slate-900 font-bold block mt-0.5 truncate" title={selectedMovementJob.customerPartNo}>
+                              {selectedMovementJob.customerPartNo}
+                            </strong>
+                          </div>
+
+                          <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
+                            <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">R.F.E. PART CODE</span>
+                            <strong className="text-blue-800 font-mono font-bold block mt-0.5 text-xs bg-blue-50/60 px-2 py-0.5 rounded border border-blue-100 inline-block">
+                              {selectedMovementJob.rfePartCode || 'D3625'}
+                            </strong>
+                          </div>
+
+                          <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
+                            <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">PRIORITY</span>
+                            <span className={`inline-block mt-0.5 font-mono font-bold text-[10px] px-2.5 py-0.5 rounded-lg border ${
+                              selectedMovementJob.priority === 'MOST URGENT'
+                                ? 'bg-rose-100 text-rose-800 border-rose-300'
+                                : selectedMovementJob.priority === 'HIGH'
+                                ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                : 'bg-slate-100 text-slate-700 border-slate-200'
+                            }`}>
+                              {selectedMovementJob.priority || 'NORMAL'}
+                            </span>
+                          </div>
+
+                          <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
+                            <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">TARGET DATE</span>
+                            <strong className="text-slate-900 font-mono block mt-0.5 font-bold">{selectedMovementJob.targetDate}</strong>
+                          </div>
+
+                          <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
+                            <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">PROD PNL QTY</span>
+                            <strong className="text-indigo-700 font-mono font-black block mt-0.5">
+                              {selectedMovementJob.prodPnlQty} PNL <span className="text-indigo-500/90 text-[10px] font-semibold">({selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || 0} PCB)</span>
+                            </strong>
+                          </div>
+
+                          <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
+                            <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">WIP AREA</span>
+                            <strong className="text-emerald-700 font-mono font-black block mt-0.5">{selectedMovementJob.prodPnlAreaSqm} Sqm</strong>
+                          </div>
+
+                          <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors col-span-2 sm:col-span-1 md:col-span-3">
+                            <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">JOB FLOW</span>
+                            <strong className="text-slate-800 font-mono block mt-0.5 font-bold">{selectedMovementJob.jobFlowSelection || 'PF-01 Standard'}</strong>
+                          </div>
+                        </div>
+
+                        {/* Customer PO & Product Specs Cards */}
+                        {(selectedMovementJob.customerPO || selectedMovementJob.product) && (
+                          <div className="pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[11px]">
+                            {selectedMovementJob.customerPO && (
+                              <div className="bg-slate-50/90 p-3 rounded-xl border border-slate-200/80 shadow-2xs">
+                                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold tracking-wider">CUSTOMER PO</span>
+                                <p className="font-extrabold text-slate-900 text-xs mt-0.5 font-mono">{selectedMovementJob.customerPO.poNo}</p>
+                                <p className="text-[10px] text-slate-500 font-medium truncate mt-0.5">{selectedMovementJob.customerPO.customer?.companyName}</p>
                               </div>
-                              <div className="flex items-center gap-2 font-mono">
-                                <span className="font-black text-blue-700 text-xs bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">{sub.qty} PNL</span>
-                                <span className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 font-extrabold border border-slate-200">
-                                  {sub.currentStage?.name || selectedMovementJob.currentStageName || PF01_STAGES[0]}
-                                </span>
+                            )}
+                            {selectedMovementJob.product && (
+                              <div className="bg-slate-50/90 p-3 rounded-xl border border-slate-200/80 shadow-2xs">
+                                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold tracking-wider">PRODUCT SPECS</span>
+                                <p className="font-extrabold text-slate-900 text-xs mt-0.5 truncate">{selectedMovementJob.product.name}</p>
+                                <p className="text-[10px] text-slate-500 font-medium truncate mt-0.5">
+                                  {selectedMovementJob.product.layers} Layers • {selectedMovementJob.product.thickness} • {selectedMovementJob.product.copper}
+                                </p>
                               </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* RIGHT COLUMN: Sub-Job Lots Breakdown + Quick Actions (5 Cols) */}
+                    <div className="lg:col-span-5 space-y-4 flex flex-col justify-between">
+                      
+                      <div className="space-y-4">
+                        {/* Sub-Job Lots Breakdown Box */}
+                        {selectedMovementJob.subJobCards && selectedMovementJob.subJobCards.length > 0 && (
+                          <div className="bg-gradient-to-br from-amber-50/90 via-amber-50/50 to-orange-50/40 border border-amber-300/80 p-4 rounded-2xl space-y-3 font-sans shadow-xs">
+                            <div className="flex items-center justify-between border-b border-amber-200 pb-2">
+                              <h5 className="text-xs font-black text-amber-950 uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                                <Split className="w-4 h-4 text-amber-700 shrink-0" />
+                                SUB-JOB LOTS BREAKDOWN ({selectedMovementJob.subJobCards.length} LOTS)
+                              </h5>
+                              <span className="text-xs text-amber-900 font-mono font-black bg-amber-200/80 px-2.5 py-0.5 rounded-lg border border-amber-400/80 shadow-2xs">
+                                Total: {selectedMovementJob.prodPnlQty} PNL
+                              </span>
                             </div>
-                          ))}
-                        </div>
+                            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                              {selectedMovementJob.subJobCards.map((sub) => (
+                                <div key={sub.id} className="bg-white p-3 rounded-xl border border-slate-200 flex items-center justify-between text-xs font-sans shadow-2xs hover:border-amber-400 transition-all">
+                                  <div className="flex items-center gap-2.5">
+                                    <span className="font-mono font-black text-slate-950 bg-amber-100 px-2.5 py-1 rounded-lg text-xs border border-amber-300 shadow-2xs">
+                                      {sub.subJobCardNo}
+                                    </span>
+                                    <span className="text-[11px] text-slate-500 font-mono font-semibold hidden sm:inline-block">
+                                      QR: {sub.qrCodeValue}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 font-mono">
+                                    <span className="font-black text-blue-700 text-xs bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">{sub.qty} PNL</span>
+                                    <span className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 font-extrabold border border-slate-200">
+                                      {sub.currentStage?.name || selectedMovementJob.currentStageName || PF01_STAGES[0]}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Immediate Launch Action if UNLAUNCHED */}
+                        {(selectedMovementJob.status === 'UNLAUNCHED' || selectedMovementJob.status === 'CREATED') && (
+                          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 p-4 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
+                            <div>
+                              <p className="font-extrabold text-emerald-950 text-xs">Job Card is Unlaunched</p>
+                              <p className="text-[11px] text-emerald-700 mt-0.5">Click Launch to release into Stage 1 Production</p>
+                            </div>
+                            <button
+                              onClick={() => {
+                                handleLaunchExistingJobCard(selectedMovementJob.id);
+                                setSelectedMovementJob(null);
+                              }}
+                              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95 shrink-0 border border-emerald-500/40"
+                            >
+                              <Play className="w-4 h-4 fill-current" />
+                              <span>LAUNCH NOW</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    )}
 
-                    {/* Immediate Launch Action if UNLAUNCHED */}
-                    {(selectedMovementJob.status === 'UNLAUNCHED' || selectedMovementJob.status === 'CREATED') && (
-                      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 p-4 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
-                        <div>
-                          <p className="font-extrabold text-emerald-950 text-xs">Job Card is Unlaunched</p>
-                          <p className="text-[11px] text-emerald-700 mt-0.5">Click Launch to release into Stage 1 Production</p>
+                      {/* Right Column Bottom Actions */}
+                      <div className="space-y-2.5 font-sans pt-2">
+                        {selectedMovementJob.status === 'IN_PROGRESS' && (
+                          <button
+                            onClick={() => handleMarkAsCompleted(selectedMovementJob.id)}
+                            className="w-full py-3.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black rounded-2xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-600/20 transition-all active:scale-98 border border-emerald-500/30"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>MARK JOB CARD AS COMPLETED (Stage 19 PACKING)</span>
+                          </button>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-2.5">
+                          <button
+                            onClick={() => setShowQrModal(selectedMovementJob)}
+                            className="py-3.5 bg-slate-950 hover:bg-slate-800 text-white font-extrabold rounded-2xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md transition-all active:scale-98 border border-slate-800"
+                          >
+                            <QrCode className="w-4 h-4 text-amber-400" />
+                            <span>VIEW & PRINT QR TAG</span>
+                          </button>
+
+                          <a
+                            href={`/job-cards-pdf/${selectedMovementJob.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black rounded-2xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md text-center transition-all active:scale-98 border border-amber-600/80"
+                          >
+                            <FileText className="w-4 h-4" />
+                            <span>OPEN JOB CARD PDF</span>
+                          </a>
                         </div>
-                        <button
-                          onClick={() => {
-                            handleLaunchExistingJobCard(selectedMovementJob.id);
-                            setSelectedMovementJob(null);
-                          }}
-                          className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-sm cursor-pointer transition-all active:scale-95 shrink-0 border border-emerald-500/40"
-                        >
-                          <Play className="w-4 h-4 fill-current" />
-                          <span>LAUNCH NOW</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Bottom Actions Buttons */}
-                    <div className="space-y-2.5 font-sans pt-1">
-                      {selectedMovementJob.status === 'IN_PROGRESS' && (
-                        <button
-                          onClick={() => handleMarkAsCompleted(selectedMovementJob.id)}
-                          className="w-full py-3.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black rounded-2xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-600/20 transition-all active:scale-98 border border-emerald-500/30"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>MARK JOB CARD AS COMPLETED (Stage 19 PACKING)</span>
-                        </button>
-                      )}
-
-                      <div className="grid grid-cols-2 gap-2.5">
-                        <button
-                          onClick={() => setShowQrModal(selectedMovementJob)}
-                          className="py-3.5 bg-slate-950 hover:bg-slate-800 text-white font-extrabold rounded-2xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md transition-all active:scale-98 border border-slate-800"
-                        >
-                          <QrCode className="w-4 h-4 text-amber-400" />
-                          <span>VIEW & PRINT QR TAG</span>
-                        </button>
-
-                        <a
-                          href={`/job-cards-pdf/${selectedMovementJob.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black rounded-2xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md text-center transition-all active:scale-98 border border-amber-600/80"
-                        >
-                          <FileText className="w-4 h-4" />
-                          <span>OPEN JOB CARD PDF</span>
-                        </a>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* TAB B: FULL MOVEMENT */}
+                {/* TAB B: FULL MOVEMENT (HORIZONTAL SIDE-BY-SIDE) */}
                 {movementTab === 'FULL' && (
-                  <div className="space-y-4 text-xs font-sans">
-                    <div className="bg-blue-50/80 border border-blue-200 p-4 rounded-2xl text-blue-950 space-y-2 shadow-2xs">
-                      <p className="font-extrabold text-blue-900 text-xs">Full Lot Stage Movement Confirmation</p>
-                      <p className="text-xs leading-relaxed text-blue-950">
-                        Are you sure you want to move Job Card No. <strong className="text-slate-900 font-mono font-black">{selectedMovementJob.jobCardNo}</strong> ({selectedMovementJob.prodPnlQty} PNL, {selectedMovementJob.prodPnlAreaSqm} Sqm) to the next process:
-                      </p>
-                      <div className="mt-2 font-bold text-blue-800 bg-white px-3 py-1.5 rounded-xl border border-blue-200 inline-block font-mono text-xs shadow-2xs">
-                        Next Stage: {PF01_STAGES[selectedMovementJob.currentStageIndex + 1] || '19. PACKING (COMPLETED)'}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 text-xs font-sans">
+                    <div className="lg:col-span-6 bg-blue-50/80 border border-blue-200 p-5 rounded-2xl text-blue-950 space-y-3 shadow-2xs flex flex-col justify-between">
+                      <div>
+                        <p className="font-black text-blue-900 text-sm flex items-center gap-2">
+                          <ArrowRight className="w-4 h-4 text-blue-600" />
+                          Full Lot Stage Movement Confirmation
+                        </p>
+                        <p className="text-xs leading-relaxed text-blue-950 mt-2">
+                          Are you sure you want to move Job Card No. <strong className="text-slate-900 font-mono font-black">{selectedMovementJob.jobCardNo}</strong> ({selectedMovementJob.prodPnlQty} PNL, {selectedMovementJob.prodPnlAreaSqm} Sqm) to the next process stage?
+                        </p>
+                      </div>
+                      <div className="p-3 font-bold text-blue-900 bg-white rounded-xl border border-blue-200 font-mono text-xs shadow-2xs">
+                        Next Stage: <span className="text-blue-700 font-extrabold">{PF01_STAGES[selectedMovementJob.currentStageIndex + 1] || '19. PACKING (COMPLETED)'}</span>
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">Movement Remarks Category *</label>
-                      <select
-                        value={fullMoveRemarkType}
-                        onChange={(e) => setFullMoveRemarkType(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-blue-500 shadow-2xs"
-                      >
-                        <option value="Clear Movement">Clear Movement (No issues)</option>
-                        <option value="Rejection">Rejection</option>
-                        <option value="Rework">Rework</option>
-                        <option value="Process issue">Process issue</option>
-                        <option value="Other relevant remarks">Other relevant movement remarks</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">Remarks Details (Optional)</label>
-                      <textarea
-                        rows={2}
-                        value={fullMoveRemarks}
-                        onChange={(e) => setFullMoveRemarks(e.target.value)}
-                        placeholder="Enter optional stage movement remarks..."
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 focus:bg-white focus:outline-none focus:border-blue-500 shadow-2xs"
-                      />
-                    </div>
-
-                    <div className="space-y-2 pt-1">
-                      <button
-                        onClick={handleFullJobMovement}
-                        className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl text-xs shadow-md transition-all cursor-pointer active:scale-98 border border-blue-500/40"
-                      >
-                        CONFIRM FULL MOVEMENT ({selectedMovementJob.prodPnlQty} PNL ➔ Next Stage)
-                      </button>
-
-                      {selectedMovementJob.status === 'IN_PROGRESS' && (
-                        <button
-                          onClick={() => handleMarkAsCompleted(selectedMovementJob.id)}
-                          className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer active:scale-98 border border-emerald-500/40"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>MARK AS COMPLETED & READY FOR DISPATCH</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* TAB C: UNCOMPLETED / SPLIT MOVEMENT */}
-                {movementTab === 'PARTIAL' && (
-                  <div className="space-y-4 text-xs font-sans">
-                    <div className="bg-amber-50/80 border border-amber-200 p-4 rounded-2xl text-amber-950 space-y-1 shadow-2xs">
-                      <p className="font-extrabold text-amber-900 flex items-center gap-1.5 text-xs">
-                        <Split className="w-4 h-4 text-amber-700 shrink-0" />
-                        Uncompleted / Partial Job Movement (Lot Split)
-                      </p>
-                      <p className="mt-1 text-[11px] text-amber-900/90 leading-relaxed">
-                        Required when complete lot is not ready to move forward. The system automatically maintains balance quantity and area for both portions.
-                      </p>
-                    </div>
-
-                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3 shadow-2xs">
+                    <div className="lg:col-span-6 bg-white p-5 rounded-2xl border border-slate-200 space-y-4 shadow-xs">
                       <div>
-                        <label className="block text-xs font-bold text-slate-700 mb-1">
-                          Quantity Ready to Move Forward (PNL):
-                        </label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={selectedMovementJob.prodPnlQty - 1}
-                          value={partialMoveQty}
-                          onChange={(e) => setPartialMoveQty(Number(e.target.value))}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Movement Remarks Category *</label>
+                        <select
+                          value={fullMoveRemarkType}
+                          onChange={(e) => setFullMoveRemarkType(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-blue-500 shadow-2xs"
+                        >
+                          <option value="Clear Movement">Clear Movement (No issues)</option>
+                          <option value="Rejection">Rejection</option>
+                          <option value="Rework">Rework</option>
+                          <option value="Process issue">Process issue</option>
+                          <option value="Other relevant remarks">Other relevant movement remarks</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Remarks Details (Optional)</label>
+                        <textarea
+                          rows={3}
+                          value={fullMoveRemarks}
+                          onChange={(e) => setFullMoveRemarks(e.target.value)}
+                          placeholder="Enter optional stage movement remarks..."
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 focus:bg-white focus:outline-none focus:border-blue-500 shadow-2xs"
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2.5 text-[11px]">
+                      <div className="space-y-2 pt-1">
+                        <button
+                          onClick={handleFullJobMovement}
+                          className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl text-xs shadow-md transition-all cursor-pointer active:scale-98 border border-blue-500/40"
+                        >
+                          CONFIRM FULL MOVEMENT ({selectedMovementJob.prodPnlQty} PNL ➔ Next Stage)
+                        </button>
+
+                        {selectedMovementJob.status === 'IN_PROGRESS' && (
+                          <button
+                            onClick={() => handleMarkAsCompleted(selectedMovementJob.id)}
+                            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer active:scale-98 border border-emerald-500/40"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>MARK AS COMPLETED & READY FOR DISPATCH</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB C: UNCOMPLETED / SPLIT MOVEMENT (HORIZONTAL SIDE-BY-SIDE) */}
+                {movementTab === 'PARTIAL' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 text-xs font-sans">
+                    <div className="lg:col-span-5 bg-amber-50/80 border border-amber-200 p-5 rounded-2xl text-amber-950 space-y-2 shadow-2xs flex flex-col justify-between">
+                      <div>
+                        <p className="font-black text-amber-900 flex items-center gap-2 text-sm">
+                          <Split className="w-4.5 h-4.5 text-amber-700 shrink-0" />
+                          Uncompleted / Partial Job Movement (Lot Split)
+                        </p>
+                        <p className="mt-2 text-xs text-amber-900/90 leading-relaxed">
+                          Required when complete lot is not ready to move forward. The system automatically maintains balance quantity and area for both portions.
+                        </p>
+                      </div>
+                      <div className="space-y-2 pt-3">
                         <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-emerald-950 font-medium">
                           <div className="font-bold text-emerald-900">Next Stage: {PF01_STAGES[selectedMovementJob.currentStageIndex + 1]}</div>
                           <div className="text-sm font-black text-emerald-700 font-mono mt-1">{partialMoveQty} PNL Moved</div>
@@ -2406,12 +2416,28 @@ export default function JobCardsPage() {
                       </div>
                     </div>
 
-                    <button
-                      onClick={handlePartialJobMovement}
-                      className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-2xl text-xs shadow-md transition-all cursor-pointer border border-amber-600 active:scale-98"
-                    >
-                      CONFIRM PARTIAL MOVEMENT ({partialMoveQty} PNL Forward • {selectedMovementJob.prodPnlQty - partialMoveQty} PNL Balance)
-                    </button>
+                    <div className="lg:col-span-7 bg-white p-5 rounded-2xl border border-slate-200 space-y-4 shadow-xs flex flex-col justify-between">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          Quantity Ready to Move Forward (PNL):
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={selectedMovementJob.prodPnlQty - 1}
+                          value={partialMoveQty}
+                          onChange={(e) => setPartialMoveQty(Number(e.target.value))}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-900 focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
+                        />
+                      </div>
+
+                      <button
+                        onClick={handlePartialJobMovement}
+                        className="w-full py-4 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-2xl text-xs shadow-md transition-all cursor-pointer border border-amber-600 active:scale-98"
+                      >
+                        CONFIRM PARTIAL MOVEMENT ({partialMoveQty} PNL Forward • {selectedMovementJob.prodPnlQty - partialMoveQty} PNL Balance)
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
