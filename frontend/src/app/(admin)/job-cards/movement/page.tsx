@@ -144,8 +144,20 @@ export default function JobMovementUpdatePage() {
             totalPcbQty: j.totalPcbQty || (j.totalQty * 4) || 160,
             prodPnlAreaSqm: j.prodPnlAreaSqm || 50,
             custPnlAreaSqm: j.custPnlAreaSqm || 45,
-            currentStageIndex: 0,
-            currentStageName: j.subJobCards?.[0]?.currentStage?.name || PF01_STAGES[0],
+            currentStageIndex: (() => {
+              const raw = j.subJobCards?.[0]?.currentStage?.name || j.currentStageName || j.currentStage?.name || PF01_STAGES[0];
+              const idx = PF01_STAGES.findIndex(
+                (s) => s.toLowerCase() === raw.toLowerCase() || s.toLowerCase().includes(raw.toLowerCase()) || raw.toLowerCase().includes(s.toLowerCase())
+              );
+              return idx >= 0 ? idx : 0;
+            })(),
+            currentStageName: (() => {
+              const raw = j.subJobCards?.[0]?.currentStage?.name || j.currentStageName || j.currentStage?.name || PF01_STAGES[0];
+              const idx = PF01_STAGES.findIndex(
+                (s) => s.toLowerCase() === raw.toLowerCase() || s.toLowerCase().includes(raw.toLowerCase()) || raw.toLowerCase().includes(s.toLowerCase())
+              );
+              return idx >= 0 ? PF01_STAGES[idx] : raw;
+            })(),
             status: j.status === 'CREATED' ? 'UNLAUNCHED' : j.status,
             photoUrl: j.photoUrl || '',
             createdAt: j.createdAt,
@@ -214,6 +226,9 @@ export default function JobMovementUpdatePage() {
     setSelectedJob(null);
   };
 
+  const [pendingWorkReason, setPendingWorkReason] = useState<string>('Drilling & Hole Check Pending');
+  const [customPendingReason, setCustomPendingReason] = useState<string>('');
+
   const handlePartialJobMovement = async () => {
     if (!selectedJob) return;
     if (!canUserMoveStage(selectedJob.currentStageName)) {
@@ -227,15 +242,22 @@ export default function JobMovementUpdatePage() {
     }
 
     const sqmMoved = Number(((partialQty * selectedJob.prodPnlAreaSqm) / selectedJob.prodPnlQty).toFixed(2));
+    const effectiveReason = pendingWorkReason === 'Other / Custom Pending Reason' ? (customPendingReason || 'Pending PNL Work') : pendingWorkReason;
 
     try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       await fetch(`http://localhost:3001/api/v1/job-cards/${selectedJob.id}/move-partial`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           qtyToMove: partialQty,
           areaToMove: sqmMoved,
-          remark: `${remarkCategory}: ${remarksText}`,
+          pendingWorkReason: effectiveReason,
+          remark: remarksText ? `${effectiveReason} • ${remarksText}` : `Incomplete Movement: ${effectiveReason}`,
+          remarkType: 'INCOMPLETE_MOVEMENT',
         }),
       });
     } catch (e) {
@@ -702,7 +724,7 @@ export default function JobMovementUpdatePage() {
                 <div className="space-y-4 text-xs font-sans">
                   <div className="bg-amber-950/40 border border-amber-800/80 p-3.5 rounded-2xl text-amber-200 space-y-1">
                     <p className="font-extrabold text-amber-300">Uncompleted / Partial Job Movement</p>
-                    <p className="text-[11px] text-amber-200/80">Move partial PNL quantity forward while maintaining balance quantity at current stage.</p>
+                    <p className="text-[11px] text-amber-200/80">Move partial PNL quantity forward while maintaining balance quantity at current stage with exact pending work reason.</p>
                   </div>
 
                   <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
@@ -715,6 +737,48 @@ export default function JobMovementUpdatePage() {
                         value={partialQty}
                         onChange={(e) => setPartialQty(Number(e.target.value))}
                         className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-amber-300 font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-amber-300 mb-1">Pending Work Reason in PNL:</label>
+                      <select
+                        value={pendingWorkReason}
+                        onChange={(e) => setPendingWorkReason(e.target.value)}
+                        className="w-full bg-slate-900 border border-amber-600/60 rounded-xl px-3 py-2 text-xs font-bold text-slate-100 focus:outline-none focus:border-amber-400"
+                      >
+                        <option value="Drilling & Hole Check Pending">Drilling & Hole Check Pending</option>
+                        <option value="Solder Mask Touch-Up Required">Solder Mask Touch-Up Required</option>
+                        <option value="Legend Reprint Pending">Legend Reprint Pending</option>
+                        <option value="V-Cut / Edge Chamfer Pending">V-Cut / Edge Chamfer Pending</option>
+                        <option value="FQC AI Re-Inspection Required">FQC AI Re-Inspection Required</option>
+                        <option value="Copper Plating Thickness Check Pending">Copper Plating Thickness Check Pending</option>
+                        <option value="Etching / Track Touch-up Pending">Etching / Track Touch-up Pending</option>
+                        <option value="Other / Custom Pending Reason">Other / Custom Pending Reason</option>
+                      </select>
+                    </div>
+
+                    {pendingWorkReason === 'Other / Custom Pending Reason' && (
+                      <div>
+                        <label className="block text-xs font-bold text-slate-300 mb-1">Specify Custom Pending Reason:</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Special Gold Finger Plating Inspection Pending"
+                          value={customPendingReason}
+                          onChange={(e) => setCustomPendingReason(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200"
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">Incomplete Movement Remarks / Work Notes:</label>
+                      <textarea
+                        rows={2}
+                        placeholder="Enter specific details regarding pending work, lot condition, or operator remarks..."
+                        value={remarksText}
+                        onChange={(e) => setRemarksText(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400"
                       />
                     </div>
 

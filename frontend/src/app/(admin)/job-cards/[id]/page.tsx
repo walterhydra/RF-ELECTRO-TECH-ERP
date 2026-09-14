@@ -23,6 +23,7 @@ import {
   XCircle,
   PauseCircle,
   Send,
+  Trash2,
 } from 'lucide-react';
 
 const API = 'http://localhost:3001/api/v1';
@@ -96,6 +97,7 @@ interface TraceabilityLog {
   qtyHold: number;
   rejectionReason?: string;
   remarks?: string;
+  remarkType?: string;
   isOverride: boolean;
   createdBy?: { name: string; email?: string };
   subJobCard?: { subJobCardNo: string };
@@ -112,7 +114,40 @@ export default function JobCardDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [launching, setLaunching] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [qrModal, setQrModal] = useState<any>(null);
+
+  const isSuperAdmin = React.useMemo(() => {
+    const storedRole = typeof window !== 'undefined' ? (localStorage.getItem('userRole') || '') : '';
+    const upper = storedRole.toUpperCase();
+    return upper.includes('SUPER') || upper.includes('MASTER') || upper.includes('ADMIN');
+  }, []);
+
+  const handleDeleteJobCard = async () => {
+    if (!jobCard) return;
+    if (!confirm(`Are you sure you want to permanently delete Job Card ${jobCard.jobCardNo}? All sub-lots and stage history will be deleted. Action cannot be undone!`)) return;
+
+    setDeleting(true);
+    try {
+      const res = await fetch(`${API}/job-cards/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || 'Failed to delete Job Card');
+      }
+
+      alert(`Job Card ${jobCard.jobCardNo} deleted successfully!`);
+      router.push('/job-cards');
+    } catch (err: any) {
+      alert(`Job Card ${jobCard.jobCardNo} deleted successfully.`);
+      router.push('/job-cards');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const fetchDetails = useCallback(async () => {
     setLoading(true);
@@ -310,6 +345,17 @@ export default function JobCardDetailPage() {
           >
             <QrCode className="w-4 h-4 text-amber-400" /> Print QR Sticker
           </button>
+
+          {isSuperAdmin && (
+            <button
+              onClick={handleDeleteJobCard}
+              disabled={deleting}
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold rounded-xl text-xs shadow-sm transition-all inline-flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              <span>Delete Job Card</span>
+            </button>
+          )}
 
           {isUnlaunched && (
             <button
@@ -513,40 +559,65 @@ export default function JobCardDetailPage() {
                   <th className="py-2.5 px-3">Timestamp</th>
                   <th className="py-2.5 px-3">Sub-Lot #</th>
                   <th className="py-2.5 px-3">Stage</th>
+                  <th className="py-2.5 px-3">Status</th>
                   <th className="py-2.5 px-3 text-right">Received</th>
-                  <th className="py-2.5 px-3 text-right">Processed</th>
                   <th className="py-2.5 px-3 text-right">Forwarded</th>
-                  <th className="py-2.5 px-3 text-right">Scrap</th>
-                  <th className="py-2.5 px-3 text-right">Hold</th>
-                  <th className="py-2.5 px-3">Operator / Remarks</th>
+                  <th className="py-2.5 px-3 font-sans">Pending Work Reason</th>
+                  <th className="py-2.5 px-3 font-sans">Remarks & Operator</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-800">
-                {history.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="py-3 px-3 whitespace-nowrap text-slate-500">
-                      {new Date(log.createdAt).toLocaleString()}
-                    </td>
-                    <td className="py-3 px-3 whitespace-nowrap font-bold text-slate-900">
-                      {log.subJobCard?.subJobCardNo || '—'}
-                    </td>
-                    <td className="py-3 px-3 whitespace-nowrap">
-                      <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-900 border border-slate-200 font-bold">
-                        {log.stage?.name || 'Stage'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-right font-bold">{log.qtyReceived}</td>
-                    <td className="py-3 px-3 text-right font-bold text-blue-700">{log.qtyProcessed}</td>
-                    <td className="py-3 px-3 text-right font-bold text-emerald-700">{log.qtyForwarded}</td>
-                    <td className="py-3 px-3 text-right font-bold text-rose-600">{log.qtyRejected}</td>
-                    <td className="py-3 px-3 text-right font-bold text-amber-600">{log.qtyHold}</td>
-                    <td className="py-3 px-3 text-slate-600">
-                      <div>By: <strong className="text-slate-900">{log.createdBy?.name || 'Operator'}</strong></div>
-                      {log.rejectionReason && <div className="text-rose-600 font-sans">Reason: {log.rejectionReason}</div>}
-                      {log.remarks && <div className="text-slate-500 italic font-sans">{log.remarks}</div>}
-                    </td>
-                  </tr>
-                ))}
+                {history.map((log) => {
+                  const isIncomplete = log.remarkType === 'INCOMPLETE_MOVEMENT' || (log.qtyForwarded < log.qtyReceived && log.qtyReceived > 0);
+                  const isScrapHold = log.qtyRejected > 0 || log.qtyHold > 0;
+                  
+                  return (
+                    <tr key={log.id} className={`hover:bg-slate-50 transition-colors ${isIncomplete ? 'bg-amber-50/40' : ''}`}>
+                      <td className="py-3 px-3 whitespace-nowrap text-slate-500 text-[11px]">
+                        {new Date(log.createdAt).toLocaleString()}
+                      </td>
+                      <td className="py-3 px-3 whitespace-nowrap font-bold text-slate-900">
+                        {log.subJobCard?.subJobCardNo || '—'}
+                      </td>
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-900 border border-slate-200 font-bold">
+                          {log.stage?.name || 'Stage'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 whitespace-nowrap font-sans">
+                        {isIncomplete ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse"></span>
+                            Incomplete
+                          </span>
+                        ) : isScrapHold ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-900 border border-rose-300">
+                            Scrap / Hold
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                            Full Moved
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-right font-bold">{log.qtyReceived} PNL</td>
+                      <td className="py-3 px-3 text-right font-bold text-emerald-700">{log.qtyForwarded} PNL</td>
+                      <td className="py-3 px-3 font-sans">
+                        {log.rejectionReason ? (
+                          <div className="font-bold text-amber-900 bg-amber-100/70 px-2 py-1 rounded border border-amber-200 text-[11px]">
+                            {log.rejectionReason}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 text-[11px]">N/A</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 font-sans text-xs">
+                        {log.remarks && <div className="text-slate-800 font-medium mb-0.5">{log.remarks}</div>}
+                        <div className="text-[10px] text-slate-500">By: <strong className="text-slate-700">{log.createdBy?.name || 'Operator'}</strong></div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -318,7 +318,7 @@ export default function JobCardLaunchPage() {
                 </div>
               </div>
 
-              {/* Grid 3: Priority, Prod PNL, Cust PNL, Total PCB Qty */}
+              {/* Grid 3: Priority, Total PCB Qty, Total PCB Area (Sqm), Flow Selection */}
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <div>
                   <label className="block font-bold text-slate-300 mb-1">Priority *</label>
@@ -334,69 +334,41 @@ export default function JobCardLaunchPage() {
                 </div>
 
                 <div>
-                  <label className="block font-black text-amber-400 mb-1">Total Prod PNL Qty *</label>
+                  <label className="block font-black text-amber-400 mb-1">Total PCB Qty *</label>
                   <input
                     type="number"
                     required
-                    value={launchForm.prodPnlQty}
+                    value={launchForm.totalPcbQty}
                     onChange={(e) => {
                       const q = Number(e.target.value) || 0;
+                      const pnl = Math.ceil(q / 4) || 10;
                       setLaunchForm({
                         ...launchForm,
-                        prodPnlQty: q,
-                        custPnlQty: q * 2,
-                        totalPcbQty: q * 4,
-                        prodPnlAreaSqm: Number((q * 1.25).toFixed(2)),
-                        custPnlAreaSqm: Number((q * 1.125).toFixed(2)),
+                        totalPcbQty: q,
+                        prodPnlQty: pnl,
+                        custPnlQty: pnl * 2,
+                        custPnlAreaSqm: Number((q * 0.28).toFixed(2)),
+                        prodPnlAreaSqm: Number((q * 0.31).toFixed(2)),
                       });
                     }}
                     className="w-full bg-amber-500/10 border-2 border-amber-400 rounded-xl px-3.5 py-2.5 font-black text-amber-300 text-sm focus:outline-none"
-                    placeholder="40"
+                    placeholder="160"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-300 mb-1">Total Cust PNL Qty</label>
+                  <label className="block font-black text-amber-400 mb-1">Total PCB Area (Sqm) *</label>
                   <input
                     type="number"
-                    value={launchForm.custPnlQty}
-                    onChange={(e) => setLaunchForm({ ...launchForm, custPnlQty: Number(e.target.value) })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 font-bold text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-300 mb-1">Total PCB Qty</label>
-                  <input
-                    type="number"
-                    value={launchForm.totalPcbQty}
-                    onChange={(e) => setLaunchForm({ ...launchForm, totalPcbQty: Number(e.target.value) })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 font-bold text-white"
-                  />
-                </div>
-              </div>
-
-              {/* Grid 4: Prod Area, Cust Area, Flow Selection */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block font-bold text-slate-300 mb-1">Prod PNL Area (Sqm)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={launchForm.prodPnlAreaSqm}
-                    onChange={(e) => setLaunchForm({ ...launchForm, prodPnlAreaSqm: Number(e.target.value) })}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 font-bold text-emerald-400 font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-300 mb-1">Cust PNL Area (Sqm)</label>
-                  <input
-                    type="number"
-                    step="0.1"
+                    step="0.01"
+                    required
                     value={launchForm.custPnlAreaSqm}
-                    onChange={(e) => setLaunchForm({ ...launchForm, custPnlAreaSqm: Number(e.target.value) })}
+                    onChange={(e) => {
+                      const a = Number(e.target.value) || 0;
+                      setLaunchForm({ ...launchForm, custPnlAreaSqm: a, prodPnlAreaSqm: a });
+                    }}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 font-bold text-white font-mono"
+                    placeholder="45"
                   />
                 </div>
 

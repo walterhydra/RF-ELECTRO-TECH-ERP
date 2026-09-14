@@ -85,6 +85,8 @@ export default function StageUpdatePage() {
   const [qtyHold, setQtyHold] = useState(0);
   const [rejectionReason, setRejectionReason] = useState('');
   const [remarks, setRemarks] = useState('');
+  const [pendingWorkReason, setPendingWorkReason] = useState('Drilling & Hole Check Pending');
+  const [customPendingReason, setCustomPendingReason] = useState('');
 
   const loadStageInfo = useCallback(async () => {
     setLoading(true);
@@ -146,6 +148,8 @@ export default function StageUpdatePage() {
     setSuccess(null);
 
     try {
+      const effectivePendingReason = pendingWorkReason === 'Other / Custom Pending Reason' ? (customPendingReason || 'Pending PNL Work') : pendingWorkReason;
+      const isIncomplete = qtyForwarded < qtyReceived;
       const clientRequestId = `mobile-${id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
       const res = await fetch(`${API}/sub-job-cards/${id}/stage-update`, {
@@ -157,8 +161,9 @@ export default function StageUpdatePage() {
           qtyForwarded,
           qtyRejected,
           qtyHold,
-          rejectionReason: qtyRejected > 0 ? rejectionReason : undefined,
+          rejectionReason: qtyRejected > 0 ? rejectionReason : (isIncomplete ? effectivePendingReason : undefined),
           remarks: remarks.trim() || undefined,
+          remarkType: isIncomplete ? 'INCOMPLETE_MOVEMENT' : 'NONE',
           clientRequestId,
         }),
       });
@@ -312,6 +317,42 @@ export default function StageUpdatePage() {
                 onChange={setQtyForwarded}
                 className="w-full justify-center"
               />
+              {qtyForwarded < qtyReceived && (
+                <div className="mt-3 bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold text-amber-400">
+                    <span>Uncompleted / Partial Job Movement</span>
+                    <span className="text-[10px] bg-amber-400 text-slate-950 px-2 py-0.5 rounded font-black">Incomplete</span>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-mono font-bold text-amber-300 mb-1">REASON FOR PENDING PNL WORK *</label>
+                    <select
+                      value={pendingWorkReason}
+                      onChange={(e) => setPendingWorkReason(e.target.value)}
+                      className="w-full h-11 bg-slate-900 border border-amber-500/50 rounded-lg px-3 text-xs text-amber-200 font-mono focus:outline-none focus:ring-2 focus:ring-amber-400 font-bold"
+                    >
+                      <option value="Drilling & Hole Check Pending">Drilling & Hole Check Pending</option>
+                      <option value="Solder Mask Touch-Up Required">Solder Mask Touch-Up Required</option>
+                      <option value="Legend Reprint Pending">Legend Reprint Pending</option>
+                      <option value="V-Cut / Edge Chamfer Pending">V-Cut / Edge Chamfer Pending</option>
+                      <option value="FQC AI Re-Inspection Required">FQC AI Re-Inspection Required</option>
+                      <option value="Copper Plating Thickness Check Pending">Copper Plating Thickness Check Pending</option>
+                      <option value="Etching / Track Touch-up Pending">Etching / Track Touch-up Pending</option>
+                      <option value="Other / Custom Pending Reason">Other / Custom Pending Reason</option>
+                    </select>
+                  </div>
+                  {pendingWorkReason === 'Other / Custom Pending Reason' && (
+                    <div>
+                      <input
+                        type="text"
+                        placeholder="Specify exact custom pending reason..."
+                        value={customPendingReason}
+                        onChange={(e) => setCustomPendingReason(e.target.value)}
+                        className="w-full h-10 bg-slate-900 border border-amber-500/50 rounded-lg px-3 text-xs text-amber-100 font-mono"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Rejected */}
@@ -435,33 +476,44 @@ export default function StageUpdatePage() {
                 No movement history yet
               </div>
             ) : (
-              history.map((log) => (
-                <div key={log.id} className="p-3 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-mono text-amber-400">
-                      {log.stage?.name || 'Stage'}
-                      {log.isOverride && <span className="ml-1 text-rose-400">[OVERRIDE]</span>}
-                    </span>
-                    <span className="text-[9px] font-mono text-slate-500">
-                      {new Date(log.createdAt).toLocaleString()}
-                    </span>
+              history.map((log) => {
+                const isIncomplete = (log as any).remarkType === 'INCOMPLETE_MOVEMENT' || (log.qtyForwarded < log.qtyReceived && log.qtyReceived > 0);
+                
+                return (
+                  <div key={log.id} className={`p-3 space-y-1 ${isIncomplete ? 'bg-amber-500/10' : ''}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-mono text-amber-400 font-bold flex items-center gap-1.5">
+                        <span>{log.stage?.name || 'Stage'}</span>
+                        {isIncomplete && (
+                          <span className="bg-amber-400 text-slate-950 px-1.5 py-0.2 rounded text-[9px] font-black">
+                            INCOMPLETE
+                          </span>
+                        )}
+                        {log.isOverride && <span className="ml-1 text-rose-400">[OVERRIDE]</span>}
+                      </span>
+                      <span className="text-[9px] font-mono text-slate-500">
+                        {new Date(log.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex gap-3 text-[10px] font-mono text-slate-400">
+                      <span>R:<span className="text-white">{log.qtyReceived}</span></span>
+                      <span>P:<span className="text-cyan-300">{log.qtyProcessed}</span></span>
+                      <span>F:<span className="text-emerald-300">{log.qtyForwarded}</span></span>
+                      {log.qtyRejected > 0 && <span>X:<span className="text-rose-300">{log.qtyRejected}</span></span>}
+                      {log.qtyHold > 0 && <span>H:<span className="text-amber-300">{log.qtyHold}</span></span>}
+                    </div>
+                    {log.rejectionReason && (
+                      <p className={`text-[10px] font-mono ${isIncomplete ? 'text-amber-300 font-bold' : 'text-rose-300'}`}>
+                        {isIncomplete ? 'Pending Work Reason: ' : 'Reason: '}{log.rejectionReason}
+                      </p>
+                    )}
+                    {log.remarks && (
+                      <p className="text-[10px] text-slate-300 font-mono italic">Remarks: {log.remarks}</p>
+                    )}
+                    <p className="text-[9px] text-slate-500 font-mono">By: {log.createdBy?.name || 'System'}</p>
                   </div>
-                  <div className="flex gap-3 text-[10px] font-mono text-slate-400">
-                    <span>R:<span className="text-white">{log.qtyReceived}</span></span>
-                    <span>P:<span className="text-cyan-300">{log.qtyProcessed}</span></span>
-                    <span>F:<span className="text-emerald-300">{log.qtyForwarded}</span></span>
-                    {log.qtyRejected > 0 && <span>X:<span className="text-rose-300">{log.qtyRejected}</span></span>}
-                    {log.qtyHold > 0 && <span>H:<span className="text-amber-300">{log.qtyHold}</span></span>}
-                  </div>
-                  {log.rejectionReason && (
-                    <p className="text-[10px] text-rose-300 font-mono">Reason: {log.rejectionReason}</p>
-                  )}
-                  {log.remarks && (
-                    <p className="text-[10px] text-slate-500 font-mono italic">{log.remarks}</p>
-                  )}
-                  <p className="text-[9px] text-slate-600 font-mono">By: {log.createdBy?.name || 'System'}</p>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}

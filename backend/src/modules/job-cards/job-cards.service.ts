@@ -581,20 +581,47 @@ export class JobCardsService {
   }
 
   async deleteJobCard(id: string, user: any) {
-    const roleName = String(user?.roleName || user?.role || user?.role?.name || '').toUpperCase();
-    const isMaster = roleName === 'MASTER' || roleName === 'SUPER_ADMIN';
+    const roleName = String(
+      user?.roleName || user?.role || user?.role?.name || user?.roleCode || user?.role_name || ''
+    ).toUpperCase();
+    const isSuperAdminOrMaster =
+      roleName.includes('SUPER') ||
+      roleName.includes('MASTER') ||
+      roleName.includes('ADMIN') ||
+      roleName === 'SUPER_ADMIN' ||
+      roleName === 'SUPER ADMIN';
 
-    if (!isMaster) {
-      throw new ForbiddenException('Forbidden (403): Only Master role is authorized to delete Job Cards. Action rejected.');
+    if (!isSuperAdminOrMaster) {
+      throw new ForbiddenException(
+        'Forbidden (403): Only Super Admin / Master role is authorized to delete Job Cards. Action rejected.'
+      );
     }
 
-    const jobCard = await this.prisma.jobCard.findUnique({ where: { id } });
+    const jobCard = await this.prisma.jobCard.findUnique({
+      where: { id },
+      include: { subJobCards: true },
+    });
     if (!jobCard) {
       throw new NotFoundException(`Job Card with ID "${id}" not found`);
     }
 
-    await this.prisma.jobCard.delete({ where: { id } });
-    return { success: true, message: `Job Card ${jobCard.jobCardNo} deleted successfully by Master.` };
+    await this.prisma.$transaction(async (tx) => {
+      const subCardIds = (jobCard.subJobCards || []).map((s) => s.id);
+      if (subCardIds.length > 0) {
+        await tx.stageMovementLog.deleteMany({
+          where: { subJobCardId: { in: subCardIds } },
+        });
+        await tx.subJobCard.deleteMany({
+          where: { jobCardId: id },
+        });
+      }
+      await tx.jobCard.delete({ where: { id } });
+    });
+
+    return {
+      success: true,
+      message: `Job Card ${jobCard.jobCardNo} deleted successfully by Super Admin.`,
+    };
   }
 
   async moveFull(id: string, body: { remark?: string; remarkType?: string }, user: any) {
@@ -698,7 +725,7 @@ export class JobCardsService {
 
   async movePartial(
     id: string,
-    body: { qtyToMove: number; areaToMove?: number; remark?: string },
+    body: { qtyToMove: number; areaToMove?: number; remark?: string; pendingWorkReason?: string; remarkType?: string },
     user: any,
   ) {
     let subCard = await this.prisma.subJobCard.findUnique({
@@ -779,7 +806,9 @@ export class JobCardsService {
           qtyForwarded: qtyToMove,
           qtyRejected: 0,
           qtyHold: 0,
-          remarks: body.remark || `Uncompleted / Partial Job Movement: ${qtyToMove} PNL moved to next stage`,
+          rejectionReason: body.pendingWorkReason || null,
+          remarkType: body.remarkType || 'INCOMPLETE_MOVEMENT',
+          remarks: body.remark || `Uncompleted / Partial Job Movement: ${qtyToMove} PNL moved to next stage (${remainingQty} PNL retained)`,
           createdById: userId,
         },
       });

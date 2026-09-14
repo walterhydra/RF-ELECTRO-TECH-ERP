@@ -93,7 +93,7 @@ export class JobCardsController {
   @ApiOperation({ summary: 'Execute Uncompleted / Partial Job Movement to next process stage' })
   async movePartial(
     @Param('id') id: string,
-    @Body() body: { qtyToMove: number; areaToMove?: number; remark?: string },
+    @Body() body: { qtyToMove: number; areaToMove?: number; remark?: string; pendingWorkReason?: string; remarkType?: string },
     @Req() req: any,
   ) {
     return this.jobCardsService.movePartial(id, body, req.user);
