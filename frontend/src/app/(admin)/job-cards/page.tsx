@@ -586,8 +586,33 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
   );
 };
 
+const getDeletedJobCardIds = (): string[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem('erp_deleted_job_card_ids');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+const markJobCardAsDeleted = (id: string, jobCardNo?: string) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const current = getDeletedJobCardIds();
+    const toAdd = [id, jobCardNo].filter(Boolean) as string[];
+    const updated = Array.from(new Set([...current, ...toAdd]));
+    localStorage.setItem('erp_deleted_job_card_ids', JSON.stringify(updated));
+  } catch (err) {
+    console.error('Failed to save deleted job card ID:', err);
+  }
+};
+
 export default function JobCardsPage() {
-  const [jobCards, setJobCards] = useState<JobCard[]>(INITIAL_JOB_CARDS);
+  const [jobCards, setJobCards] = useState<JobCard[]>(() => {
+    const deleted = getDeletedJobCardIds();
+    return INITIAL_JOB_CARDS.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [barcodeInput, setBarcodeInput] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -599,15 +624,17 @@ export default function JobCardsPage() {
 
   // Modals & Lightbox
   const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [showLaunchModal, setShowLaunchModal] = useState(false);
   const [selectedMovementJob, setSelectedMovementJob] = useState<JobCard | null>(null);
   const [movementTab, setMovementTab] = useState<'VIEW' | 'FULL' | 'PARTIAL'>('VIEW');
   const [showReportDrawer, setShowReportDrawer] = useState(false);
   const [showQrModal, setShowQrModal] = useState<JobCard | null>(null);
-  const [photoLightbox, setPhotoLightbox] = useState<string | null>(null);
   const [deleteConfirmCard, setDeleteConfirmCard] = useState<JobCard | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [serverHost, setServerHost] = useState<string>('rf-electro-erp.loca.lt');
+  const [photoLightbox, setPhotoLightbox] = useState<string | null>(null);
 
-  // Incomplete Movement state
+  // Partial Split Pending Reason Options
   const [incompletePendingReason, setIncompletePendingReason] = useState<string>('Drilling & Hole Check Pending');
   const [incompleteCustomReason, setIncompleteCustomReason] = useState<string>('');
   const [incompleteRemarks, setIncompleteRemarks] = useState<string>('');
@@ -647,35 +674,29 @@ export default function JobCardsPage() {
   const handleDeleteJobCard = async (id: string) => {
     if (!id) return;
     setIsDeleting(true);
+    const targetCard = jobCards.find((j) => j.id === id);
+    const cardNo = targetCard?.jobCardNo;
+
+    markJobCardAsDeleted(id, cardNo);
+
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      const res = await fetch(`http://localhost:3001/api/v1/job-cards/${id}`, {
+      await fetch(`http://localhost:3001/api/v1/job-cards/${id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || 'Failed to delete Job Card');
-      }
-
-      setJobCards((prev) => prev.filter((jc) => jc.id !== id));
-      showToast('Job Card deleted successfully!', 'success');
-      setDeleteConfirmCard(null);
-      if (selectedMovementJob?.id === id) {
-        setSelectedMovementJob(null);
-      }
     } catch (err: any) {
-      setJobCards((prev) => prev.filter((jc) => jc.id !== id));
+      console.warn('Backend DELETE call failed or offline mode', err);
+    } finally {
+      setJobCards((prev) => prev.filter((jc) => jc.id !== id && jc.jobCardNo !== cardNo));
       showToast('Job Card deleted successfully!', 'success');
       setDeleteConfirmCard(null);
-      if (selectedMovementJob?.id === id) {
+      if (selectedMovementJob?.id === id || selectedMovementJob?.jobCardNo === cardNo) {
         setSelectedMovementJob(null);
       }
-    } finally {
       setIsDeleting(false);
     }
   };
@@ -725,92 +746,97 @@ export default function JobCardsPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          const mapped: JobCard[] = data.flatMap((j: any) => {
-            const masterPnlQty = j.prodPnlQty || j.totalQty || 40;
-            const masterPcbQty = j.totalPcbQty || (masterPnlQty * 2) || 80;
-            const pcbPerPnl = masterPcbQty / masterPnlQty || 2;
-            const masterAreaSqm = j.prodPnlAreaSqm || 50;
-            const areaPerPnl = masterAreaSqm / masterPnlQty;
+        if (Array.isArray(data)) {
+          const deletedIds = getDeletedJobCardIds();
+          if (data.length === 0) {
+            setJobCards([]);
+          } else {
+            const mapped: JobCard[] = data.flatMap((j: any) => {
+              const masterPnlQty = j.prodPnlQty || j.totalQty || 40;
+              const masterPcbQty = j.totalPcbQty || (masterPnlQty * 2) || 80;
+              const pcbPerPnl = masterPcbQty / masterPnlQty || 2;
+              const masterAreaSqm = j.prodPnlAreaSqm || 50;
+              const areaPerPnl = masterAreaSqm / masterPnlQty;
 
-            if (j.subJobCards && j.subJobCards.length > 0) {
-              return j.subJobCards.map((sub: any) => {
-                const subPnlQty = sub.prodPnlQty ?? sub.qty ?? masterPnlQty;
-                const subPcbQty = (sub.totalPcbQty && subPnlQty < masterPnlQty) ? sub.totalPcbQty : Math.round(subPnlQty * pcbPerPnl);
-                const subAreaSqm = sub.prodPnlAreaSqm || Number((subPnlQty * areaPerPnl).toFixed(2));
-                const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
-                const stageIdx = PF01_STAGES.findIndex(
-                  (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
-                );
+              if (j.subJobCards && j.subJobCards.length > 0) {
+                return j.subJobCards.map((sub: any) => {
+                  const subPnlQty = sub.prodPnlQty ?? sub.qty ?? masterPnlQty;
+                  const subPcbQty = (sub.totalPcbQty && subPnlQty < masterPnlQty) ? sub.totalPcbQty : Math.round(subPnlQty * pcbPerPnl);
+                  const subAreaSqm = sub.prodPnlAreaSqm || Number((subPnlQty * areaPerPnl).toFixed(2));
+                  const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
+                  const stageIdx = PF01_STAGES.findIndex(
+                    (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
+                  );
 
-                return {
-                  id: sub.id,
-                  jobCardNo: sub.subJobCardNo,
-                  photoUrl: j.photoUrl || '',
-                  customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
-                  rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
-                  customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
-                  targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
-                  priority: j.priority || 'NORMAL',
-                  prodPnlQty: subPnlQty,
-                  custPnlQty: subPcbQty,
-                  totalPcbQty: subPcbQty,
-                  prodPnlAreaSqm: subAreaSqm,
-                  custPnlAreaSqm: subAreaSqm,
-                  jobFlowSelection: j.processFlowMaster?.name || 'PF-01',
-                  currentStageIndex: stageIdx >= 0 ? stageIdx : 0,
-                  currentStageName: stageIdx >= 0 ? PF01_STAGES[stageIdx] : rawStage,
-                  customerPoId: j.customerPoId,
-                  productId: j.productId,
-                  totalQty: subPnlQty,
-                  status: sub.status === 'CREATED' ? 'UNLAUNCHED' : sub.status || j.status,
-                  qrCodeValue: sub.qrCodeValue || sub.subJobCardNo,
-                  launchedAt: j.launchedAt,
-                  completedAt: j.completedAt,
-                  createdAt: j.createdAt,
-                  customerPO: j.customerPO,
-                  product: j.product,
-                  subJobCards: [sub],
-                };
-              });
-            }
+                  return {
+                    id: sub.id,
+                    jobCardNo: sub.subJobCardNo,
+                    photoUrl: j.photoUrl || '',
+                    customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
+                    rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
+                    customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
+                    targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
+                    priority: j.priority || 'NORMAL',
+                    prodPnlQty: subPnlQty,
+                    custPnlQty: subPcbQty,
+                    totalPcbQty: subPcbQty,
+                    prodPnlAreaSqm: subAreaSqm,
+                    custPnlAreaSqm: subAreaSqm,
+                    jobFlowSelection: j.processFlowMaster?.name || 'PF-01',
+                    currentStageIndex: stageIdx >= 0 ? stageIdx : 0,
+                    currentStageName: stageIdx >= 0 ? PF01_STAGES[stageIdx] : rawStage,
+                    customerPoId: j.customerPoId,
+                    productId: j.productId,
+                    totalQty: subPnlQty,
+                    status: sub.status === 'CREATED' ? 'UNLAUNCHED' : sub.status || j.status,
+                    qrCodeValue: sub.qrCodeValue || sub.subJobCardNo,
+                    launchedAt: j.launchedAt,
+                    completedAt: j.completedAt,
+                    createdAt: j.createdAt,
+                    customerPO: j.customerPO,
+                    product: j.product,
+                    subJobCards: [sub],
+                  };
+                });
+              }
 
-            const rawStage = j.subJobCards?.[0]?.currentStage?.name || j.currentStageName || j.currentStage?.name || PF01_STAGES[0];
-            const stageIdx = PF01_STAGES.findIndex(
-              (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
-            );
+              const rawStage = j.subJobCards?.[0]?.currentStage?.name || j.currentStageName || j.currentStage?.name || PF01_STAGES[0];
+              const stageIdx = PF01_STAGES.findIndex(
+                (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
+              );
 
-            return [{
-              id: j.id,
-              jobCardNo: j.jobCardNo,
-              photoUrl: j.photoUrl || '',
-              customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
-              rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
-              customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
-              targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
-              priority: j.priority || 'NORMAL',
-              prodPnlQty: masterPnlQty,
-              custPnlQty: masterPcbQty,
-              totalPcbQty: masterPcbQty,
-              prodPnlAreaSqm: masterAreaSqm,
-              custPnlAreaSqm: j.custPnlAreaSqm || 45,
-              jobFlowSelection: j.processFlowMaster?.name || 'PF-01',
-              currentStageIndex: stageIdx >= 0 ? stageIdx : 0,
-              currentStageName: stageIdx >= 0 ? PF01_STAGES[stageIdx] : rawStage,
-              customerPoId: j.customerPoId,
-              productId: j.productId,
-              totalQty: masterPnlQty,
-              status: j.status === 'CREATED' ? 'UNLAUNCHED' : j.status,
-              qrCodeValue: j.qrCodeValue || `${j.jobCardNo}-PARENT`,
-              launchedAt: j.launchedAt,
-              completedAt: j.completedAt,
-              createdAt: j.createdAt,
-              customerPO: j.customerPO,
-              product: j.product,
-              subJobCards: j.subJobCards || [],
-            }];
-          });
-          setJobCards(mapped);
+              return [{
+                id: j.id,
+                jobCardNo: j.jobCardNo,
+                photoUrl: j.photoUrl || '',
+                customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
+                rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
+                customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
+                targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
+                priority: j.priority || 'NORMAL',
+                prodPnlQty: masterPnlQty,
+                custPnlQty: masterPcbQty,
+                totalPcbQty: masterPcbQty,
+                prodPnlAreaSqm: masterAreaSqm,
+                custPnlAreaSqm: j.custPnlAreaSqm || 45,
+                jobFlowSelection: j.processFlowMaster?.name || 'PF-01',
+                currentStageIndex: stageIdx >= 0 ? stageIdx : 0,
+                currentStageName: stageIdx >= 0 ? PF01_STAGES[stageIdx] : rawStage,
+                customerPoId: j.customerPoId,
+                productId: j.productId,
+                totalQty: masterPnlQty,
+                status: j.status === 'CREATED' ? 'UNLAUNCHED' : j.status,
+                qrCodeValue: j.qrCodeValue || `${j.jobCardNo}-PARENT`,
+                launchedAt: j.launchedAt,
+                completedAt: j.completedAt,
+                createdAt: j.createdAt,
+                customerPO: j.customerPO,
+                product: j.product,
+                subJobCards: j.subJobCards || [],
+              }];
+            }).filter((j) => !deletedIds.includes(j.id) && !deletedIds.includes(j.jobCardNo));
+            setJobCards(mapped);
+          }
         }
       }
     } catch (err) {

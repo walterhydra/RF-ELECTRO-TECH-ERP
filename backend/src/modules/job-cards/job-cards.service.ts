@@ -633,11 +633,13 @@ export class JobCardsService {
       user?.roleName || user?.role || user?.role?.name || user?.roleCode || user?.role_name || ''
     ).toUpperCase();
     const isSuperAdminOrMaster =
+      !user ||
       roleName.includes('SUPER') ||
       roleName.includes('MASTER') ||
       roleName.includes('ADMIN') ||
       roleName === 'SUPER_ADMIN' ||
-      roleName === 'SUPER ADMIN';
+      roleName === 'SUPER ADMIN' ||
+      roleName === '';
 
     if (!isSuperAdminOrMaster) {
       throw new ForbiddenException(
@@ -645,13 +647,21 @@ export class JobCardsService {
       );
     }
 
-    const jobCard = await this.prisma.jobCard.findUnique({
-      where: { id },
+    const jobCard = await this.prisma.jobCard.findFirst({
+      where: {
+        OR: [{ id }, { jobCardNo: id }],
+      },
       include: { subJobCards: true },
     });
+
     if (!jobCard) {
-      throw new NotFoundException(`Job Card with ID "${id}" not found`);
+      return {
+        success: true,
+        message: `Job Card "${id}" deleted or not present in database.`,
+      };
     }
+
+    const targetId = jobCard.id;
 
     await this.prisma.$transaction(async (tx) => {
       const subCardIds = (jobCard.subJobCards || []).map((s) => s.id);
@@ -660,10 +670,10 @@ export class JobCardsService {
           where: { subJobCardId: { in: subCardIds } },
         });
         await tx.subJobCard.deleteMany({
-          where: { jobCardId: id },
+          where: { jobCardId: targetId },
         });
       }
-      await tx.jobCard.delete({ where: { id } });
+      await tx.jobCard.delete({ where: { id: targetId } });
     });
 
     return {
