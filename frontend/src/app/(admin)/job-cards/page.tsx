@@ -2002,7 +2002,8 @@ export default function JobCardsPage() {
                           <button
                             onClick={() => {
                               setSelectedMovementJob(jc);
-                              setMovementTab('FULL');
+                              setPartialMoveQty(Math.max(1, Math.floor(jc.prodPnlQty / 2)));
+                              setMovementTab('VIEW');
                             }}
                             title="Open Stage Movement Confirmation & Options"
                             className="h-7 px-3 bg-gradient-to-r from-amber-500 via-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black rounded-lg border border-amber-600/90 text-[11px] inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 whitespace-nowrap"
@@ -2688,9 +2689,9 @@ export default function JobCardsPage() {
                           </div>
 
                           <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
-                            <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">PROD PNL QTY</span>
+                            <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">TOTAL PCB QTY</span>
                             <strong className="text-indigo-700 font-mono font-black block mt-0.5">
-                              {selectedMovementJob.prodPnlQty} PNL <span className="text-indigo-500/90 text-[10px] font-semibold">({selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || 0} PCB)</span>
+                              {selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || Math.round((selectedMovementJob.prodPnlQty || 0) * 2)} PCBs <span className="text-indigo-500/90 text-[10px] font-semibold">({selectedMovementJob.prodPnlQty} PNL)</span>
                             </strong>
                           </div>
 
@@ -2704,28 +2705,6 @@ export default function JobCardsPage() {
                             <strong className="text-slate-800 font-mono block mt-0.5 font-bold">{selectedMovementJob.jobFlowSelection || 'PF-01 Standard'}</strong>
                           </div>
                         </div>
-
-                        {/* Customer PO & Product Specs Cards */}
-                        {(selectedMovementJob.customerPO || selectedMovementJob.product) && (
-                          <div className="pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[11px]">
-                            {selectedMovementJob.customerPO && (
-                              <div className="bg-slate-50/90 p-3 rounded-xl border border-slate-200/80 shadow-2xs">
-                                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold tracking-wider">CUSTOMER PO</span>
-                                <p className="font-extrabold text-slate-900 text-xs mt-0.5 font-mono">{selectedMovementJob.customerPO.poNo}</p>
-                                <p className="text-[10px] text-slate-500 font-medium truncate mt-0.5">{selectedMovementJob.customerPO.customer?.companyName}</p>
-                              </div>
-                            )}
-                            {selectedMovementJob.product && (
-                              <div className="bg-slate-50/90 p-3 rounded-xl border border-slate-200/80 shadow-2xs">
-                                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold tracking-wider">PRODUCT SPECS</span>
-                                <p className="font-extrabold text-slate-900 text-xs mt-0.5 truncate">{selectedMovementJob.product.name}</p>
-                                <p className="text-[10px] text-slate-500 font-medium truncate mt-0.5">
-                                  {selectedMovementJob.product.layers} Layers • {selectedMovementJob.product.thickness} • {selectedMovementJob.product.copper}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        )}
                       </div>
                     </div>
 
@@ -2742,28 +2721,33 @@ export default function JobCardsPage() {
                                 SUB-JOB LOTS BREAKDOWN ({selectedMovementJob.subJobCards.length} LOTS)
                               </h5>
                               <span className="text-xs text-amber-900 font-mono font-black bg-amber-200/80 px-2.5 py-0.5 rounded-lg border border-amber-400/80 shadow-2xs">
-                                Total: {selectedMovementJob.prodPnlQty} PNL
+                                Total: {selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || Math.round((selectedMovementJob.prodPnlQty || 0) * 2)} PCBs ({selectedMovementJob.prodPnlQty} PNL)
                               </span>
                             </div>
                             <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                              {selectedMovementJob.subJobCards.map((sub) => (
-                                <div key={sub.id} className="bg-white p-3 rounded-xl border border-slate-200 flex items-center justify-between text-xs font-sans shadow-2xs hover:border-amber-400 transition-all">
-                                  <div className="flex items-center gap-2.5">
-                                    <span className="font-mono font-black text-slate-950 bg-amber-100 px-2.5 py-1 rounded-lg text-xs border border-amber-300 shadow-2xs">
-                                      {sub.subJobCardNo}
-                                    </span>
-                                    <span className="text-[11px] text-slate-500 font-mono font-semibold hidden sm:inline-block">
-                                      QR: {sub.qrCodeValue}
-                                    </span>
+                              {selectedMovementJob.subJobCards.map((sub) => {
+                                const masterPcb = selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || (selectedMovementJob.prodPnlQty * 2);
+                                const ratio = masterPcb / selectedMovementJob.prodPnlQty || 2;
+                                const sPnl = (sub as any).prodPnlQty ?? (sub as any).qty ?? selectedMovementJob.prodPnlQty;
+                                const sPcb = (sub as any).totalPcbQty || Math.round(sPnl * ratio);
+
+                                return (
+                                  <div key={sub.id} className="bg-white p-3 rounded-xl border border-slate-200 flex items-center justify-between text-xs font-sans shadow-2xs hover:border-amber-400 transition-all">
+                                    <div className="flex items-center gap-2 font-mono">
+                                      <strong className="text-slate-900 font-bold bg-amber-100/70 px-2 py-0.5 rounded border border-amber-200">{sub.subJobCardNo}</strong>
+                                      <span className="text-[10px] text-slate-400">QR: {sub.qrCodeValue}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-mono font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 text-[11px]">
+                                        {sPcb} PCBs <span className="text-[9px] font-normal text-slate-500">({sPnl} PNL)</span>
+                                      </span>
+                                      <span className="font-bold text-[11px] text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+                                        {sub.currentStage?.name || selectedMovementJob.currentStageName}
+                                      </span>
+                                    </div>
                                   </div>
-                                  <div className="flex items-center gap-2 font-mono">
-                                    <span className="font-black text-blue-700 text-xs bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">{sub.qty} PNL</span>
-                                    <span className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 font-extrabold border border-slate-200">
-                                      {sub.currentStage?.name || selectedMovementJob.currentStageName || PF01_STAGES[0]}
-                                    </span>
-                                  </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         )}
@@ -2835,7 +2819,7 @@ export default function JobCardsPage() {
                           Full Lot Stage Movement Confirmation
                         </p>
                         <p className="text-xs leading-relaxed text-blue-950 mt-2">
-                          Are you sure you want to move Job Card No. <strong className="text-slate-900 font-mono font-black">{selectedMovementJob.jobCardNo}</strong> ({selectedMovementJob.prodPnlQty} PNL, {selectedMovementJob.prodPnlAreaSqm} Sqm) to the next process stage?
+                          Are you sure you want to move Job Card No. <strong className="text-slate-900 font-mono font-black">{selectedMovementJob.jobCardNo}</strong> ({selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || Math.round((selectedMovementJob.prodPnlQty || 0) * 2)} PCBs / {selectedMovementJob.prodPnlQty} PNL, {selectedMovementJob.prodPnlAreaSqm} Sqm) to the next process stage?
                         </p>
                       </div>
                       <div className="p-3 font-bold text-blue-900 bg-white rounded-xl border border-blue-200 font-mono text-xs shadow-2xs">
@@ -2875,7 +2859,7 @@ export default function JobCardsPage() {
                           onClick={handleFullJobMovement}
                           className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl text-xs shadow-md transition-all cursor-pointer active:scale-98 border border-blue-500/40"
                         >
-                          CONFIRM FULL MOVEMENT ({selectedMovementJob.prodPnlQty} PNL ➔ Next Stage)
+                          CONFIRM FULL MOVEMENT ({selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || Math.round((selectedMovementJob.prodPnlQty || 0) * 2)} PCBs ➔ Next Stage)
                         </button>
 
                         {selectedMovementJob.status === 'IN_PROGRESS' && (
@@ -2893,111 +2877,130 @@ export default function JobCardsPage() {
                 )}
 
                 {/* TAB C: UNCOMPLETED / SPLIT MOVEMENT (HORIZONTAL SIDE-BY-SIDE) */}
-                {movementTab === 'PARTIAL' && (
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 text-xs font-sans">
-                    <div className="lg:col-span-5 bg-amber-50/80 border border-amber-200 p-5 rounded-2xl text-amber-950 space-y-2 shadow-2xs flex flex-col justify-between">
-                      <div>
-                        <p className="font-black text-amber-900 flex items-center gap-2 text-sm">
-                          <Split className="w-4.5 h-4.5 text-amber-700 shrink-0" />
-                          Uncompleted / Partial Job Movement (Lot Split)
-                        </p>
-                        <p className="mt-2 text-xs text-amber-900/90 leading-relaxed">
-                          Required when complete lot is not ready to move forward. The system automatically maintains balance quantity and area for both portions.
-                        </p>
-                      </div>
-                      <div className="space-y-2 pt-3">
-                        <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-emerald-950 font-medium">
-                          <div className="font-bold text-emerald-900">Next Stage: {PF01_STAGES[selectedMovementJob.currentStageIndex + 1]}</div>
-                          <div className="text-sm font-black text-emerald-700 font-mono mt-1">{partialMoveQty} PNL Moved</div>
-                          <div className="text-[10px] text-slate-500 font-mono">
-                            Sqm: {((partialMoveQty * selectedMovementJob.prodPnlAreaSqm) / selectedMovementJob.prodPnlQty).toFixed(2)} Sqm
+                {movementTab === 'PARTIAL' && (() => {
+                  const masterPcb = selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || (selectedMovementJob.prodPnlQty * 2);
+                  const pcbRatio = masterPcb / selectedMovementJob.prodPnlQty || 2;
+                  const validMoveQty = Math.min(Math.max(1, partialMoveQty), Math.max(1, selectedMovementJob.prodPnlQty - 1));
+                  const movedPcb = Math.round(validMoveQty * pcbRatio);
+                  const remPnl = Math.max(0, selectedMovementJob.prodPnlQty - validMoveQty);
+                  const remPcb = Math.round(remPnl * pcbRatio);
+
+                  return (
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 text-xs font-sans">
+                      <div className="lg:col-span-5 bg-amber-50/80 border border-amber-200 p-5 rounded-2xl text-amber-950 space-y-2 shadow-2xs flex flex-col justify-between">
+                        <div>
+                          <p className="font-black text-amber-900 flex items-center gap-2 text-sm">
+                            <Split className="w-4.5 h-4.5 text-amber-700 shrink-0" />
+                            Uncompleted / Partial Job Movement (Lot Split)
+                          </p>
+                          <p className="mt-2 text-xs text-amber-900/90 leading-relaxed">
+                            Required when complete lot is not ready to move forward. The system automatically maintains balance quantity and area for both portions.
+                          </p>
+                        </div>
+                        <div className="space-y-2 pt-3">
+                          <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-emerald-950 font-medium">
+                            <div className="font-bold text-emerald-900">Next Stage: {PF01_STAGES[selectedMovementJob.currentStageIndex + 1]}</div>
+                            <div className="text-sm font-black text-emerald-700 font-mono mt-1">{movedPcb} PCBs ({validMoveQty} PNL Moved)</div>
+                            <div className="text-[10px] text-slate-500 font-mono">
+                              Sqm: {((validMoveQty * selectedMovementJob.prodPnlAreaSqm) / selectedMovementJob.prodPnlQty).toFixed(2)} Sqm
+                            </div>
+                          </div>
+
+                          <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-amber-950 font-medium">
+                            <div className="font-bold text-amber-900">Stays at: {selectedMovementJob.currentStageName}</div>
+                            <div className="text-sm font-black text-amber-700 font-mono mt-1">{remPcb} PCBs ({remPnl} PNL Remaining)</div>
+                            <div className="text-[10px] text-slate-500 font-mono">
+                              Sqm: {((remPnl * selectedMovementJob.prodPnlAreaSqm) / selectedMovementJob.prodPnlQty).toFixed(2)} Sqm
+                            </div>
                           </div>
                         </div>
-
-                        <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-amber-950 font-medium">
-                          <div className="font-bold text-amber-900">Stays at: {selectedMovementJob.currentStageName}</div>
-                          <div className="text-sm font-black text-amber-700 font-mono mt-1">{selectedMovementJob.prodPnlQty - partialMoveQty} PNL Remaining</div>
-                          <div className="text-[10px] text-slate-500 font-mono">
-                            Sqm: {(((selectedMovementJob.prodPnlQty - partialMoveQty) * selectedMovementJob.prodPnlAreaSqm) / selectedMovementJob.prodPnlQty).toFixed(2)} Sqm
-                          </div>
-                        </div>
                       </div>
-                    </div>
 
-                    <div className="lg:col-span-7 bg-white p-5 rounded-2xl border border-slate-200 space-y-4 shadow-xs flex flex-col justify-between">
-                      <div className="space-y-3">
-                        <div>
-                          <label className="block text-xs font-bold text-slate-700 mb-1">
-                            Quantity Ready to Move Forward (PNL):
-                          </label>
-                          <input
-                            type="number"
-                            min={1}
-                            max={selectedMovementJob.prodPnlQty - 1}
-                            value={partialMoveQty}
-                            onChange={(e) => setPartialMoveQty(Number(e.target.value))}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-900 focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
-                          />
-                        </div>
+                      <div className="lg:col-span-7 bg-white p-5 rounded-2xl border border-slate-200 space-y-4 shadow-xs flex flex-col justify-between">
+                        <div className="space-y-3">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="block text-xs font-bold text-slate-700">
+                                Quantity Ready to Move Forward (PNL):
+                              </label>
+                              <span className="text-xs font-black text-indigo-700 font-mono bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                                = {movedPcb} PCBs
+                              </span>
+                            </div>
+                            <input
+                              type="number"
+                              min={1}
+                              max={selectedMovementJob.prodPnlQty - 1}
+                              value={partialMoveQty}
+                              onChange={(e) => setPartialMoveQty(Number(e.target.value))}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-900 focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
+                            />
+                            {partialMoveQty >= selectedMovementJob.prodPnlQty && (
+                              <p className="text-[11px] text-rose-600 font-bold mt-1">
+                                ⚠ Quantity cannot exceed {selectedMovementJob.prodPnlQty - 1} PNL (Total Lot PNL: {selectedMovementJob.prodPnlQty}).
+                              </p>
+                            )}
+                          </div>
 
-                        <div>
-                          <label className="block text-xs font-bold text-amber-900 mb-1">
-                            Pending Work Reason in PNL:
-                          </label>
-                          <select
-                            value={incompletePendingReason}
-                            onChange={(e) => setIncompletePendingReason(e.target.value)}
-                            className="w-full bg-amber-50/50 border border-amber-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-amber-500"
-                          >
-                            <option value="Drilling & Hole Check Pending">Drilling & Hole Check Pending</option>
-                            <option value="Solder Mask Touch-Up Required">Solder Mask Touch-Up Required</option>
-                            <option value="Legend Reprint Pending">Legend Reprint Pending</option>
-                            <option value="V-Cut / Edge Chamfer Pending">V-Cut / Edge Chamfer Pending</option>
-                            <option value="FQC AI Re-Inspection Required">FQC AI Re-Inspection Required</option>
-                            <option value="Copper Plating Thickness Check Pending">Copper Plating Thickness Check Pending</option>
-                            <option value="Etching / Track Touch-up Pending">Etching / Track Touch-up Pending</option>
-                            <option value="Other / Custom Pending Reason">Other / Custom Pending Reason</option>
-                          </select>
-                        </div>
+                          <div>
+                            <label className="block text-xs font-bold text-amber-900 mb-1">
+                              Pending Work Reason:
+                            </label>
+                            <select
+                              value={incompletePendingReason}
+                              onChange={(e) => setIncompletePendingReason(e.target.value)}
+                              className="w-full bg-amber-50/50 border border-amber-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-amber-500"
+                            >
+                              <option value="Drilling & Hole Check Pending">Drilling & Hole Check Pending</option>
+                              <option value="Solder Mask Touch-Up Required">Solder Mask Touch-Up Required</option>
+                              <option value="Legend Reprint Pending">Legend Reprint Pending</option>
+                              <option value="V-Cut / Edge Chamfer Pending">V-Cut / Edge Chamfer Pending</option>
+                              <option value="FQC AI Re-Inspection Required">FQC AI Re-Inspection Required</option>
+                              <option value="Copper Plating Thickness Check Pending">Copper Plating Thickness Check Pending</option>
+                              <option value="Etching / Track Touch-up Pending">Etching / Track Touch-up Pending</option>
+                              <option value="Other / Custom Pending Reason">Other / Custom Pending Reason</option>
+                            </select>
+                          </div>
 
-                        {incompletePendingReason === 'Other / Custom Pending Reason' && (
+                          {incompletePendingReason === 'Other / Custom Pending Reason' && (
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1">
+                                Specify Custom Pending Reason:
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="e.g. Special Gold Finger Plating Inspection Pending"
+                                value={incompleteCustomReason}
+                                onChange={(e) => setIncompleteCustomReason(e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+                              />
+                            </div>
+                          )}
+
                           <div>
                             <label className="block text-xs font-bold text-slate-700 mb-1">
-                              Specify Custom Pending Reason:
+                              Incomplete Movement Remarks / Work Notes:
                             </label>
-                            <input
-                              type="text"
-                              placeholder="e.g. Special Gold Finger Plating Inspection Pending"
-                              value={incompleteCustomReason}
-                              onChange={(e) => setIncompleteCustomReason(e.target.value)}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+                            <textarea
+                              rows={2}
+                              placeholder="Enter specific work details pending on remaining PNL..."
+                              value={incompleteRemarks}
+                              onChange={(e) => setIncompleteRemarks(e.target.value)}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-amber-500"
                             />
                           </div>
-                        )}
-
-                        <div>
-                          <label className="block text-xs font-bold text-slate-700 mb-1">
-                            Incomplete Movement Remarks / Work Notes:
-                          </label>
-                          <textarea
-                            rows={2}
-                            placeholder="Enter specific work details pending on remaining PNL..."
-                            value={incompleteRemarks}
-                            onChange={(e) => setIncompleteRemarks(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-amber-500"
-                          />
                         </div>
-                      </div>
 
-                      <button
-                        onClick={handlePartialJobMovement}
-                        className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-2xl text-xs shadow-md transition-all cursor-pointer border border-amber-600 active:scale-98 mt-2"
-                      >
-                        CONFIRM PARTIAL MOVEMENT ({partialMoveQty} PNL Forward • {selectedMovementJob.prodPnlQty - partialMoveQty} PNL Balance)
-                      </button>
+                        <button
+                          onClick={handlePartialJobMovement}
+                          className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-2xl text-xs shadow-md transition-all cursor-pointer border border-amber-600 active:scale-98 mt-2"
+                        >
+                          CONFIRM PARTIAL MOVEMENT ({movedPcb} PCBs / {validMoveQty} PNL Forward • {remPcb} PCBs / {remPnl} PNL Balance)
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
 
             </div>
