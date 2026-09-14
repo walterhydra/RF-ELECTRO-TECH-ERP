@@ -170,18 +170,18 @@ const INITIAL_JOB_CARDS: JobCard[] = [
     subJobCards: [
       {
         id: 'sub-1',
-        subJobCardNo: '26-27-1729-A',
+        subJobCardNo: '26-27-1729',
         qty: 35,
         status: 'IN_PROGRESS',
-        qrCodeValue: '26-27-1729-A',
+        qrCodeValue: '26-27-1729',
         currentStage: { id: 'stg-3', name: '2. DRILLING' },
       },
       {
         id: 'sub-2',
-        subJobCardNo: '26-27-1729-B',
+        subJobCardNo: '26-27-1729',
         qty: 5,
         status: 'IN_PROGRESS',
-        qrCodeValue: '26-27-1729-B',
+        qrCodeValue: '26-27-1729',
         currentStage: { id: 'stg-2', name: '1. SHEARING' },
       },
     ],
@@ -225,10 +225,10 @@ const INITIAL_JOB_CARDS: JobCard[] = [
     subJobCards: [
       {
         id: 'sub-3',
-        subJobCardNo: '26-27-1730-A',
+        subJobCardNo: '26-27-1730',
         qty: 60,
         status: 'UNLAUNCHED',
-        qrCodeValue: '26-27-1730-A',
+        qrCodeValue: '26-27-1730',
         currentStage: { id: 'stg-1', name: '1. SHEARING' },
       },
     ],
@@ -1050,11 +1050,11 @@ export default function JobCardsPage() {
 
       subJobCardsList = launchForm.customSplits.map((item, idx) => ({
         id: `sub-${Date.now()}-${idx}`,
-        subJobCardNo: item.subNo || `${jcNo}-${idx + 1}`,
+        subJobCardNo: jcNo,
         qty: Number(item.qty),
         totalPcbQty: Number(item.qty),
         status: launchForm.autoLaunch ? 'IN_PROGRESS' : 'UNLAUNCHED',
-        qrCodeValue: `${item.subNo || `${jcNo}-${idx + 1}`}`,
+        qrCodeValue: jcNo,
         currentStage: { id: `stg-${idx + 1}`, name: PF01_STAGES[0] },
       }));
 
@@ -1063,11 +1063,11 @@ export default function JobCardsPage() {
       subJobCardsList = [
         {
           id: `sub-${Date.now()}`,
-          subJobCardNo: `${jcNo}-1`,
+          subJobCardNo: jcNo,
           qty: totalPcb,
           totalPcbQty: totalPcb,
           status: launchForm.autoLaunch ? 'IN_PROGRESS' : 'UNLAUNCHED',
-          qrCodeValue: `${jcNo}-1`,
+          qrCodeValue: jcNo,
           currentStage: { id: 'stg-1', name: PF01_STAGES[0] },
         },
       ];
