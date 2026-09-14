@@ -868,7 +868,7 @@ export default function JobCardsPage() {
 
                 return {
                   id: sub.id,
-                  jobCardNo: sub.subJobCardNo,
+                  jobCardNo: j.jobCardNo || sub.subJobCardNo,
                   photoUrl: j.photoUrl || '',
                   customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
                   rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
