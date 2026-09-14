@@ -1011,6 +1011,7 @@ export default function JobCardsPage() {
               currentStageIndex: 0,
               currentStageName: PF01_STAGES[0],
               launchedAt: new Date().toISOString(),
+              isNewlyCreated: false,
             };
           }
           return j;
@@ -1096,6 +1097,7 @@ export default function JobCardsPage() {
         jobFlowSelection: launchForm.jobFlowSelection,
         status: launchForm.autoLaunch ? 'IN_PROGRESS' : existing.status,
         subJobCards: subJobCardsList,
+        isNewlyCreated: launchForm.autoLaunch ? false : existing.isNewlyCreated,
       };
 
       runWithLoading(`Updating Job Card ${jcNo}...`, async () => {
@@ -1157,7 +1159,7 @@ export default function JobCardsPage() {
           copper: '1oz',
         },
         subJobCards: subJobCardsList,
-        isNewlyCreated: true,
+        isNewlyCreated: !launchForm.autoLaunch,
       };
 
       // Try Backend POST API sync
@@ -1228,6 +1230,7 @@ export default function JobCardsPage() {
         currentStageIndex: nextIndex,
         currentStageName: nextStage,
         status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
+        isNewlyCreated: false,
       };
 
       setJobCards((prev) => prev.map((j) => (j.id === selectedMovementJob.id ? updated : j)));
@@ -1249,6 +1252,7 @@ export default function JobCardsPage() {
               currentStageIndex: PF01_STAGES.length - 1,
               currentStageName: PF01_STAGES[PF01_STAGES.length - 1],
               completedAt: new Date().toISOString(),
+              isNewlyCreated: false,
             };
           }
           return j;
@@ -1362,6 +1366,8 @@ export default function JobCardsPage() {
         custPnlAreaSqm: movedArea,
         currentStageIndex: nextIndex,
         currentStageName: nextStage,
+        status: 'IN_PROGRESS',
+        isNewlyCreated: false,
       };
 
       const remainingBatch: JobCard = {
@@ -1372,6 +1378,7 @@ export default function JobCardsPage() {
         totalPcbQty: remainingPcb,
         prodPnlAreaSqm: remArea,
         custPnlAreaSqm: remArea,
+        isNewlyCreated: false,
       };
 
       setJobCards((prev) =>
@@ -2062,12 +2069,13 @@ export default function JobCardsPage() {
                   const isCompleted = jc.status === 'COMPLETED';
                   const stageIndex = PF01_STAGES.indexOf(jc.currentStageName || PF01_STAGES[0]);
                   const progressPct = isUnlaunched ? 0 : isCompleted ? 100 : Math.round(((stageIndex + 1) / PF01_STAGES.length) * 100);
+                  const isNewTagVisible = Boolean(jc.isNewlyCreated) && isUnlaunched;
 
                   return (
                     <tr
                       key={jc.id}
                       className={`hover:bg-amber-50/50 transition-colors ${
-                        jc.isNewlyCreated
+                        isNewTagVisible
                           ? 'bg-emerald-50/80 border-l-4 border-l-emerald-500 font-medium'
                           : idx % 2 === 0
                           ? 'bg-white'
@@ -2085,7 +2093,7 @@ export default function JobCardsPage() {
                             <Printer className="w-3.5 h-3.5" />
                           </button>
                           <span>{jc.jobCardNo}</span>
-                          {jc.isNewlyCreated && (
+                          {isNewTagVisible && (
                             <span className="px-1.5 py-0.5 bg-emerald-600 text-white font-black text-[9px] rounded uppercase tracking-wider animate-pulse shrink-0 shadow-2xs">
                               NEW
                             </span>
