@@ -609,10 +609,7 @@ const markJobCardAsDeleted = (id: string, jobCardNo?: string) => {
 };
 
 export default function JobCardsPage() {
-  const [jobCards, setJobCards] = useState<JobCard[]>(() => {
-    const deleted = getDeletedJobCardIds();
-    return INITIAL_JOB_CARDS.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
-  });
+  const [jobCards, setJobCards] = useState<JobCard[]>(INITIAL_JOB_CARDS);
   const [searchQuery, setSearchQuery] = useState('');
   const [barcodeInput, setBarcodeInput] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -639,6 +636,14 @@ export default function JobCardsPage() {
   const [incompleteCustomReason, setIncompleteCustomReason] = useState<string>('');
   const [incompleteRemarks, setIncompleteRemarks] = useState<string>('');
 
+  // Filter out deleted cards on client mount (prevents SSR hydration error)
+  useEffect(() => {
+    const deleted = getDeletedJobCardIds();
+    if (deleted.length > 0) {
+      setJobCards((prev) => prev.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo)));
+    }
+  }, []);
+
   // Sync userRole from localStorage if set
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -656,8 +661,7 @@ export default function JobCardsPage() {
 
   // Super Admin Check Helper
   const isSuperAdmin = React.useMemo(() => {
-    const storedRole = typeof window !== 'undefined' ? (localStorage.getItem('userRole') || '') : '';
-    const upper = storedRole.toUpperCase();
+    const upper = userRole.toUpperCase();
     return upper.includes('SUPER') || upper.includes('MASTER') || upper.includes('ADMIN') || userRole === 'MASTER';
   }, [userRole]);
 

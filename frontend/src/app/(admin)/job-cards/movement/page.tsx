@@ -121,15 +121,20 @@ const getDeletedJobCardIds = (): string[] => {
 };
 
 export default function JobMovementUpdatePage() {
-  const [jobs, setJobs] = useState<JobCard[]>(() => {
-    const deleted = getDeletedJobCardIds();
-    return SAMPLE_ACTIVE_JOBS.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
-  });
+  const [jobs, setJobs] = useState<JobCard[]>(SAMPLE_ACTIVE_JOBS);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedJob, setSelectedJob] = useState<JobCard | null>(null);
   const [userRole, setUserRole] = useState<'MASTER' | 'SUPER_USER' | 'NORMAL'>('MASTER');
   const [assignedStage, setAssignedStage] = useState<string>('2. DRILLING');
   const [toast, setToast] = useState<string | null>(null);
+
+  // Filter out deleted cards on client mount (prevents SSR hydration error)
+  useEffect(() => {
+    const deleted = getDeletedJobCardIds();
+    if (deleted.length > 0) {
+      setJobs((prev) => prev.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo)));
+    }
+  }, []);
 
   // Movement Modal Options State
   const [movementTab, setMovementTab] = useState<'VIEW' | 'FULL' | 'PARTIAL'>('VIEW');
