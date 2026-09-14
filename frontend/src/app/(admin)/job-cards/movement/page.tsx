@@ -575,7 +575,7 @@ export default function JobMovementUpdatePage() {
 
                   <div>
                     <span className="text-[10px] text-slate-500 uppercase font-mono font-bold block">QUANTITY</span>
-                    <span className="font-black text-amber-300 font-mono">{j.prodPnlQty} PNL ({j.totalPcbQty} PCB)</span>
+                    <span className="font-black text-amber-300 font-mono">{j.totalPcbQty || (j.prodPnlQty * 2)} PCBs</span>
                   </div>
 
                   <div>
@@ -740,7 +740,7 @@ export default function JobMovementUpdatePage() {
                     </div>
                     <div className="flex justify-between border-b border-slate-800/60 pb-1.5">
                       <span className="text-slate-400">Total PCB Quantity:</span>
-                      <strong className="font-mono text-emerald-400 font-bold">{selectedJob.totalPcbQty || (selectedJob.prodPnlQty * 2)} PCBs <span className="text-[10px] text-slate-400 font-normal">({selectedJob.prodPnlQty} PNL)</span></strong>
+                      <strong className="font-mono text-emerald-400 font-bold">{selectedJob.totalPcbQty || (selectedJob.prodPnlQty * 2)} PCBs</strong>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">Production WIP Area:</span>
@@ -756,7 +756,7 @@ export default function JobMovementUpdatePage() {
                   <div className="bg-blue-950/70 border border-blue-800/80 p-4 rounded-2xl text-blue-200 space-y-2">
                     <p className="font-bold text-white text-xs">Full Job Movement Confirmation</p>
                     <p className="text-xs leading-relaxed text-blue-100">
-                      Are you sure you want to move Job Card No. <strong className="text-amber-300 font-mono">{selectedJob.jobCardNo}</strong> ({selectedJob.totalPcbQty || (selectedJob.prodPnlQty * 2)} PCBs / {selectedJob.prodPnlQty} PNL) to the next process?
+                      Are you sure you want to move Job Card No. <strong className="text-amber-300 font-mono">{selectedJob.jobCardNo}</strong> ({selectedJob.totalPcbQty || (selectedJob.prodPnlQty * 2)} PCBs) to the next process?
                     </p>
                     <div className="mt-2 text-xs font-extrabold text-blue-300 bg-slate-950 px-3 py-1.5 rounded-xl border border-blue-800 inline-block font-mono">
                       Next Stage: {PF01_STAGES[selectedJob.currentStageIndex + 1] || '19. PACKING (COMPLETED)'}
@@ -811,13 +811,13 @@ export default function JobMovementUpdatePage() {
                   <div className="space-y-4 text-xs font-sans">
                     <div className="bg-amber-950/40 border border-amber-800/80 p-3.5 rounded-2xl text-amber-200 space-y-1">
                       <p className="font-extrabold text-amber-300">Uncompleted / Partial Job Movement</p>
-                      <p className="text-[11px] text-amber-200/80">Move partial PNL quantity forward while maintaining balance quantity at current stage with exact pending work reason.</p>
+                      <p className="text-[11px] text-amber-200/80">Move partial quantity forward while maintaining balance quantity at current stage with exact pending work reason.</p>
                     </div>
 
                     <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
                       <div>
                         <div className="flex items-center justify-between mb-1">
-                          <label className="block text-xs font-bold text-slate-300">Ready PNL Qty to Move Forward:</label>
+                          <label className="block text-xs font-bold text-slate-300">Ready Qty to Move Forward:</label>
                           <span className="text-xs font-bold text-amber-300 font-mono bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
                             = {movedPcb} PCBs
                           </span>
@@ -838,7 +838,7 @@ export default function JobMovementUpdatePage() {
                       </div>
 
                       <div>
-                        <label className="block text-xs font-bold text-amber-300 mb-1">Pending Work Reason in PNL:</label>
+                        <label className="block text-xs font-bold text-amber-300 mb-1">Pending Work Reason:</label>
                         <select
                           value={pendingWorkReason}
                           onChange={(e) => setPendingWorkReason(e.target.value)}
@@ -882,11 +882,11 @@ export default function JobMovementUpdatePage() {
                       <div className="grid grid-cols-2 gap-2 text-[11px]">
                         <div className="bg-emerald-950/50 border border-emerald-800/80 p-3 rounded-xl text-emerald-300">
                           <div className="font-bold">Next Stage: {PF01_STAGES[selectedJob.currentStageIndex + 1]}</div>
-                          <div className="text-xs font-extrabold text-emerald-400 mt-1">{movedPcb} PCBs ({validPnl} PNL Moved)</div>
+                          <div className="text-xs font-extrabold text-emerald-400 mt-1">{movedPcb} PCBs Moved</div>
                         </div>
                         <div className="bg-amber-950/50 border border-amber-800/80 p-3 rounded-xl text-amber-300">
                           <div className="font-bold">Stays at: {selectedJob.currentStageName}</div>
-                          <div className="text-xs font-extrabold text-amber-400 mt-1">{remPcb} PCBs ({remPnl} PNL Balance)</div>
+                          <div className="text-xs font-extrabold text-amber-400 mt-1">{remPcb} PCBs Balance</div>
                         </div>
                       </div>
                     </div>
@@ -895,7 +895,7 @@ export default function JobMovementUpdatePage() {
                       onClick={handlePartialJobMovement}
                       className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg cursor-pointer"
                     >
-                      CONFIRM PARTIAL MOVEMENT ({movedPcb} PCBs / {validPnl} PNL Forward • {remPcb} PCBs / {remPnl} PNL Remaining)
+                      CONFIRM PARTIAL MOVEMENT ({movedPcb} PCBs Forward • {remPcb} PCBs Balance)
                     </button>
                   </div>
                 );

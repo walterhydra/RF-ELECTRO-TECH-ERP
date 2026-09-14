@@ -285,7 +285,7 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
     `CUSTOMER: ${jobCard.customerCode}`,
     `RFE PART CODE: ${jobCard.rfePartCode}`,
     `CUST PART NO: ${jobCard.customerPartNo}`,
-    `PROD PNL QTY: ${jobCard.prodPnlQty} PNL (${jobCard.totalPcbQty || jobCard.custPnlQty || 0} PCB)`,
+    `TOTAL PCB QTY: ${jobCard.totalPcbQty || jobCard.custPnlQty || 0} PCB`,
     `WIP AREA: ${jobCard.prodPnlAreaSqm || 50} SQM`,
     `CURRENT STAGE: ${jobCard.currentStageName || '1. SHEARING'}`,
     `PRIORITY: ${jobCard.priority}`,
@@ -301,7 +301,7 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
   const prodName = jobCard.product?.name || jobCard.customerPartNo;
   const prodSpecs = jobCard.product
     ? `${jobCard.product.layers || 4} Layers • ${jobCard.product.thickness || '1.6mm'} • ${jobCard.product.copper || '1oz'}`
-    : `${jobCard.prodPnlAreaSqm || 50} Sqm • ${jobCard.prodPnlQty || 40} PNL`;
+    : `${jobCard.prodPnlAreaSqm || 50} Sqm • ${jobCard.totalPcbQty || 80} PCB`;
 
   return (
     <div className="bg-white border-2 border-slate-900 rounded-3xl p-5 sm:p-7 shadow-2xl max-w-5xl w-full mx-auto text-slate-900 font-sans print:shadow-none print:border-black space-y-6">
@@ -487,8 +487,8 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
               </div>
 
               <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">PROD PNL QTY</span>
-                <strong className="text-indigo-700 font-mono font-black block">{jobCard.prodPnlQty} PNL ({jobCard.totalPcbQty || jobCard.custPnlQty || 0} PCB)</strong>
+                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">TOTAL PCB QTY</span>
+                <strong className="text-indigo-700 font-mono font-black block">{jobCard.totalPcbQty || jobCard.custPnlQty || (jobCard.prodPnlQty * 2) || 0} PCB</strong>
               </div>
 
               <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
@@ -535,23 +535,26 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
                 SUB-LOTS ({jobCard.subJobCards?.length || 1})
               </h5>
               <span className="text-[11px] font-mono font-black text-amber-900 bg-amber-200 px-2 py-0.5 rounded border border-amber-400">
-                {jobCard.prodPnlQty} PNL
+                {jobCard.totalPcbQty || (jobCard.prodPnlQty * 2)} PCBs
               </span>
             </div>
 
             <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-              {(jobCard.subJobCards || []).map((sub) => (
-                <div key={sub.id} className="bg-white p-2.5 rounded-xl border border-slate-200 flex items-center justify-between text-xs font-sans shadow-2xs">
-                  <div>
-                    <span className="font-mono font-black text-slate-950 bg-amber-100 px-2 py-0.5 rounded text-[11px] border border-amber-300 block">
-                      {sub.subJobCardNo}
-                    </span>
+              {(jobCard.subJobCards || []).map((sub) => {
+                const subPcb = (sub as any).totalPcbQty || (sub.qty * 2);
+                return (
+                  <div key={sub.id} className="bg-white p-2.5 rounded-xl border border-slate-200 flex items-center justify-between text-xs font-sans shadow-2xs">
+                    <div>
+                      <span className="font-mono font-black text-slate-950 bg-amber-100 px-2 py-0.5 rounded text-[11px] border border-amber-300 block">
+                        {sub.subJobCardNo}
+                      </span>
+                    </div>
+                    <div className="text-right font-mono">
+                      <span className="font-black text-blue-700 text-xs">{subPcb} PCBs</span>
+                    </div>
                   </div>
-                  <div className="text-right font-mono">
-                    <span className="font-black text-blue-700 text-xs">{sub.qty} PNL</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -1425,6 +1428,7 @@ export default function JobCardsPage() {
   const inProgressCount = jobCards.filter((j) => j.status === 'IN_PROGRESS').length;
   const totalSubLots = jobCards.reduce((acc, j) => acc + (j.subJobCards?.length || 1), 0);
   const activePnlCount = jobCards.reduce((acc, j) => acc + (j.prodPnlQty || 0), 0);
+  const activePcbCount = jobCards.reduce((acc, j) => acc + (j.totalPcbQty || j.custPnlQty || ((j.prodPnlQty || 0) * 2)), 0);
   const activeSqmArea = jobCards.reduce((acc, j) => acc + (j.prodPnlAreaSqm || 0), 0);
 
   const getStatusBadge = (status?: string) => {
@@ -1600,21 +1604,21 @@ export default function JobCardsPage() {
           </div>
         </div>
 
-        {/* Card 3: Total Production PNL */}
+        {/* Card 3: Total Production PCB */}
         <div className="bg-white border border-emerald-100 rounded-2xl p-4 shadow-xs flex items-center gap-3 min-h-[96px]">
           <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
             <Cpu className="w-5 h-5" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">TOTAL PRODUCTION PNL</span>
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">TOTAL PRODUCTION PCB</span>
               <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
             </div>
             <div className="text-base sm:text-lg font-black text-slate-900 font-mono mt-0.5 truncate">
-              {activePnlCount} PNL Qty
+              {activePcbCount} PCBs
             </div>
             <div className="text-[11px] text-emerald-700 font-semibold truncate">
-              • {activePnlCount} PNL In-Progress
+              • {activePcbCount} PCBs In-Progress
             </div>
           </div>
         </div>
@@ -2426,7 +2430,7 @@ export default function JobCardsPage() {
                               }}
                               className="w-20 bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs font-bold text-blue-700"
                             />
-                            <span>PNL</span>
+                            <span>PCB</span>
                           </div>
                           {launchForm.customSplits.length > 1 && (
                             <button
@@ -2451,8 +2455,8 @@ export default function JobCardsPage() {
                       const isValid = sum === target;
                       return (
                         <div className={`p-2 rounded-lg text-[11px] font-bold flex items-center justify-between ${isValid ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' : 'bg-rose-100 text-rose-900 border border-rose-300'}`}>
-                          <span>Sum of Sub-Lots: {sum} PNL / Total: {target} PNL</span>
-                          <span>{isValid ? '✓ Valid Split' : '⚠️ Must equal Total PNL'}</span>
+                          <span>Sum of Sub-Lots: {sum} PCB / Total: {target} PCB</span>
+                          <span>{isValid ? '✓ Valid Split' : '⚠️ Must equal Total PCB'}</span>
                         </div>
                       );
                     })()}
@@ -3095,8 +3099,8 @@ export default function JobCardsPage() {
                 </div>
 
                 <div className="bg-emerald-50/60 border border-emerald-200 p-3 rounded-xl">
-                  <p className="text-[10px] font-bold text-emerald-800 uppercase font-mono">Total WIP PNL</p>
-                  <p className="text-base sm:text-lg font-black text-emerald-950 mt-0.5 font-mono">{activePnlCount} PNL</p>
+                  <p className="text-[10px] font-bold text-emerald-800 uppercase font-mono">Total WIP PCBs</p>
+                  <p className="text-base sm:text-lg font-black text-emerald-950 mt-0.5 font-mono">{activePcbCount} PCBs</p>
                 </div>
 
                 <div className="bg-purple-50/60 border border-purple-200 p-3 rounded-xl">
@@ -3122,7 +3126,7 @@ export default function JobCardsPage() {
                       <tr>
                         <th className="py-2.5 px-3 font-bold">Stage Name</th>
                         <th className="py-2.5 px-3 text-center font-bold">Active Jobs</th>
-                        <th className="py-2.5 px-3 text-center font-bold">PNL Qty</th>
+                        <th className="py-2.5 px-3 text-center font-bold">PCB Qty</th>
                         <th className="py-2.5 px-3 text-right font-bold">WIP Area</th>
                       </tr>
                     </thead>
@@ -3138,9 +3142,9 @@ export default function JobCardsPage() {
 
                         const totalStageJobsCount = activeMasterJobs.length + activeSubJobs.length;
 
-                        const pnlSum =
-                          activeMasterJobs.reduce((s, j) => s + (j.prodPnlQty || j.totalQty || 0), 0) +
-                          activeSubJobs.reduce((s, sub) => s + sub.qty, 0);
+                        const pcbSum =
+                          activeMasterJobs.reduce((s, j) => s + (j.totalPcbQty || j.custPnlQty || ((j.prodPnlQty || 0) * 2)), 0) +
+                          activeSubJobs.reduce((s, sub) => s + ((sub as any).totalPcbQty || (sub.qty * 2)), 0);
 
                         const sqmSum = activeMasterJobs.reduce((s, j) => s + (j.prodPnlAreaSqm || 50), 0);
 
@@ -3170,7 +3174,7 @@ export default function JobCardsPage() {
                             </td>
                             <td className="py-2.5 px-3 text-center font-mono">
                               {hasActiveWip ? (
-                                <span className="font-extrabold text-blue-700">{pnlSum}</span>
+                                <span className="font-extrabold text-blue-700">{pcbSum}</span>
                               ) : (
                                 <span className="text-slate-400 font-medium">0</span>
                               )}
@@ -3192,7 +3196,7 @@ export default function JobCardsPage() {
                       <tr>
                         <td className="py-2.5 px-3 font-black text-slate-900 uppercase">Grand Total WIP</td>
                         <td className="py-2.5 px-3 text-center font-black text-blue-900">{inProgressCount} Jobs</td>
-                        <td className="py-2.5 px-3 text-center font-black text-blue-700">{activePnlCount} PNL</td>
+                        <td className="py-2.5 px-3 text-center font-black text-blue-700">{activePcbCount} PCBs</td>
                         <td className="py-2.5 px-3 text-right font-black text-emerald-700">{activeSqmArea.toFixed(1)} Sqm</td>
                       </tr>
                     </tfoot>
@@ -3245,8 +3249,8 @@ export default function JobCardsPage() {
                     <strong className="text-amber-800 font-mono font-black">0 Jobs Reworked</strong>
                   </div>
                   <div className="flex justify-between items-center border-b border-emerald-200/80 pb-1">
-                    <span>Total Daily Rejection / Scrap PNL:</span>
-                    <strong className="text-emerald-800 font-mono font-black">0 PNL Scrap (100% Quality Yield)</strong>
+                    <span>Total Daily Rejection / Scrap:</span>
+                    <strong className="text-emerald-800 font-mono font-black">0 PCB Scrap (100% Quality Yield)</strong>
                   </div>
                   <div className="flex justify-between items-center pt-0.5">
                     <span>Overall Factory Production Yield:</span>
@@ -3383,7 +3387,7 @@ export default function JobCardsPage() {
                 <div className="space-y-1 bg-white p-3 rounded-xl border border-slate-200 font-mono text-[11px]">
                   <div><span className="text-slate-400">Customer Part:</span> <strong className="text-slate-800">{deleteConfirmCard.customerPartNo}</strong></div>
                   <div><span className="text-slate-400">Customer Code:</span> <strong className="text-slate-800">{deleteConfirmCard.customerCode}</strong></div>
-                  <div><span className="text-slate-400">Quantity:</span> <strong className="text-indigo-700">{deleteConfirmCard.prodPnlQty} PNL</strong></div>
+                  <div><span className="text-slate-400">Quantity:</span> <strong className="text-indigo-700">{deleteConfirmCard.totalPcbQty || deleteConfirmCard.custPnlQty || (deleteConfirmCard.prodPnlQty * 2)} PCBs</strong></div>
                 </div>
                 <p className="text-[11px] text-rose-600 font-bold flex items-center gap-1">
                   <AlertCircle className="w-3.5 h-3.5 shrink-0" /> This will delete all associated sub-lots & stage logs. Action cannot be undone!

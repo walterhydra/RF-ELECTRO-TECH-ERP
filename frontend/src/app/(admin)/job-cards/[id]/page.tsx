@@ -600,8 +600,8 @@ export default function JobCardDetailPage() {
                           </span>
                         )}
                       </td>
-                      <td className="py-3 px-3 text-right font-bold">{log.qtyReceived} PNL</td>
-                      <td className="py-3 px-3 text-right font-bold text-emerald-700">{log.qtyForwarded} PNL</td>
+                      <td className="py-3 px-3 text-right font-bold">{log.qtyReceived} PCBs</td>
+                      <td className="py-3 px-3 text-right font-bold text-emerald-700">{log.qtyForwarded} PCBs</td>
                       <td className="py-3 px-3 font-sans">
                         {log.rejectionReason ? (
                           <div className="font-bold text-amber-900 bg-amber-100/70 px-2 py-1 rounded border border-amber-200 text-[11px]">

@@ -324,7 +324,7 @@ export default function StageUpdatePage() {
                     <span className="text-[10px] bg-amber-400 text-slate-950 px-2 py-0.5 rounded font-black">Incomplete</span>
                   </div>
                   <div>
-                    <label className="block text-[11px] font-mono font-bold text-amber-300 mb-1">REASON FOR PENDING PNL WORK *</label>
+                    <label className="block text-[11px] font-mono font-bold text-amber-300 mb-1">REASON FOR PENDING WORK *</label>
                     <select
                       value={pendingWorkReason}
                       onChange={(e) => setPendingWorkReason(e.target.value)}
