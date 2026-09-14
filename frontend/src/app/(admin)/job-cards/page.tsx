@@ -636,7 +636,15 @@ const markJobCardAsDeleted = (id: string, jobCardNo?: string) => {
 };
 
 export default function JobCardsPage() {
-  const [jobCards, setJobCards] = useState<JobCard[]>(INITIAL_JOB_CARDS);
+  const [jobCards, setJobCards] = useState<JobCard[]>(() => {
+    if (typeof window === 'undefined') return INITIAL_JOB_CARDS;
+    const deleted = getDeletedJobCardIds();
+    const stored = getStoredJobCards();
+    if (stored !== null) {
+      return stored.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
+    }
+    return INITIAL_JOB_CARDS.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [barcodeInput, setBarcodeInput] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -664,20 +672,14 @@ export default function JobCardsPage() {
   const [incompleteCustomReason, setIncompleteCustomReason] = useState<string>('');
   const [incompleteRemarks, setIncompleteRemarks] = useState<string>('');
 
-  // Filter out deleted cards on client mount & load from localStorage
-  useEffect(() => {
-    const deleted = getDeletedJobCardIds();
-    const stored = getStoredJobCards();
-    if (stored !== null) {
-      const filtered = stored.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
-      setJobCards(filtered);
-    } else {
-      setJobCards((prev) => prev.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo)));
-    }
-  }, []);
+  const isMountedRef = React.useRef(false);
 
-  // Save jobCards to localStorage whenever state updates
+  // Save jobCards to localStorage whenever state updates (only after mount)
   useEffect(() => {
+    if (!isMountedRef.current) {
+      isMountedRef.current = true;
+      return;
+    }
     saveJobCardsToStorage(jobCards);
   }, [jobCards]);
 
