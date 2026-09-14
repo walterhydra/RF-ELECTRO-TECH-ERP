@@ -630,6 +630,7 @@ export default function JobCardsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [serverHost, setServerHost] = useState<string>('rf-electro-erp.loca.lt');
   const [photoLightbox, setPhotoLightbox] = useState<string | null>(null);
+  const [unitPcbAreaSqm, setUnitPcbAreaSqm] = useState<number>(0.28125);
 
   // Partial Split Pending Reason Options
   const [incompletePendingReason, setIncompletePendingReason] = useState<string>('Drilling & Hole Check Pending');
@@ -2294,17 +2295,18 @@ export default function JobCardsPage() {
                   <input
                     type="number"
                     required
-                    value={launchForm.totalPcbQty}
+                    value={launchForm.totalPcbQty || ''}
                     onChange={(e) => {
                       const qty = Number(e.target.value) || 0;
                       const pnlCount = Math.ceil(qty / 4) || 10;
+                      const calculatedArea = Number((qty * unitPcbAreaSqm).toFixed(2));
                       setLaunchForm({
                         ...launchForm,
                         totalPcbQty: qty,
                         prodPnlQty: pnlCount,
                         custPnlQty: pnlCount * 2,
-                        custPnlAreaSqm: Number((qty * 0.28).toFixed(2)),
-                        prodPnlAreaSqm: Number((qty * 0.31).toFixed(2)),
+                        custPnlAreaSqm: calculatedArea,
+                        prodPnlAreaSqm: Number((calculatedArea * 1.1).toFixed(2)),
                       });
                     }}
                     className="w-full bg-amber-50 border-2 border-amber-400 rounded-xl px-3 py-2 text-xs font-extrabold text-slate-900 focus:outline-none shadow-2xs"
@@ -2318,14 +2320,24 @@ export default function JobCardsPage() {
                     type="number"
                     step="0.01"
                     required
-                    value={launchForm.custPnlAreaSqm}
+                    value={launchForm.custPnlAreaSqm || ''}
                     onChange={(e) => {
                       const area = Number(e.target.value) || 0;
-                      setLaunchForm({ ...launchForm, custPnlAreaSqm: area, prodPnlAreaSqm: area });
+                      const newUnitArea = launchForm.totalPcbQty > 0 ? area / launchForm.totalPcbQty : 0.28125;
+                      setUnitPcbAreaSqm(newUnitArea);
+                      setLaunchForm({
+                        ...launchForm,
+                        custPnlAreaSqm: area,
+                        prodPnlAreaSqm: Number((area * 1.1).toFixed(2)),
+                      });
                     }}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500"
                     placeholder="45"
                   />
+                  <p className="text-[10px] font-semibold text-amber-700 mt-1 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                    Auto-calculated: {launchForm.totalPcbQty || 0} PCBs × {unitPcbAreaSqm.toFixed(4)} Sqm/PCB
+                  </p>
                 </div>
 
                 <div>

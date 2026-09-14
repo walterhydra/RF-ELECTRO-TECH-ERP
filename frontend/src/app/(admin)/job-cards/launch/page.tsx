@@ -48,6 +48,7 @@ export default function JobCardLaunchPage() {
   });
 
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [unitPcbAreaSqm, setUnitPcbAreaSqm] = useState<number>(0.28125);
 
   const showToastMsg = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ type, message });
@@ -338,20 +339,21 @@ export default function JobCardLaunchPage() {
                   <input
                     type="number"
                     required
-                    value={launchForm.totalPcbQty}
+                    value={launchForm.totalPcbQty || ''}
                     onChange={(e) => {
                       const q = Number(e.target.value) || 0;
                       const pnl = Math.ceil(q / 4) || 10;
+                      const calculatedArea = Number((q * unitPcbAreaSqm).toFixed(2));
                       setLaunchForm({
                         ...launchForm,
                         totalPcbQty: q,
                         prodPnlQty: pnl,
                         custPnlQty: pnl * 2,
-                        custPnlAreaSqm: Number((q * 0.28).toFixed(2)),
-                        prodPnlAreaSqm: Number((q * 0.31).toFixed(2)),
+                        custPnlAreaSqm: calculatedArea,
+                        prodPnlAreaSqm: Number((calculatedArea * 1.1).toFixed(2)),
                       });
                     }}
-                    className="w-full bg-amber-500/10 border-2 border-amber-400 rounded-xl px-3.5 py-2.5 font-black text-amber-300 text-sm focus:outline-none"
+                    className="w-full bg-amber-500/10 border-2 border-amber-400 rounded-xl px-3.5 py-2.5 font-black text-amber-300 text-sm focus:outline-none font-mono"
                     placeholder="160"
                   />
                 </div>
@@ -362,14 +364,24 @@ export default function JobCardLaunchPage() {
                     type="number"
                     step="0.01"
                     required
-                    value={launchForm.custPnlAreaSqm}
+                    value={launchForm.custPnlAreaSqm || ''}
                     onChange={(e) => {
                       const a = Number(e.target.value) || 0;
-                      setLaunchForm({ ...launchForm, custPnlAreaSqm: a, prodPnlAreaSqm: a });
+                      const newUnitArea = launchForm.totalPcbQty > 0 ? a / launchForm.totalPcbQty : 0.28125;
+                      setUnitPcbAreaSqm(newUnitArea);
+                      setLaunchForm({
+                        ...launchForm,
+                        custPnlAreaSqm: a,
+                        prodPnlAreaSqm: Number((a * 1.1).toFixed(2)),
+                      });
                     }}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 font-bold text-white font-mono"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 font-bold text-white font-mono focus:border-amber-400 focus:outline-none"
                     placeholder="45"
                   />
+                  <p className="text-[10px] font-semibold text-amber-400 mt-1 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                    Auto-calculated: {launchForm.totalPcbQty || 0} PCBs × {unitPcbAreaSqm.toFixed(4)} Sqm/PCB
+                  </p>
                 </div>
 
                 <div>
