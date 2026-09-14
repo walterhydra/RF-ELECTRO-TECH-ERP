@@ -131,37 +131,70 @@ export default function JobMovementUpdatePage() {
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
-          const mapped: JobCard[] = data.map((j: any) => ({
-            id: j.id,
-            jobCardNo: j.jobCardNo,
-            customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
-            rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
-            customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
-            targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
-            priority: j.priority || 'NORMAL',
-            prodPnlQty: j.prodPnlQty || j.totalQty || 40,
-            custPnlQty: j.custPnlQty || (j.totalQty * 2) || 80,
-            totalPcbQty: j.totalPcbQty || (j.totalQty * 4) || 160,
-            prodPnlAreaSqm: j.prodPnlAreaSqm || 50,
-            custPnlAreaSqm: j.custPnlAreaSqm || 45,
-            currentStageIndex: (() => {
-              const raw = j.subJobCards?.[0]?.currentStage?.name || j.currentStageName || j.currentStage?.name || PF01_STAGES[0];
-              const idx = PF01_STAGES.findIndex(
-                (s) => s.toLowerCase() === raw.toLowerCase() || s.toLowerCase().includes(raw.toLowerCase()) || raw.toLowerCase().includes(s.toLowerCase())
-              );
-              return idx >= 0 ? idx : 0;
-            })(),
-            currentStageName: (() => {
-              const raw = j.subJobCards?.[0]?.currentStage?.name || j.currentStageName || j.currentStage?.name || PF01_STAGES[0];
-              const idx = PF01_STAGES.findIndex(
-                (s) => s.toLowerCase() === raw.toLowerCase() || s.toLowerCase().includes(raw.toLowerCase()) || raw.toLowerCase().includes(s.toLowerCase())
-              );
-              return idx >= 0 ? PF01_STAGES[idx] : raw;
-            })(),
-            status: j.status === 'CREATED' ? 'UNLAUNCHED' : j.status,
-            photoUrl: j.photoUrl || '',
-            createdAt: j.createdAt,
-          }));
+          const mapped: JobCard[] = data.flatMap((j: any) => {
+            const masterPnlQty = j.prodPnlQty || j.totalQty || 40;
+            const masterPcbQty = j.totalPcbQty || (masterPnlQty * 2) || 80;
+            const pcbPerPnl = masterPcbQty / masterPnlQty || 2;
+            const masterAreaSqm = j.prodPnlAreaSqm || 50;
+            const areaPerPnl = masterAreaSqm / masterPnlQty;
+
+            if (j.subJobCards && j.subJobCards.length > 1) {
+              return j.subJobCards.map((sub: any) => {
+                const subPnlQty = sub.qty || masterPnlQty;
+                const subPcbQty = Math.round(subPnlQty * pcbPerPnl);
+                const subAreaSqm = Number((subPnlQty * areaPerPnl).toFixed(2));
+                const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
+                const stageIdx = PF01_STAGES.findIndex(
+                  (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
+                );
+
+                return {
+                  id: sub.id,
+                  jobCardNo: sub.subJobCardNo,
+                  photoUrl: j.photoUrl || '',
+                  customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
+                  rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
+                  customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
+                  targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
+                  priority: j.priority || 'NORMAL',
+                  prodPnlQty: subPnlQty,
+                  custPnlQty: subPcbQty,
+                  totalPcbQty: subPcbQty,
+                  prodPnlAreaSqm: subAreaSqm,
+                  custPnlAreaSqm: subAreaSqm,
+                  currentStageIndex: stageIdx >= 0 ? stageIdx : 0,
+                  currentStageName: stageIdx >= 0 ? PF01_STAGES[stageIdx] : rawStage,
+                  status: sub.status === 'CREATED' ? 'UNLAUNCHED' : sub.status || j.status,
+                  createdAt: j.createdAt,
+                };
+              });
+            }
+
+            const rawStage = j.subJobCards?.[0]?.currentStage?.name || j.currentStageName || j.currentStage?.name || PF01_STAGES[0];
+            const stageIdx = PF01_STAGES.findIndex(
+              (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
+            );
+
+            return [{
+              id: j.id,
+              jobCardNo: j.jobCardNo,
+              photoUrl: j.photoUrl || '',
+              customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
+              rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
+              customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
+              targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
+              priority: j.priority || 'NORMAL',
+              prodPnlQty: masterPnlQty,
+              custPnlQty: masterPcbQty,
+              totalPcbQty: masterPcbQty,
+              prodPnlAreaSqm: masterAreaSqm,
+              custPnlAreaSqm: j.custPnlAreaSqm || 45,
+              currentStageIndex: stageIdx >= 0 ? stageIdx : 0,
+              currentStageName: stageIdx >= 0 ? PF01_STAGES[stageIdx] : rawStage,
+              status: j.status === 'CREATED' ? 'UNLAUNCHED' : j.status,
+              createdAt: j.createdAt,
+            }];
+          });
           setJobs(mapped);
         }
       })
@@ -269,12 +302,16 @@ export default function JobMovementUpdatePage() {
     const nextStageName = PF01_STAGES[nextIndex];
     const remQty = selectedJob.prodPnlQty - partialQty;
     const sqmPerPnl = selectedJob.prodPnlAreaSqm / selectedJob.prodPnlQty;
+    const masterPcbQty = selectedJob.totalPcbQty || selectedJob.custPnlQty || (selectedJob.prodPnlQty * 2);
+    const pcbPerPnl = masterPcbQty / selectedJob.prodPnlQty;
 
     const movedBatch: JobCard = {
       ...selectedJob,
       id: `jc-part-${Date.now()}-A`,
-      jobCardNo: `${selectedJob.jobCardNo}-A`,
+      jobCardNo: selectedJob.jobCardNo.includes('-') ? selectedJob.jobCardNo : `${selectedJob.jobCardNo}-A`,
       prodPnlQty: partialQty,
+      custPnlQty: Math.round(partialQty * pcbPerPnl),
+      totalPcbQty: Math.round(partialQty * pcbPerPnl),
       prodPnlAreaSqm: Number((partialQty * sqmPerPnl).toFixed(2)),
       currentStageIndex: nextIndex,
       currentStageName: nextStageName,
@@ -282,8 +319,10 @@ export default function JobMovementUpdatePage() {
 
     const remainingBatch: JobCard = {
       ...selectedJob,
-      jobCardNo: `${selectedJob.jobCardNo}-B`,
+      jobCardNo: selectedJob.jobCardNo.includes('-') ? selectedJob.jobCardNo : `${selectedJob.jobCardNo}-B`,
       prodPnlQty: remQty,
+      custPnlQty: Math.round(remQty * pcbPerPnl),
+      totalPcbQty: Math.round(remQty * pcbPerPnl),
       prodPnlAreaSqm: Number((remQty * sqmPerPnl).toFixed(2)),
     };
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { 
   Layers, 
@@ -712,19 +712,72 @@ export default function JobCardsPage() {
   });
 
   // Sync state from backend API if available
-  useEffect(() => {
-    const fetchBackendJobCards = async () => {
-      try {
-        const res = await fetch('http://localhost:3001/api/v1/job-cards', {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-          },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
-            const mapped: JobCard[] = data.map((j: any) => ({
+  const fetchBackendJobCards = useCallback(async () => {
+    try {
+      const res = await fetch('http://localhost:3001/api/v1/job-cards', {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped: JobCard[] = data.flatMap((j: any) => {
+            const masterPnlQty = j.prodPnlQty || j.totalQty || 40;
+            const masterPcbQty = j.totalPcbQty || (masterPnlQty * 2) || 80;
+            const pcbPerPnl = masterPcbQty / masterPnlQty || 2;
+            const masterAreaSqm = j.prodPnlAreaSqm || 50;
+            const areaPerPnl = masterAreaSqm / masterPnlQty;
+
+            if (j.subJobCards && j.subJobCards.length > 1) {
+              return j.subJobCards.map((sub: any) => {
+                const subPnlQty = sub.qty || masterPnlQty;
+                const subPcbQty = Math.round(subPnlQty * pcbPerPnl);
+                const subAreaSqm = Number((subPnlQty * areaPerPnl).toFixed(2));
+                const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
+                const stageIdx = PF01_STAGES.findIndex(
+                  (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
+                );
+
+                return {
+                  id: sub.id,
+                  jobCardNo: sub.subJobCardNo,
+                  photoUrl: j.photoUrl || '',
+                  customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
+                  rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
+                  customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
+                  targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
+                  priority: j.priority || 'NORMAL',
+                  prodPnlQty: subPnlQty,
+                  custPnlQty: subPcbQty,
+                  totalPcbQty: subPcbQty,
+                  prodPnlAreaSqm: subAreaSqm,
+                  custPnlAreaSqm: subAreaSqm,
+                  jobFlowSelection: j.processFlowMaster?.name || 'PF-01',
+                  currentStageIndex: stageIdx >= 0 ? stageIdx : 0,
+                  currentStageName: stageIdx >= 0 ? PF01_STAGES[stageIdx] : rawStage,
+                  customerPoId: j.customerPoId,
+                  productId: j.productId,
+                  totalQty: subPnlQty,
+                  status: sub.status === 'CREATED' ? 'UNLAUNCHED' : sub.status || j.status,
+                  qrCodeValue: sub.qrCodeValue || sub.subJobCardNo,
+                  launchedAt: j.launchedAt,
+                  completedAt: j.completedAt,
+                  createdAt: j.createdAt,
+                  customerPO: j.customerPO,
+                  product: j.product,
+                  subJobCards: [sub],
+                };
+              });
+            }
+
+            const rawStage = j.subJobCards?.[0]?.currentStage?.name || j.currentStageName || j.currentStage?.name || PF01_STAGES[0];
+            const stageIdx = PF01_STAGES.findIndex(
+              (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
+            );
+
+            return [{
               id: j.id,
               jobCardNo: j.jobCardNo,
               photoUrl: j.photoUrl || '',
@@ -733,29 +786,17 @@ export default function JobCardsPage() {
               customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
               targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
               priority: j.priority || 'NORMAL',
-              prodPnlQty: j.prodPnlQty || j.totalQty || 40,
-              custPnlQty: j.custPnlQty || (j.totalQty * 2) || 80,
-              totalPcbQty: j.totalPcbQty || (j.totalQty * 4) || 160,
-              prodPnlAreaSqm: j.prodPnlAreaSqm || 50,
+              prodPnlQty: masterPnlQty,
+              custPnlQty: masterPcbQty,
+              totalPcbQty: masterPcbQty,
+              prodPnlAreaSqm: masterAreaSqm,
               custPnlAreaSqm: j.custPnlAreaSqm || 45,
               jobFlowSelection: j.processFlowMaster?.name || 'PF-01',
-              currentStageIndex: (() => {
-                const raw = j.subJobCards?.[0]?.currentStage?.name || j.currentStageName || j.currentStage?.name || PF01_STAGES[0];
-                const idx = PF01_STAGES.findIndex(
-                  (s) => s.toLowerCase() === raw.toLowerCase() || s.toLowerCase().includes(raw.toLowerCase()) || raw.toLowerCase().includes(s.toLowerCase())
-                );
-                return idx >= 0 ? idx : 0;
-              })(),
-              currentStageName: (() => {
-                const raw = j.subJobCards?.[0]?.currentStage?.name || j.currentStageName || j.currentStage?.name || PF01_STAGES[0];
-                const idx = PF01_STAGES.findIndex(
-                  (s) => s.toLowerCase() === raw.toLowerCase() || s.toLowerCase().includes(raw.toLowerCase()) || raw.toLowerCase().includes(s.toLowerCase())
-                );
-                return idx >= 0 ? PF01_STAGES[idx] : raw;
-              })(),
+              currentStageIndex: stageIdx >= 0 ? stageIdx : 0,
+              currentStageName: stageIdx >= 0 ? PF01_STAGES[stageIdx] : rawStage,
               customerPoId: j.customerPoId,
               productId: j.productId,
-              totalQty: j.totalQty || 40,
+              totalQty: masterPnlQty,
               status: j.status === 'CREATED' ? 'UNLAUNCHED' : j.status,
               qrCodeValue: j.qrCodeValue || `${j.jobCardNo}-PARENT`,
               launchedAt: j.launchedAt,
@@ -763,24 +804,20 @@ export default function JobCardsPage() {
               createdAt: j.createdAt,
               customerPO: j.customerPO,
               product: j.product,
-              subJobCards: (j.subJobCards || []).map((sub: any) => ({
-                id: sub.id,
-                subJobCardNo: sub.subJobCardNo,
-                qty: sub.qty,
-                status: sub.status,
-                qrCodeValue: sub.qrCodeValue,
-                currentStage: sub.currentStage,
-              })),
-            }));
-            setJobCards(mapped);
-          }
+              subJobCards: j.subJobCards || [],
+            }];
+          });
+          setJobCards(mapped);
         }
-      } catch (err) {
-        // Retain client-side fallback state smoothly
       }
-    };
-    fetchBackendJobCards();
+    } catch (err) {
+      // Retain client-side fallback state smoothly
+    }
   }, []);
+
+  useEffect(() => {
+    fetchBackendJobCards();
+  }, [fetchBackendJobCards]);
 
   // Movement Form
   const [fullMoveRemarkType, setFullMoveRemarkType] = useState('Process issue');
@@ -1075,11 +1112,16 @@ export default function JobCardsPage() {
         console.warn('Backend API call failed, using client state update');
       }
 
+      const masterPcbQty = selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || (selectedMovementJob.prodPnlQty * 2);
+      const pcbPerPnl = masterPcbQty / selectedMovementJob.prodPnlQty;
+
       const movedBatch: JobCard = {
         ...selectedMovementJob,
         id: `jc-part-${Date.now()}`,
-        jobCardNo: `${selectedMovementJob.jobCardNo}-A`,
+        jobCardNo: selectedMovementJob.jobCardNo.includes('-') ? selectedMovementJob.jobCardNo : `${selectedMovementJob.jobCardNo}-A`,
         prodPnlQty: partialMoveQty,
+        custPnlQty: Math.round(partialMoveQty * pcbPerPnl),
+        totalPcbQty: Math.round(partialMoveQty * pcbPerPnl),
         prodPnlAreaSqm: Number((partialMoveQty * areaPerPnl).toFixed(2)),
         currentStageIndex: nextIndex,
         currentStageName: nextStage,
@@ -1087,14 +1129,18 @@ export default function JobCardsPage() {
 
       const remainingBatch: JobCard = {
         ...selectedMovementJob,
-        jobCardNo: `${selectedMovementJob.jobCardNo}-B`,
+        jobCardNo: selectedMovementJob.jobCardNo.includes('-') ? selectedMovementJob.jobCardNo : `${selectedMovementJob.jobCardNo}-B`,
         prodPnlQty: remainingBalance,
+        custPnlQty: Math.round(remainingBalance * pcbPerPnl),
+        totalPcbQty: Math.round(remainingBalance * pcbPerPnl),
         prodPnlAreaSqm: Number((remainingBalance * areaPerPnl).toFixed(2)),
       };
 
       setJobCards((prev) =>
         prev.flatMap((j) => (j.id === selectedMovementJob.id ? [movedBatch, remainingBatch] : [j]))
       );
+
+      await fetchBackendJobCards();
 
       setSelectedMovementJob(null);
       setIncompleteRemarks('');
