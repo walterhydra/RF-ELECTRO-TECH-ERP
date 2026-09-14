@@ -110,6 +110,31 @@ const SAMPLE_ACTIVE_JOBS: JobCard[] = [
   },
 ];
 
+const LOCAL_STORAGE_CARDS_KEY = 'rf_electro_job_cards_v2';
+
+const getStoredJobCards = (): JobCard[] | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_CARDS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {
+    // Ignore parse error
+  }
+  return null;
+};
+
+const saveJobCardsToStorage = (cards: JobCard[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(LOCAL_STORAGE_CARDS_KEY, JSON.stringify(cards));
+  } catch (err) {
+    console.warn('Failed to persist job cards to localStorage', err);
+  }
+};
+
 const getDeletedJobCardIds = (): string[] => {
   if (typeof window === 'undefined') return [];
   try {
@@ -128,13 +153,26 @@ export default function JobMovementUpdatePage() {
   const [assignedStage, setAssignedStage] = useState<string>('2. DRILLING');
   const [toast, setToast] = useState<string | null>(null);
 
-  // Filter out deleted cards on client mount (prevents SSR hydration error)
+  // Filter out deleted cards on client mount & load from localStorage
   useEffect(() => {
     const deleted = getDeletedJobCardIds();
-    if (deleted.length > 0) {
+    const stored = getStoredJobCards();
+    if (stored && stored.length > 0) {
+      const filtered = stored.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
+      if (filtered.length > 0) {
+        setJobs(filtered);
+      }
+    } else {
       setJobs((prev) => prev.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo)));
     }
   }, []);
+
+  // Save jobs to localStorage whenever state updates
+  useEffect(() => {
+    if (jobs && jobs.length > 0) {
+      saveJobCardsToStorage(jobs);
+    }
+  }, [jobs]);
 
   // Movement Modal Options State
   const [movementTab, setMovementTab] = useState<'VIEW' | 'FULL' | 'PARTIAL'>('VIEW');
@@ -148,72 +186,77 @@ export default function JobMovementUpdatePage() {
     fetch('http://localhost:3001/api/v1/job-cards')
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data)) {
+        if (Array.isArray(data) && data.length > 0) {
           const deletedIds = getDeletedJobCardIds();
-          if (data.length === 0) {
-            setJobs([]);
-          } else {
-            const mapped: JobCard[] = data.flatMap((j: any) => {
-              const masterPcbQty = j.totalPcbQty || j.custPnlQty || (j.prodPnlQty ? j.prodPnlQty * 4 : 160);
-              const masterAreaSqm = j.custPnlAreaSqm || j.prodPnlAreaSqm || 45;
+          const mapped: JobCard[] = data.flatMap((j: any) => {
+            const masterPcbQty = j.totalPcbQty || j.custPnlQty || (j.prodPnlQty ? j.prodPnlQty * 4 : 160);
+            const masterAreaSqm = j.custPnlAreaSqm || j.prodPnlAreaSqm || 45;
 
-              if (j.subJobCards && j.subJobCards.length > 0) {
-                return j.subJobCards.map((sub: any) => {
-                  const subPcbQty = sub.totalPcbQty || sub.qty || masterPcbQty;
-                  const subAreaSqm = sub.custPnlAreaSqm || sub.prodPnlAreaSqm || masterAreaSqm;
-                  const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
-                  const stageIdx = PF01_STAGES.findIndex(
-                    (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
-                  );
+            if (j.subJobCards && j.subJobCards.length > 0) {
+              return j.subJobCards.map((sub: any) => {
+                const subPcbQty = sub.totalPcbQty || sub.qty || masterPcbQty;
+                const subAreaSqm = sub.custPnlAreaSqm || sub.prodPnlAreaSqm || masterAreaSqm;
+                const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
+                const stageIdx = PF01_STAGES.findIndex(
+                  (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
+                );
 
-                  return {
-                    id: sub.id,
-                    jobCardNo: sub.subJobCardNo,
-                    photoUrl: j.photoUrl || '',
-                    customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
-                    rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
-                    customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
-                    targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
-                    priority: j.priority || 'NORMAL',
-                    prodPnlQty: Math.ceil(subPcbQty / 4),
-                    custPnlQty: subPcbQty,
-                    totalPcbQty: subPcbQty,
-                    prodPnlAreaSqm: subAreaSqm,
-                    custPnlAreaSqm: subAreaSqm,
-                    currentStageIndex: stageIdx >= 0 ? stageIdx : 0,
-                    currentStageName: stageIdx >= 0 ? PF01_STAGES[stageIdx] : rawStage,
-                    status: sub.status === 'CREATED' ? 'UNLAUNCHED' : sub.status || j.status,
-                    createdAt: j.createdAt,
-                  };
-                });
-              }
+                return {
+                  id: sub.id,
+                  jobCardNo: sub.subJobCardNo,
+                  photoUrl: j.photoUrl || '',
+                  customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
+                  rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
+                  customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
+                  targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
+                  priority: j.priority || 'NORMAL',
+                  prodPnlQty: Math.ceil(subPcbQty / 4),
+                  custPnlQty: subPcbQty,
+                  totalPcbQty: subPcbQty,
+                  prodPnlAreaSqm: subAreaSqm,
+                  custPnlAreaSqm: subAreaSqm,
+                  currentStageIndex: stageIdx >= 0 ? stageIdx : 0,
+                  currentStageName: stageIdx >= 0 ? PF01_STAGES[stageIdx] : rawStage,
+                  status: sub.status === 'CREATED' ? 'UNLAUNCHED' : sub.status || j.status,
+                  createdAt: j.createdAt,
+                };
+              });
+            }
 
-              const rawStage = j.subJobCards?.[0]?.currentStage?.name || j.currentStageName || j.currentStage?.name || PF01_STAGES[0];
-              const stageIdx = PF01_STAGES.findIndex(
-                (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
-              );
+            const rawStage = j.subJobCards?.[0]?.currentStage?.name || j.currentStageName || j.currentStage?.name || PF01_STAGES[0];
+            const stageIdx = PF01_STAGES.findIndex(
+              (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
+            );
 
-              return [{
-                id: j.id,
-                jobCardNo: j.jobCardNo,
-                photoUrl: j.photoUrl || '',
-                customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
-                rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
-                customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
-                targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
-                priority: j.priority || 'NORMAL',
-                prodPnlQty: Math.ceil(masterPcbQty / 4),
-                custPnlQty: masterPcbQty,
-                totalPcbQty: masterPcbQty,
-                prodPnlAreaSqm: masterAreaSqm,
-                custPnlAreaSqm: masterAreaSqm,
-                currentStageIndex: stageIdx >= 0 ? stageIdx : 0,
-                currentStageName: stageIdx >= 0 ? PF01_STAGES[stageIdx] : rawStage,
-                status: j.status === 'CREATED' ? 'UNLAUNCHED' : j.status,
-                createdAt: j.createdAt,
-              }];
-            }).filter((j) => !deletedIds.includes(j.id) && !deletedIds.includes(j.jobCardNo));
-            setJobs(mapped);
+            return [{
+              id: j.id,
+              jobCardNo: j.jobCardNo,
+              photoUrl: j.photoUrl || '',
+              customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
+              rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
+              customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
+              targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
+              priority: j.priority || 'NORMAL',
+              prodPnlQty: Math.ceil(masterPcbQty / 4),
+              custPnlQty: masterPcbQty,
+              totalPcbQty: masterPcbQty,
+              prodPnlAreaSqm: masterAreaSqm,
+              custPnlAreaSqm: masterAreaSqm,
+              currentStageIndex: stageIdx >= 0 ? stageIdx : 0,
+              currentStageName: stageIdx >= 0 ? PF01_STAGES[stageIdx] : rawStage,
+              status: j.status === 'CREATED' ? 'UNLAUNCHED' : j.status,
+              createdAt: j.createdAt,
+            }];
+          }).filter((j) => !deletedIds.includes(j.id) && !deletedIds.includes(j.jobCardNo));
+
+          if (mapped.length > 0) {
+            setJobs((prev) => {
+              const backendKeySet = new Set(mapped.flatMap((m) => [m.id, m.jobCardNo]));
+              const clientOnly = prev.filter((p) => !backendKeySet.has(p.id) && !backendKeySet.has(p.jobCardNo) && !deletedIds.includes(p.id) && !deletedIds.includes(p.jobCardNo));
+              const merged = [...mapped, ...clientOnly];
+              saveJobCardsToStorage(merged);
+              return merged;
+            });
           }
         }
       })
