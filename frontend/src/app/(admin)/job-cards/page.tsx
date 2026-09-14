@@ -1253,7 +1253,31 @@ export default function JobCardsPage() {
         isNewlyCreated: false,
       };
 
-      setJobCards((prev) => prev.map((j) => (j.id === selectedMovementJob.id ? updated : j)));
+      setJobCards((prev) => {
+        const otherItems = prev.filter((j) => j.id !== selectedMovementJob.id);
+        const existingNextIdx = otherItems.findIndex(
+          (j) => j.jobCardNo === selectedMovementJob.jobCardNo && j.currentStageName === nextStage
+        );
+        if (existingNextIdx !== -1) {
+          const target = otherItems[existingNextIdx];
+          const mergedQty = (target.totalPcbQty || 0) + movedPcb;
+          const mergedArea = Number(((target.custPnlAreaSqm || 0) + movedArea).toFixed(2));
+          return otherItems.map((j, idx) =>
+            idx === existingNextIdx
+              ? {
+                  ...target,
+                  totalPcbQty: mergedQty,
+                  custPnlQty: mergedQty,
+                  prodPnlQty: Math.ceil(mergedQty / 4),
+                  custPnlAreaSqm: mergedArea,
+                  prodPnlAreaSqm: mergedArea,
+                }
+              : j
+          );
+        }
+        return [...otherItems, updated];
+      });
+
       setSelectedMovementJob(null);
       setFullMoveRemarks('');
       setFullMoveRejectQty(0);
@@ -1365,9 +1389,57 @@ export default function JobCardsPage() {
         isNewlyCreated: false,
       };
 
-      setJobCards((prev) =>
-        prev.flatMap((j) => (j.id === selectedMovementJob.id ? [movedBatch, remainingBatch] : [j]))
-      );
+      setJobCards((prev) => {
+        const otherItems = prev.filter((j) => j.id !== selectedMovementJob.id);
+        const existingNextIdx = otherItems.findIndex(
+          (j) => j.jobCardNo === selectedMovementJob.jobCardNo && j.currentStageName === nextStage
+        );
+
+        let listWithMoved: JobCard[];
+        if (existingNextIdx !== -1) {
+          const target = otherItems[existingNextIdx];
+          const mergedQty = (target.totalPcbQty || 0) + parsedMoveQty;
+          const mergedArea = Number(((target.custPnlAreaSqm || 0) + movedArea).toFixed(2));
+          const mergedCard: JobCard = {
+            ...target,
+            totalPcbQty: mergedQty,
+            custPnlQty: mergedQty,
+            prodPnlQty: Math.ceil(mergedQty / 4),
+            custPnlAreaSqm: mergedArea,
+            prodPnlAreaSqm: mergedArea,
+          };
+          listWithMoved = otherItems.map((j, idx) => (idx === existingNextIdx ? mergedCard : j));
+        } else {
+          listWithMoved = [...otherItems, movedBatch];
+        }
+
+        if (remainingPcb > 0) {
+          const existingCurrIdx = listWithMoved.findIndex(
+            (j) => j.jobCardNo === selectedMovementJob.jobCardNo && j.currentStageName === selectedMovementJob.currentStageName
+          );
+          if (existingCurrIdx !== -1) {
+            const curr = listWithMoved[existingCurrIdx];
+            const mergedRemQty = (curr.totalPcbQty || 0) + remainingPcb;
+            const mergedRemArea = Number(((curr.custPnlAreaSqm || 0) + remArea).toFixed(2));
+            return listWithMoved.map((j, idx) =>
+              idx === existingCurrIdx
+                ? {
+                    ...curr,
+                    totalPcbQty: mergedRemQty,
+                    custPnlQty: mergedRemQty,
+                    prodPnlQty: Math.ceil(mergedRemQty / 4),
+                    custPnlAreaSqm: mergedRemArea,
+                    prodPnlAreaSqm: mergedRemArea,
+                  }
+                : j
+            );
+          } else {
+            return [...listWithMoved, remainingBatch];
+          }
+        }
+
+        return listWithMoved;
+      });
 
       await fetchBackendJobCards();
 
@@ -2615,7 +2687,7 @@ export default function JobCardsPage() {
                     onChange={(e) => setLaunchForm({ ...launchForm, jobFlowSelection: e.target.value })}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900"
                   >
-                    <option value="PF-01">PF-01 Standard Flow (19 Stages)</option>
+                    <option value="PF-01">PF-01 Standard Flow (20 Stages)</option>
                   </select>
                 </div>
               </div>
