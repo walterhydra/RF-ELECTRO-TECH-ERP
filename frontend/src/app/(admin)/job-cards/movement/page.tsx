@@ -305,10 +305,51 @@ export default function JobMovementUpdatePage() {
     const masterPcbQty = selectedJob.totalPcbQty || selectedJob.custPnlQty || (selectedJob.prodPnlQty * 2);
     const pcbPerPnl = masterPcbQty / selectedJob.prodPnlQty;
 
+    const rawNo = selectedJob.jobCardNo;
+    const parts = rawNo.split('-');
+    const baseMasterNo = parts.length >= 3 ? parts.slice(0, 3).join('-') : rawNo;
+
+    const usedLetters = new Set<string>();
+    jobs.forEach((j) => {
+      if (j.jobCardNo.startsWith(`${baseMasterNo}-`)) {
+        const rem = j.jobCardNo.slice(baseMasterNo.length + 1);
+        const match = rem.match(/^([A-Z]+)/);
+        if (match) usedLetters.add(match[1]);
+      }
+    });
+
+    let nextMovedLetter = 'A';
+    for (let i = 0; i < 26; i++) {
+      const l = String.fromCharCode(65 + i);
+      if (!usedLetters.has(l)) {
+        nextMovedLetter = l;
+        break;
+      }
+    }
+
+    let movedSubNo = `${baseMasterNo}-${nextMovedLetter}`;
+    let remainingSubNo = rawNo;
+
+    const lastSegment = parts[parts.length - 1];
+    const isLetterSuffix = /^[A-Z]+$/.test(lastSegment);
+
+    if (!isLetterSuffix) {
+      usedLetters.add(nextMovedLetter);
+      let remLetter = 'B';
+      for (let i = 0; i < 26; i++) {
+        const l = String.fromCharCode(65 + i);
+        if (!usedLetters.has(l)) {
+          remLetter = l;
+          break;
+        }
+      }
+      remainingSubNo = `${baseMasterNo}-${remLetter}`;
+    }
+
     const movedBatch: JobCard = {
       ...selectedJob,
       id: `jc-part-${Date.now()}-A`,
-      jobCardNo: selectedJob.jobCardNo.includes('-') ? selectedJob.jobCardNo : `${selectedJob.jobCardNo}-A`,
+      jobCardNo: movedSubNo,
       prodPnlQty: partialQty,
       custPnlQty: Math.round(partialQty * pcbPerPnl),
       totalPcbQty: Math.round(partialQty * pcbPerPnl),
@@ -319,7 +360,7 @@ export default function JobMovementUpdatePage() {
 
     const remainingBatch: JobCard = {
       ...selectedJob,
-      jobCardNo: selectedJob.jobCardNo.includes('-') ? selectedJob.jobCardNo : `${selectedJob.jobCardNo}-B`,
+      jobCardNo: remainingSubNo,
       prodPnlQty: remQty,
       custPnlQty: Math.round(remQty * pcbPerPnl),
       totalPcbQty: Math.round(remQty * pcbPerPnl),

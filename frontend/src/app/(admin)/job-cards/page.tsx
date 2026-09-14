@@ -1115,10 +1115,51 @@ export default function JobCardsPage() {
       const masterPcbQty = selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || (selectedMovementJob.prodPnlQty * 2);
       const pcbPerPnl = masterPcbQty / selectedMovementJob.prodPnlQty;
 
+      const rawNo = selectedMovementJob.jobCardNo;
+      const parts = rawNo.split('-');
+      const baseMasterNo = parts.length >= 3 ? parts.slice(0, 3).join('-') : rawNo;
+
+      const usedLetters = new Set<string>();
+      jobCards.forEach((j) => {
+        if (j.jobCardNo.startsWith(`${baseMasterNo}-`)) {
+          const rem = j.jobCardNo.slice(baseMasterNo.length + 1);
+          const match = rem.match(/^([A-Z]+)/);
+          if (match) usedLetters.add(match[1]);
+        }
+      });
+
+      let nextMovedLetter = 'A';
+      for (let i = 0; i < 26; i++) {
+        const l = String.fromCharCode(65 + i);
+        if (!usedLetters.has(l)) {
+          nextMovedLetter = l;
+          break;
+        }
+      }
+
+      let movedSubNo = `${baseMasterNo}-${nextMovedLetter}`;
+      let remainingSubNo = rawNo;
+
+      const lastSegment = parts[parts.length - 1];
+      const isLetterSuffix = /^[A-Z]+$/.test(lastSegment);
+
+      if (!isLetterSuffix) {
+        usedLetters.add(nextMovedLetter);
+        let remLetter = 'B';
+        for (let i = 0; i < 26; i++) {
+          const l = String.fromCharCode(65 + i);
+          if (!usedLetters.has(l)) {
+            remLetter = l;
+            break;
+          }
+        }
+        remainingSubNo = `${baseMasterNo}-${remLetter}`;
+      }
+
       const movedBatch: JobCard = {
         ...selectedMovementJob,
-        id: `jc-part-${Date.now()}`,
-        jobCardNo: selectedMovementJob.jobCardNo.includes('-') ? selectedMovementJob.jobCardNo : `${selectedMovementJob.jobCardNo}-A`,
+        id: `jc-part-${Date.now()}-A`,
+        jobCardNo: movedSubNo,
         prodPnlQty: partialMoveQty,
         custPnlQty: Math.round(partialMoveQty * pcbPerPnl),
         totalPcbQty: Math.round(partialMoveQty * pcbPerPnl),
@@ -1129,7 +1170,7 @@ export default function JobCardsPage() {
 
       const remainingBatch: JobCard = {
         ...selectedMovementJob,
-        jobCardNo: selectedMovementJob.jobCardNo.includes('-') ? selectedMovementJob.jobCardNo : `${selectedMovementJob.jobCardNo}-B`,
+        jobCardNo: remainingSubNo,
         prodPnlQty: remainingBalance,
         custPnlQty: Math.round(remainingBalance * pcbPerPnl),
         totalPcbQty: Math.round(remainingBalance * pcbPerPnl),

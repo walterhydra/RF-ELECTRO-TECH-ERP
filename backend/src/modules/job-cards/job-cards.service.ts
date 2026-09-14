@@ -813,10 +813,56 @@ export class JobCardsService {
         },
       });
 
-      // 2. Update remaining lot at current stage
+      // 2. Determine clean subJobCard numbers relative to master Job Card No
+      const masterJobCardNo = (subCard as any).jobCard?.jobCardNo || 'JC';
+
+      const existingSubCards = await tx.subJobCard.findMany({
+        where: { jobCardId: subCard.jobCardId },
+        select: { id: true, subJobCardNo: true },
+      });
+
+      const usedLetters = new Set<string>();
+      existingSubCards.forEach((s) => {
+        if (s.subJobCardNo.startsWith(`${masterJobCardNo}-`)) {
+          const rem = s.subJobCardNo.slice(masterJobCardNo.length + 1);
+          const match = rem.match(/^([A-Z]+)/);
+          if (match) usedLetters.add(match[1]);
+        }
+      });
+
+      let nextMovedLetter = 'A';
+      for (let i = 0; i < 26; i++) {
+        const l = String.fromCharCode(65 + i);
+        if (!usedLetters.has(l)) {
+          nextMovedLetter = l;
+          break;
+        }
+      }
+
+      let newSubCardNo = `${masterJobCardNo}-${nextMovedLetter}`;
+      let updatedRemainingNo = subCard.subJobCardNo;
+
+      const lastSegment = subCard.subJobCardNo.split('-').pop() || '';
+      const isLetterSuffix = /^[A-Z]+$/.test(lastSegment);
+
+      if (!isLetterSuffix) {
+        usedLetters.add(nextMovedLetter);
+        let remLetter = 'B';
+        for (let i = 0; i < 26; i++) {
+          const l = String.fromCharCode(65 + i);
+          if (!usedLetters.has(l)) {
+            remLetter = l;
+            break;
+          }
+        }
+        updatedRemainingNo = `${masterJobCardNo}-${remLetter}`;
+      }
+
+      // Update remaining lot at current stage
       await tx.subJobCard.update({
         where: { id: subCard.id },
         data: {
+          subJobCardNo: updatedRemainingNo,
           qty: remainingQty,
           prodPnlQty: remainingQty,
           prodPnlAreaSqm: remainingArea,
@@ -824,12 +870,6 @@ export class JobCardsService {
       });
 
       // 3. Create moved portion at next stage
-      const existingChildrenCount = await tx.subJobCard.count({
-        where: { parentSubJobCardId: subCard.id },
-      });
-      const suffix = String.fromCharCode(65 + existingChildrenCount); // A, B, C...
-      const newSubCardNo = `${subCard.subJobCardNo}-${suffix}`;
-
       await tx.subJobCard.create({
         data: {
           subJobCardNo: newSubCardNo,
