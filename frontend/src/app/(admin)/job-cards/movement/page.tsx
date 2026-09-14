@@ -147,7 +147,7 @@ const getDeletedJobCardIds = (): string[] => {
 
 export default function JobMovementUpdatePage() {
   const [isMounted, setIsMounted] = useState(false);
-  const [jobs, setJobs] = useState<JobCard[]>(SAMPLE_ACTIVE_JOBS);
+  const [jobs, setJobs] = useState<JobCard[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedJob, setSelectedJob] = useState<JobCard | null>(null);
   const [userRole, setUserRole] = useState<'MASTER' | 'SUPER_USER' | 'NORMAL'>('MASTER');

@@ -638,7 +638,7 @@ const markJobCardAsDeleted = (id: string, jobCardNo?: string) => {
 
 export default function JobCardsPage() {
   const [isMounted, setIsMounted] = useState(false);
-  const [jobCards, setJobCards] = useState<JobCard[]>(INITIAL_JOB_CARDS);
+  const [jobCards, setJobCards] = useState<JobCard[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [barcodeInput, setBarcodeInput] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
