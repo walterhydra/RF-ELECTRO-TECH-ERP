@@ -102,7 +102,7 @@ export class JobCardsService {
       ];
     }
 
-    return this.prisma.jobCard.findMany({
+    const jobCards = await this.prisma.jobCard.findMany({
       where,
       include: {
         customerPO: {
@@ -117,6 +117,54 @@ export class JobCardsService {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    // Auto-correct sub-job card PCB quantities & clean sub-card numbers
+    for (const jc of jobCards) {
+      if (jc.subJobCards && jc.subJobCards.length > 0) {
+        const masterPnlQty = jc.prodPnlQty || jc.totalQty || 40;
+        const masterPcbQty = jc.totalPcbQty || (masterPnlQty * 2);
+        const pcbPerPnl = masterPcbQty / masterPnlQty || 2;
+
+        const usedLetters = new Set<string>();
+
+        for (const sub of jc.subJobCards) {
+          const subPnlQty = sub.prodPnlQty ?? sub.qty ?? masterPnlQty;
+          const expectedPcbQty = Math.round(subPnlQty * pcbPerPnl);
+
+          // Clean subJobCardNo if it has nested hyphens e.g. 26-27-1590-A-A -> 26-27-1590-A
+          let cleanNo = sub.subJobCardNo;
+          const parts = sub.subJobCardNo.split('-');
+          if (parts.length > 4 || (parts.length === 4 && /^[A-Z]+$/.test(parts[2]) && /^[A-Z]+$/.test(parts[3]))) {
+            const base = parts.slice(0, 3).join('-');
+            let letter = 'A';
+            for (let i = 0; i < 26; i++) {
+              const l = String.fromCharCode(65 + i);
+              if (!usedLetters.has(l)) {
+                letter = l;
+                break;
+              }
+            }
+            cleanNo = `${base}-${letter}`;
+          }
+
+          const lastSeg = cleanNo.split('-').pop() || '';
+          if (/^[A-Z]+$/.test(lastSeg)) {
+            usedLetters.add(lastSeg);
+          }
+
+          if (sub.totalPcbQty !== expectedPcbQty || sub.subJobCardNo !== cleanNo) {
+            sub.totalPcbQty = expectedPcbQty;
+            sub.subJobCardNo = cleanNo;
+            this.prisma.subJobCard.update({
+              where: { id: sub.id },
+              data: { totalPcbQty: expectedPcbQty, subJobCardNo: cleanNo },
+            }).catch(() => {});
+          }
+        }
+      }
+    }
+
+    return jobCards;
   }
 
   async findOne(id: string) {

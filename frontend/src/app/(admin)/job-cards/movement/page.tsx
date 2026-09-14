@@ -138,11 +138,11 @@ export default function JobMovementUpdatePage() {
             const masterAreaSqm = j.prodPnlAreaSqm || 50;
             const areaPerPnl = masterAreaSqm / masterPnlQty;
 
-            if (j.subJobCards && j.subJobCards.length > 1) {
+            if (j.subJobCards && j.subJobCards.length > 0) {
               return j.subJobCards.map((sub: any) => {
-                const subPnlQty = sub.qty || masterPnlQty;
-                const subPcbQty = Math.round(subPnlQty * pcbPerPnl);
-                const subAreaSqm = Number((subPnlQty * areaPerPnl).toFixed(2));
+                const subPnlQty = sub.prodPnlQty ?? sub.qty ?? masterPnlQty;
+                const subPcbQty = (sub.totalPcbQty && subPnlQty < masterPnlQty) ? sub.totalPcbQty : Math.round(subPnlQty * pcbPerPnl);
+                const subAreaSqm = sub.prodPnlAreaSqm || Number((subPnlQty * areaPerPnl).toFixed(2));
                 const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
                 const stageIdx = PF01_STAGES.findIndex(
                   (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())

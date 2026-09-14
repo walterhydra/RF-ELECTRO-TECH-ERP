@@ -730,11 +730,11 @@ export default function JobCardsPage() {
             const masterAreaSqm = j.prodPnlAreaSqm || 50;
             const areaPerPnl = masterAreaSqm / masterPnlQty;
 
-            if (j.subJobCards && j.subJobCards.length > 1) {
+            if (j.subJobCards && j.subJobCards.length > 0) {
               return j.subJobCards.map((sub: any) => {
-                const subPnlQty = sub.qty || masterPnlQty;
-                const subPcbQty = Math.round(subPnlQty * pcbPerPnl);
-                const subAreaSqm = Number((subPnlQty * areaPerPnl).toFixed(2));
+                const subPnlQty = sub.prodPnlQty ?? sub.qty ?? masterPnlQty;
+                const subPcbQty = (sub.totalPcbQty && subPnlQty < masterPnlQty) ? sub.totalPcbQty : Math.round(subPnlQty * pcbPerPnl);
+                const subAreaSqm = sub.prodPnlAreaSqm || Number((subPnlQty * areaPerPnl).toFixed(2));
                 const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
                 const stageIdx = PF01_STAGES.findIndex(
                   (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
@@ -1938,7 +1938,7 @@ export default function JobCardsPage() {
 
                       {/* Pndg */}
                       <td className="py-2.5 px-3 border-r border-slate-200 font-mono text-right font-bold text-slate-900 whitespace-nowrap">
-                        {jc.totalPcbQty || jc.prodPnlQty * 4}
+                        {jc.totalPcbQty || jc.custPnlQty || (jc.prodPnlQty ? Math.round(jc.prodPnlQty * 2) : 0)}
                       </td>
 
                       {/* Unit */}
