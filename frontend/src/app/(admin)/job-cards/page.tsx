@@ -588,15 +588,15 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
   );
 };
 
-const LOCAL_STORAGE_CARDS_KEY = 'rf_electro_job_cards_v2';
+const LOCAL_STORAGE_CARDS_KEY = 'rf_electro_job_cards_v3';
 
 const getStoredJobCards = (): JobCard[] | null => {
   if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_CARDS_KEY);
-    if (raw) {
+    if (raw !== null) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) return parsed;
     }
   } catch {
     // Ignore parse error
@@ -668,11 +668,9 @@ export default function JobCardsPage() {
   useEffect(() => {
     const deleted = getDeletedJobCardIds();
     const stored = getStoredJobCards();
-    if (stored && stored.length > 0) {
+    if (stored !== null) {
       const filtered = stored.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
-      if (filtered.length > 0) {
-        setJobCards(filtered);
-      }
+      setJobCards(filtered);
     } else {
       setJobCards((prev) => prev.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo)));
     }
@@ -680,9 +678,7 @@ export default function JobCardsPage() {
 
   // Save jobCards to localStorage whenever state updates
   useEffect(() => {
-    if (jobCards && jobCards.length > 0) {
-      saveJobCardsToStorage(jobCards);
-    }
+    saveJobCardsToStorage(jobCards);
   }, [jobCards]);
 
   // Sync userRole from localStorage if set
