@@ -1585,11 +1585,23 @@ export default function JobCardsPage() {
     progress: '',
   });
 
-  const [statusRadio, setStatusRadio] = useState<'All' | 'Unstarted' | 'Active' | 'Pending' | 'Done'>('All');
+  const [statusRadio, setStatusRadio] = useState<'All' | 'Unstarted' | 'Active' | 'Pending' | 'Done' | 'Overdue'>('All');
   const [globalSearch, setGlobalSearch] = useState('');
   const [showColFilters, setShowColFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  const todayStr = React.useMemo(() => new Date().toISOString().split('T')[0], []);
+
+  const isCardOverdue = useCallback(
+    (jc: JobCard) => {
+      if (jc.status === 'COMPLETED') return false;
+      if (!jc.targetDate) return false;
+      const targetStr = jc.targetDate.split('T')[0];
+      return targetStr < todayStr;
+    },
+    [todayStr]
+  );
 
   // Filtered Cards based on per-column filters, global search, and radio status
   const filteredCards = jobCards.filter((jc) => {
@@ -1617,6 +1629,8 @@ export default function JobCardsPage() {
         ? jc.status === 'UNLAUNCHED' || jc.status === 'CREATED'
         : statusRadio === 'Done'
         ? jc.status === 'COMPLETED'
+        : statusRadio === 'Overdue'
+        ? isCardOverdue(jc)
         : true;
 
     return matchesWip && matchesProduct && matchesCode && matchesCust && matchesStage && matchesPriority && matchesGlobal && matchesRadio;
@@ -1628,6 +1642,13 @@ export default function JobCardsPage() {
   const activePnlCount = jobCards.reduce((acc, j) => acc + (j.prodPnlQty || 0), 0);
   const activePcbCount = jobCards.reduce((acc, j) => acc + (j.totalPcbQty || j.custPnlQty || ((j.prodPnlQty || 0) * 2)), 0);
   const activeSqmArea = jobCards.reduce((acc, j) => acc + (j.prodPnlAreaSqm || 0), 0);
+
+  const overdueCards = React.useMemo(() => jobCards.filter(isCardOverdue), [jobCards, isCardOverdue]);
+  const overdueCount = overdueCards.length;
+  const overduePcbCount = React.useMemo(
+    () => overdueCards.reduce((acc, curr) => acc + (curr.totalPcbQty || curr.custPnlQty || 0), 0),
+    [overdueCards]
+  );
 
   const getStatusBadge = (status?: string) => {
     switch (status) {
@@ -1751,14 +1772,14 @@ export default function JobCardsPage() {
       </div>
 
       {/* 2. SECOND ROW SUMMARY CARDS & BARCODE SCANNER */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5 items-stretch">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-stretch">
         
         {/* Card 1: Barcode Scanner / Fast Stage Movement */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex flex-col justify-between space-y-2.5 min-h-[96px]">
           <div className="flex items-center justify-between gap-1">
             <div className="flex items-center gap-1 text-[11px] font-black text-blue-900 uppercase tracking-wider shrink-0">
               <Scan className="w-4 h-4 text-blue-600 shrink-0" />
-              <span className="whitespace-nowrap">⚡ STAGE MOVEMENT SCANNER</span>
+              <span className="whitespace-nowrap">⚡ STAGE SCANNER</span>
             </div>
             <span className="text-[10px] font-mono font-bold text-slate-400 shrink-0 bg-slate-100 px-1.5 py-0.5 rounded hidden sm:inline-block">
               26-27-1729
@@ -1770,15 +1791,15 @@ export default function JobCardsPage() {
               type="text"
               value={barcodeInput}
               onChange={(e) => setBarcodeInput(e.target.value)}
-              placeholder="Scan QR or enter Job No (e.g. 1729)..."
+              placeholder="Scan QR or Job No..."
               className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white placeholder-slate-400 shadow-2xs"
             />
             <button
               type="submit"
-              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl transition-all cursor-pointer shadow-xs inline-flex items-center gap-1 shrink-0 active:scale-95"
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl transition-all cursor-pointer shadow-xs inline-flex items-center gap-1 shrink-0 active:scale-95"
             >
               <Zap className="w-3.5 h-3.5 fill-current text-amber-400" />
-              <span>Scan & Move</span>
+              <span>Move</span>
             </button>
           </form>
         </div>
@@ -1821,7 +1842,52 @@ export default function JobCardsPage() {
           </div>
         </div>
 
-        {/* Card 4: Total WIP Area */}
+        {/* Card 4: Overdue Job Cards (Interactive Metric) */}
+        <div
+          onClick={() => setStatusRadio(statusRadio === 'Overdue' ? 'All' : 'Overdue')}
+          className={`border rounded-2xl p-4 shadow-xs flex items-center gap-3 min-h-[96px] cursor-pointer transition-all ${
+            statusRadio === 'Overdue'
+              ? 'bg-rose-600 text-white border-rose-700 shadow-md ring-2 ring-rose-400'
+              : overdueCount > 0
+              ? 'bg-rose-50/90 border-rose-200 hover:bg-rose-100/90'
+              : 'bg-white border-slate-200 hover:border-slate-300'
+          }`}
+
+        >
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold shrink-0 ${
+            statusRadio === 'Overdue'
+              ? 'bg-white/20 text-white'
+              : overdueCount > 0
+              ? 'bg-rose-100 text-rose-700'
+              : 'bg-slate-100 text-slate-500'
+          }`}>
+            <AlertCircle className="w-5 h-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between">
+              <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                statusRadio === 'Overdue' ? 'text-rose-100' : overdueCount > 0 ? 'text-rose-900' : 'text-slate-500'
+              }`}>
+                OVERDUE JOB CARDS
+              </span>
+              {overdueCount > 0 && (
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping shrink-0" />
+              )}
+            </div>
+            <div className={`text-base sm:text-lg font-black font-mono mt-0.5 truncate ${
+              statusRadio === 'Overdue' ? 'text-white' : overdueCount > 0 ? 'text-rose-950' : 'text-slate-900'
+            }`}>
+              {overdueCount} Cards
+            </div>
+            <div className={`text-[11px] font-semibold truncate ${
+              statusRadio === 'Overdue' ? 'text-rose-100' : overdueCount > 0 ? 'text-rose-700' : 'text-slate-500'
+            }`}>
+              • {overduePcbCount} PCBs Past Target
+            </div>
+          </div>
+        </div>
+
+        {/* Card 5: Total WIP Area */}
         <div className="bg-white border border-purple-100 rounded-2xl p-4 shadow-xs flex items-center gap-3 min-h-[96px]">
           <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold shrink-0">
             <Split className="w-5 h-5" />
@@ -1910,6 +1976,23 @@ export default function JobCardsPage() {
             <span>COMPLETED</span>
             <span className="px-1.5 py-0.2 bg-slate-950/10 rounded font-mono text-[11px]">
               {jobCards.filter((j) => j.status === 'COMPLETED').length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setStatusRadio(statusRadio === 'Overdue' ? 'All' : 'Overdue')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border ${
+              statusRadio === 'Overdue'
+                ? 'bg-rose-600 text-white border-rose-700 shadow-xs font-black'
+                : overdueCount > 0
+                ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 font-extrabold'
+                : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+            }`}
+          >
+            <AlertCircle className="w-3.5 h-3.5" />
+            <span>OVERDUE</span>
+            <span className="px-1.5 py-0.2 bg-slate-950/10 rounded font-mono text-[11px]">
+              {overdueCount} ({overduePcbCount} PCBs)
             </span>
           </button>
 
@@ -2125,8 +2208,18 @@ export default function JobCardsPage() {
                       </td>
 
                       {/* Target */}
-                      <td className="py-2.5 px-3 border-r border-slate-200 font-mono text-[11px] text-slate-600 whitespace-nowrap">
-                        {formatDateDisplay(jc.targetDate)}
+                      <td className="py-2.5 px-3 border-r border-slate-200 font-mono text-[11px] whitespace-nowrap">
+                        <div className="flex flex-col">
+                          <span className={isCardOverdue(jc) ? 'text-rose-700 font-extrabold' : 'text-slate-600'}>
+                            {formatDateDisplay(jc.targetDate)}
+                          </span>
+                          {isCardOverdue(jc) && (
+                            <span className="px-1.5 py-0.2 bg-rose-100 text-rose-900 text-[9px] font-black rounded border border-rose-300 w-max mt-0.5 inline-flex items-center gap-1 shadow-2xs">
+                              <AlertCircle className="w-2.5 h-2.5 text-rose-600" />
+                              OVERDUE
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Priority */}
