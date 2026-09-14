@@ -822,7 +822,7 @@ export default function JobCardsPage() {
   // Movement Form
   const [fullMoveRemarkType, setFullMoveRemarkType] = useState('Process issue');
   const [fullMoveRemarks, setFullMoveRemarks] = useState('');
-  const [partialMoveQty, setPartialMoveQty] = useState<number>(35);
+  const [partialMoveQty, setPartialMoveQty] = useState<number | string>(35);
 
   // Barcode Lookup Trigger
   const handleBarcodeSubmit = (e: React.FormEvent) => {
@@ -841,6 +841,7 @@ export default function JobCardsPage() {
     if (matched) {
       runWithLoading(`Scanning QR/Barcode & Loading Job Card ${matched.jobCardNo}...`, () => {
         setSelectedMovementJob(matched);
+        setPartialMoveQty(Math.max(1, Math.floor(matched.prodPnlQty / 2)));
         setMovementTab('VIEW');
         setBarcodeInput('');
         showToast(`Scanned Job Card ${matched.jobCardNo} successfully`, 'info');
@@ -1080,18 +1081,20 @@ export default function JobCardsPage() {
       return;
     }
 
-    if (partialMoveQty <= 0 || partialMoveQty >= selectedMovementJob.prodPnlQty) {
+    const parsedMoveQty = typeof partialMoveQty === 'number' ? partialMoveQty : (parseInt(String(partialMoveQty), 10) || 0);
+
+    if (parsedMoveQty <= 0 || parsedMoveQty >= selectedMovementJob.prodPnlQty) {
       showToast(`Partial movement qty must be between 1 and ${selectedMovementJob.prodPnlQty - 1} PNL.`, 'error');
       return;
     }
 
     const nextIndex = selectedMovementJob.currentStageIndex + 1;
     const nextStage = PF01_STAGES[nextIndex];
-    const remainingBalance = selectedMovementJob.prodPnlQty - partialMoveQty;
+    const remainingBalance = selectedMovementJob.prodPnlQty - parsedMoveQty;
     const areaPerPnl = selectedMovementJob.prodPnlAreaSqm / selectedMovementJob.prodPnlQty;
     const effectiveReason = incompletePendingReason === 'Other / Custom Pending Reason' ? (incompleteCustomReason || 'Pending PNL Work') : incompletePendingReason;
 
-    runWithLoading(`Splitting ${partialMoveQty} PNL & Moving to ${nextStage}...`, async () => {
+    runWithLoading(`Splitting ${parsedMoveQty} PNL & Moving to ${nextStage}...`, async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
         await fetch(`http://localhost:3001/api/v1/job-cards/${selectedMovementJob.id}/move-partial`, {
@@ -1101,8 +1104,8 @@ export default function JobCardsPage() {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({
-            qtyToMove: partialMoveQty,
-            areaToMove: Number((partialMoveQty * areaPerPnl).toFixed(2)),
+            qtyToMove: parsedMoveQty,
+            areaToMove: Number((parsedMoveQty * areaPerPnl).toFixed(2)),
             pendingWorkReason: effectiveReason,
             remark: incompleteRemarks ? `${effectiveReason} • ${incompleteRemarks}` : `Incomplete Movement: ${effectiveReason}`,
             remarkType: 'INCOMPLETE_MOVEMENT',
@@ -1160,10 +1163,10 @@ export default function JobCardsPage() {
         ...selectedMovementJob,
         id: `jc-part-${Date.now()}-A`,
         jobCardNo: movedSubNo,
-        prodPnlQty: partialMoveQty,
-        custPnlQty: Math.round(partialMoveQty * pcbPerPnl),
-        totalPcbQty: Math.round(partialMoveQty * pcbPerPnl),
-        prodPnlAreaSqm: Number((partialMoveQty * areaPerPnl).toFixed(2)),
+        prodPnlQty: parsedMoveQty,
+        custPnlQty: Math.round(parsedMoveQty * pcbPerPnl),
+        totalPcbQty: Math.round(parsedMoveQty * pcbPerPnl),
+        prodPnlAreaSqm: Number((parsedMoveQty * areaPerPnl).toFixed(2)),
         currentStageIndex: nextIndex,
         currentStageName: nextStage,
       };
@@ -1186,7 +1189,7 @@ export default function JobCardsPage() {
       setSelectedMovementJob(null);
       setIncompleteRemarks('');
       showToast(
-        `Incomplete Movement logged: ${partialMoveQty} PNL moved to ${nextStage}, ${remainingBalance} PNL retained at ${selectedMovementJob.currentStageName} due to "${effectiveReason}"`,
+        `Incomplete Movement logged: ${parsedMoveQty} PNL moved to ${nextStage}, ${remainingBalance} PNL retained at ${selectedMovementJob.currentStageName} due to "${effectiveReason}"`,
         'success'
       );
     });
@@ -2880,7 +2883,8 @@ export default function JobCardsPage() {
                 {movementTab === 'PARTIAL' && (() => {
                   const masterPcb = selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || (selectedMovementJob.prodPnlQty * 2);
                   const pcbRatio = masterPcb / selectedMovementJob.prodPnlQty || 2;
-                  const validMoveQty = Math.min(Math.max(1, partialMoveQty), Math.max(1, selectedMovementJob.prodPnlQty - 1));
+                  const parsedMoveQty = typeof partialMoveQty === 'number' ? partialMoveQty : (parseInt(String(partialMoveQty), 10) || 0);
+                  const validMoveQty = Math.min(Math.max(1, parsedMoveQty), Math.max(1, selectedMovementJob.prodPnlQty - 1));
                   const movedPcb = Math.round(validMoveQty * pcbRatio);
                   const remPnl = Math.max(0, selectedMovementJob.prodPnlQty - validMoveQty);
                   const remPcb = Math.round(remPnl * pcbRatio);
@@ -2921,7 +2925,7 @@ export default function JobCardsPage() {
                           <div>
                             <div className="flex items-center justify-between mb-1">
                               <label className="block text-xs font-bold text-slate-700">
-                                Quantity Ready to Move Forward (PNL):
+                                Quantity Ready to Move Forward:
                               </label>
                               <span className="text-xs font-black text-indigo-700 font-mono bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
                                 = {movedPcb} PCBs
@@ -2932,12 +2936,20 @@ export default function JobCardsPage() {
                               min={1}
                               max={selectedMovementJob.prodPnlQty - 1}
                               value={partialMoveQty}
-                              onChange={(e) => setPartialMoveQty(Number(e.target.value))}
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                if (raw === '') {
+                                  setPartialMoveQty('');
+                                } else {
+                                  const parsed = parseInt(raw, 10);
+                                  setPartialMoveQty(isNaN(parsed) ? '' : parsed);
+                                }
+                              }}
                               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-900 focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
                             />
-                            {partialMoveQty >= selectedMovementJob.prodPnlQty && (
+                            {parsedMoveQty >= selectedMovementJob.prodPnlQty && (
                               <p className="text-[11px] text-rose-600 font-bold mt-1">
-                                ⚠ Quantity cannot exceed {selectedMovementJob.prodPnlQty - 1} PNL (Total Lot PNL: {selectedMovementJob.prodPnlQty}).
+                                ⚠ Quantity cannot exceed {selectedMovementJob.prodPnlQty - 1} PNL / {Math.round((selectedMovementJob.prodPnlQty - 1) * pcbRatio)} PCBs (Total Lot: {selectedMovementJob.prodPnlQty} PNL / {masterPcb} PCBs).
                               </p>
                             )}
                           </div>
@@ -2979,7 +2991,7 @@ export default function JobCardsPage() {
 
                           <div>
                             <label className="block text-xs font-bold text-slate-700 mb-1">
-                              Incomplete Movement Remarks / Work Notes:
+                              Work Notes / Incomplete Movement Remarks:
                             </label>
                             <textarea
                               rows={2}
