@@ -33,6 +33,7 @@ import {
   UserCheck,
   Zap,
   X,
+  Pencil,
   Check,
   Eye,
   Download,
@@ -70,6 +71,7 @@ interface SubJobCard {
   id: string;
   subJobCardNo: string;
   qty: number;
+  totalPcbQty?: number;
   status: string;
   qrCodeValue: string;
   currentStage?: { id: string; name: string } | null;
@@ -719,6 +721,8 @@ export default function JobCardsPage() {
     }, delayMs);
   };
 
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+
   // New Job Card Form (Full PDF 13 Fields & Pre-Launch Split Options)
   const [launchForm, setLaunchForm] = useState({
     jobCardNo: '26-27-1731',
@@ -727,6 +731,7 @@ export default function JobCardsPage() {
     rfePartCode: 'D3625',
     customerCode: 'CUST-RF045',
     targetDate: '2026-09-28',
+    launchDate: new Date().toISOString().split('T')[0],
     priority: 'MOST URGENT' as 'MOST URGENT' | 'HIGH' | 'NORMAL',
     prodPnlQty: 40,
     custPnlQty: 80,
@@ -737,8 +742,64 @@ export default function JobCardsPage() {
     autoLaunch: false,
     enablePreSplit: false,
     splitCount: 2,
-    customSplits: [{ subNo: '26-27-1731-1', qty: 20 }, { subNo: '26-27-1731-2', qty: 20 }],
+    customSplits: [{ subNo: '26-27-1731-1', qty: 80 }, { subNo: '26-27-1731-2', qty: 80 }],
   });
+
+  const handleOpenCreateModal = () => {
+    setEditingCardId(null);
+    const nextNo = `26-27-${Math.floor(1000 + Math.random() * 9000)}`;
+    const today = new Date().toISOString().split('T')[0];
+    const nextWeek = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+    setLaunchForm({
+      jobCardNo: nextNo,
+      photoUrl: '',
+      customerPartNo: 'EV-900W-WP-TO247-VORS-25082026',
+      rfePartCode: 'D3625',
+      customerCode: 'CUST-RF045',
+      targetDate: nextWeek,
+      launchDate: today,
+      priority: 'NORMAL',
+      prodPnlQty: 40,
+      custPnlQty: 80,
+      totalPcbQty: 160,
+      prodPnlAreaSqm: 50,
+      custPnlAreaSqm: 45,
+      jobFlowSelection: 'PF-01',
+      autoLaunch: false,
+      enablePreSplit: false,
+      splitCount: 2,
+      customSplits: [{ subNo: `${nextNo}-1`, qty: 80 }, { subNo: `${nextNo}-2`, qty: 80 }],
+    });
+    setShowGenerateModal(true);
+  };
+
+  const handleOpenEditModal = (card: JobCard) => {
+    setEditingCardId(card.id);
+    const launchDateStr = card.launchedAt ? card.launchedAt.split('T')[0] : new Date().toISOString().split('T')[0];
+    setLaunchForm({
+      jobCardNo: card.jobCardNo,
+      photoUrl: card.photoUrl || '',
+      customerPartNo: card.customerPartNo || '',
+      rfePartCode: card.rfePartCode || '',
+      customerCode: card.customerCode || '',
+      targetDate: card.targetDate || '',
+      launchDate: launchDateStr,
+      priority: card.priority || 'NORMAL',
+      prodPnlQty: card.prodPnlQty || 40,
+      custPnlQty: card.custPnlQty || 80,
+      totalPcbQty: card.totalPcbQty || 160,
+      prodPnlAreaSqm: card.prodPnlAreaSqm || 50,
+      custPnlAreaSqm: card.custPnlAreaSqm || 45,
+      jobFlowSelection: card.jobFlowSelection || 'PF-01',
+      autoLaunch: card.status === 'IN_PROGRESS',
+      enablePreSplit: false,
+      splitCount: card.subJobCards?.length || 1,
+      customSplits: card.subJobCards
+        ? card.subJobCards.map((s) => ({ subNo: s.subJobCardNo, qty: s.totalPcbQty || s.qty || 80 }))
+        : [{ subNo: `${card.jobCardNo}-1`, qty: card.totalPcbQty || 160 }],
+    });
+    setShowGenerateModal(true);
+  };
 
   // Sync state from backend API if available
   const fetchBackendJobCards = useCallback(async () => {
@@ -931,7 +992,8 @@ export default function JobCardsPage() {
     }
 
     const jcNo = launchForm.jobCardNo || `26-27-${Math.floor(1000 + Math.random() * 9000)}`;
-    const totalPnl = Number(launchForm.prodPnlQty) || 40;
+    const totalPcb = Number(launchForm.totalPcbQty) || 160;
+    const launchIsoDate = launchForm.launchDate ? new Date(launchForm.launchDate).toISOString() : new Date().toISOString();
 
     // Validate pre-splits if enabled
     let subJobCardsList: SubJobCard[] = [];
@@ -939,8 +1001,8 @@ export default function JobCardsPage() {
 
     if (launchForm.enablePreSplit && launchForm.customSplits.length > 0) {
       const splitSum = launchForm.customSplits.reduce((acc, curr) => acc + (Number(curr.qty) || 0), 0);
-      if (splitSum !== totalPnl) {
-        showToast(`Pre-split quantity sum (${splitSum} PNL) must equal Total Production PNL (${totalPnl} PNL).`, 'error');
+      if (splitSum !== totalPcb) {
+        showToast(`Pre-split quantity sum (${splitSum} PCBs) must equal Total PCB Qty (${totalPcb} PCBs).`, 'error');
         return;
       }
 
@@ -948,6 +1010,7 @@ export default function JobCardsPage() {
         id: `sub-${Date.now()}-${idx}`,
         subJobCardNo: item.subNo || `${jcNo}-${idx + 1}`,
         qty: Number(item.qty),
+        totalPcbQty: Number(item.qty),
         status: launchForm.autoLaunch ? 'IN_PROGRESS' : 'UNLAUNCHED',
         qrCodeValue: `${item.subNo || `${jcNo}-${idx + 1}`}`,
         currentStage: { id: `stg-${idx + 1}`, name: PF01_STAGES[0] },
@@ -959,13 +1022,63 @@ export default function JobCardsPage() {
         {
           id: `sub-${Date.now()}`,
           subJobCardNo: `${jcNo}-1`,
-          qty: totalPnl,
+          qty: totalPcb,
+          totalPcbQty: totalPcb,
           status: launchForm.autoLaunch ? 'IN_PROGRESS' : 'UNLAUNCHED',
           qrCodeValue: `${jcNo}-1`,
           currentStage: { id: 'stg-1', name: PF01_STAGES[0] },
         },
       ];
-      apiSplits = [totalPnl];
+      apiSplits = [totalPcb];
+    }
+
+    // Check if updating an existing card instead of creating duplicate
+    const existingIndex = jobCards.findIndex(
+      (j) => (editingCardId && j.id === editingCardId) || j.jobCardNo === jcNo
+    );
+
+    if (existingIndex !== -1) {
+      const existing = jobCards[existingIndex];
+      const updatedJobCard: JobCard = {
+        ...existing,
+        jobCardNo: jcNo,
+        photoUrl: launchForm.photoUrl,
+        customerPartNo: launchForm.customerPartNo,
+        rfePartCode: launchForm.rfePartCode,
+        customerCode: launchForm.customerCode,
+        targetDate: launchForm.targetDate,
+        launchedAt: launchIsoDate,
+        priority: launchForm.priority,
+        totalPcbQty: totalPcb,
+        custPnlQty: totalPcb,
+        prodPnlQty: Math.ceil(totalPcb / 4),
+        custPnlAreaSqm: Number(launchForm.custPnlAreaSqm) || 45,
+        prodPnlAreaSqm: Number(Number(launchForm.custPnlAreaSqm || 45) * 1.1) || 50,
+        jobFlowSelection: launchForm.jobFlowSelection,
+        status: launchForm.autoLaunch ? 'IN_PROGRESS' : existing.status,
+        subJobCards: subJobCardsList,
+      };
+
+      runWithLoading(`Updating Job Card ${jcNo}...`, async () => {
+        try {
+          await fetch(`http://localhost:3001/api/v1/job-cards/${existing.id}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+            },
+            body: JSON.stringify(updatedJobCard),
+          });
+        } catch (err) {
+          // offline fallback
+        }
+
+        setJobCards((prev) => prev.map((j, idx) => (idx === existingIndex ? updatedJobCard : j)));
+        showToast(`Job Card ${jcNo} updated successfully!`, 'success');
+        setShowGenerateModal(false);
+        setEditingCardId(null);
+      });
+      return;
     }
 
     runWithLoading('Creating New Job Card & Generating Barcode Tag...', async () => {
@@ -978,22 +1091,22 @@ export default function JobCardsPage() {
         customerCode: launchForm.customerCode,
         targetDate: launchForm.targetDate,
         priority: launchForm.priority,
-        prodPnlQty: totalPnl,
-        custPnlQty: Number(launchForm.custPnlQty) || totalPnl * 2,
-        totalPcbQty: Number(launchForm.totalPcbQty) || totalPnl * 4,
-        prodPnlAreaSqm: Number(launchForm.prodPnlAreaSqm) || 50,
+        prodPnlQty: Math.ceil(totalPcb / 4),
+        custPnlQty: totalPcb,
+        totalPcbQty: totalPcb,
+        prodPnlAreaSqm: Number(Number(launchForm.custPnlAreaSqm || 45) * 1.1) || 50,
         custPnlAreaSqm: Number(launchForm.custPnlAreaSqm) || 45,
         jobFlowSelection: launchForm.jobFlowSelection,
         currentStageIndex: 0,
         currentStageName: PF01_STAGES[0],
-        totalQty: totalPnl,
+        totalQty: totalPcb,
         status: launchForm.autoLaunch ? 'IN_PROGRESS' : 'UNLAUNCHED',
-        launchedAt: launchForm.autoLaunch ? new Date().toISOString() : null,
+        launchedAt: launchIsoDate,
         qrCodeValue: `${jcNo}-PARENT`,
         createdAt: new Date().toISOString(),
         customerPO: {
           poNo: `PO-${launchForm.customerCode}`,
-          orderQty: totalPnl,
+          orderQty: totalPcb,
           customer: { companyName: launchForm.customerCode },
         },
         product: {
@@ -1023,10 +1136,11 @@ export default function JobCardsPage() {
             rfePartCode: launchForm.rfePartCode,
             customerCode: launchForm.customerCode,
             targetDate: launchForm.targetDate,
+            launchedAt: launchIsoDate,
             priority: launchForm.priority,
-            prodPnlQty: totalPnl,
-            custPnlQty: launchForm.custPnlQty,
-            totalPcbQty: launchForm.totalPcbQty,
+            prodPnlQty: Math.ceil(totalPcb / 4),
+            custPnlQty: totalPcb,
+            totalPcbQty: totalPcb,
             prodPnlAreaSqm: launchForm.prodPnlAreaSqm,
             custPnlAreaSqm: launchForm.custPnlAreaSqm,
             jobFlowSelection: launchForm.jobFlowSelection,
@@ -1042,6 +1156,7 @@ export default function JobCardsPage() {
       setStatusRadio('All');
       setShowGenerateModal(false);
       setShowQrModal(newJobCard);
+      setEditingCardId(null);
 
       showToast(
         `Job Card ${newJobCard.jobCardNo} created with ${subJobCardsList.length} sub-lot(s)! ${
@@ -1574,7 +1689,7 @@ export default function JobCardsPage() {
 
           {/* Add New Job Card Button */}
           <button
-            onClick={() => setShowGenerateModal(true)}
+            onClick={() => handleOpenCreateModal()}
             className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-md hover:shadow-lg transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-amber-600"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
@@ -1953,7 +2068,7 @@ export default function JobCardsPage() {
 
                       {/* Launch */}
                       <td className="py-2.5 px-3 border-r border-slate-200 font-mono text-[11px] text-slate-600 whitespace-nowrap">
-                        31-Aug-26
+                        {formatDateDisplay(jc.launchedAt || jc.createdAt)}
                       </td>
 
                       {/* Target */}
@@ -1986,7 +2101,7 @@ export default function JobCardsPage() {
 
                       {/* Area */}
                       <td className="py-2.5 px-3 border-r border-slate-200 font-mono text-right font-bold text-emerald-700 whitespace-nowrap">
-                        {jc.prodPnlAreaSqm ? jc.prodPnlAreaSqm.toFixed(2) : '50.00'}
+                        {jc.custPnlAreaSqm ? jc.custPnlAreaSqm.toFixed(2) : (jc.prodPnlAreaSqm ? jc.prodPnlAreaSqm.toFixed(2) : '45.00')}
                       </td>
 
                       {/* Stage */}
@@ -2040,7 +2155,7 @@ export default function JobCardsPage() {
                           <button
                             onClick={() => {
                               setSelectedMovementJob(jc);
-                              setPartialMoveQty(Math.max(1, Math.floor(jc.prodPnlQty / 2)));
+                              setPartialMoveQty(Math.max(1, Math.floor((jc.totalPcbQty || 160) / 2)));
                               setMovementTab('VIEW');
                             }}
                             title="Open Stage Movement Confirmation & Options"
@@ -2048,6 +2163,14 @@ export default function JobCardsPage() {
                           >
                             <RefreshCw className="w-3 h-3 stroke-[3]" />
                             <span>Move Stage ➔</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleOpenEditModal(jc)}
+                            title="Edit Job Card Parameters"
+                            className="h-7 w-7 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg inline-flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
                           </button>
 
                           {isSuperAdmin && (
@@ -2121,8 +2244,12 @@ export default function JobCardsPage() {
                   <Plus className="w-5 h-5 stroke-[3]" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-slate-900 text-base">New Job Card Creation & Launch</h3>
-                  <p className="text-xs text-slate-500">Fill job parameters to generate QR code & launch into production</p>
+                  <h3 className="font-extrabold text-slate-900 text-base">
+                    {editingCardId ? `Edit Job Card Parameters (${launchForm.jobCardNo})` : 'New Job Card Creation & Launch'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {editingCardId ? 'Modify PCB parameters and update existing job card record' : 'Fill job parameters to generate QR code & launch into production'}
+                  </p>
                 </div>
               </div>
               <button onClick={() => setShowGenerateModal(false)} className="text-slate-400 hover:text-slate-700 text-base font-bold p-1 rounded-lg hover:bg-slate-100 cursor-pointer">✕</button>
@@ -2210,8 +2337,8 @@ export default function JobCardsPage() {
                 </div>
               </div>
 
-              {/* Row 1: Job Card No & Target Date */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Row 1: Job Card No, Launch Date & Target Date */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Job Card No. *</label>
                   <input
@@ -2225,13 +2352,24 @@ export default function JobCardsPage() {
                 </div>
 
                 <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Launch Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={launchForm.launchDate}
+                    onChange={(e) => setLaunchForm({ ...launchForm, launchDate: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 font-mono"
+                  />
+                </div>
+
+                <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Target Delivery Date *</label>
                   <input
                     type="date"
                     required
                     value={launchForm.targetDate}
                     onChange={(e) => setLaunchForm({ ...launchForm, targetDate: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 font-mono"
                   />
                 </div>
               </div>

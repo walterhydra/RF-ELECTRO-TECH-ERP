@@ -292,12 +292,14 @@ export default function JobMovementUpdatePage() {
       return;
     }
 
-    if (partialQty <= 0 || partialQty >= selectedJob.prodPnlQty) {
-      showToastMsg(`Partial quantity must be between 1 and ${selectedJob.prodPnlQty - 1} PNL`);
+    const maxPcbQty = selectedJob.totalPcbQty || (selectedJob.custPnlQty || (selectedJob.prodPnlQty * 2)) || 160;
+    if (partialQty <= 0 || partialQty >= maxPcbQty) {
+      showToastMsg(`Partial quantity must be between 1 and ${maxPcbQty - 1} PCBs`);
       return;
     }
 
-    const sqmMoved = Number(((partialQty * selectedJob.prodPnlAreaSqm) / selectedJob.prodPnlQty).toFixed(2));
+    const totalArea = selectedJob.custPnlAreaSqm || selectedJob.prodPnlAreaSqm || 45;
+    const sqmMoved = Number(((partialQty * totalArea) / maxPcbQty).toFixed(2));
     const effectiveReason = pendingWorkReason === 'Other / Custom Pending Reason' ? (customPendingReason || 'Pending PNL Work') : pendingWorkReason;
 
     try {
