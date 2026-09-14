@@ -78,6 +78,14 @@ interface SubJobCard {
   currentStage?: { id: string; name: string } | null;
 }
 
+interface RejectionLog {
+  stageName: string;
+  rejectedPcbQty: number;
+  rejectedAreaSqm: number;
+  remark: string;
+  timestamp: string;
+}
+
 interface JobCard {
   id: string;
   jobCardNo: string;
@@ -118,6 +126,9 @@ interface JobCard {
   };
   subJobCards: SubJobCard[];
   isNewlyCreated?: boolean;
+  rejectedPcbQty?: number;
+  rejectedAreaSqm?: number;
+  rejectionLogs?: RejectionLog[];
 }
 
 interface OpenPO {
@@ -1230,6 +1241,7 @@ export default function JobCardsPage() {
     const movedPcb = currentPcb - rejectPcb;
     const unitArea = currentPcb > 0 ? currentArea / currentPcb : 0.2;
     const movedArea = Number((movedPcb * unitArea).toFixed(2));
+    const rejectArea = Number((rejectPcb * unitArea).toFixed(2));
 
     const nextIndex = selectedMovementJob.currentStageIndex + 1;
     if (nextIndex >= PF01_STAGES.length) {
@@ -1238,6 +1250,19 @@ export default function JobCardsPage() {
     }
 
     const nextStage = PF01_STAGES[nextIndex];
+
+    const updatedRejectedPcbQty = (selectedMovementJob.rejectedPcbQty || 0) + rejectPcb;
+    const updatedRejectedAreaSqm = Number(((selectedMovementJob.rejectedAreaSqm || 0) + rejectArea).toFixed(2));
+    const newRejectionLogs: RejectionLog[] = rejectPcb > 0 ? [
+      ...(selectedMovementJob.rejectionLogs || []),
+      {
+        stageName: selectedMovementJob.currentStageName,
+        rejectedPcbQty: rejectPcb,
+        rejectedAreaSqm: rejectArea,
+        remark: fullMoveRemarks.trim() || 'Rejected during stage movement',
+        timestamp: new Date().toISOString(),
+      }
+    ] : (selectedMovementJob.rejectionLogs || []);
 
     runWithLoading(`Moving Job ${selectedMovementJob.jobCardNo} to ${nextStage}...`, () => {
       const updated: JobCard = {
@@ -1249,6 +1274,9 @@ export default function JobCardsPage() {
         prodPnlQty: Math.ceil(movedPcb / 4),
         custPnlAreaSqm: movedArea,
         prodPnlAreaSqm: movedArea,
+        rejectedPcbQty: updatedRejectedPcbQty,
+        rejectedAreaSqm: updatedRejectedAreaSqm,
+        rejectionLogs: newRejectionLogs,
         status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
         isNewlyCreated: false,
       };
@@ -1262,6 +1290,10 @@ export default function JobCardsPage() {
           const target = otherItems[existingNextIdx];
           const mergedQty = (target.totalPcbQty || 0) + movedPcb;
           const mergedArea = Number(((target.custPnlAreaSqm || 0) + movedArea).toFixed(2));
+          const mergedRejectedPcb = (target.rejectedPcbQty || 0) + updatedRejectedPcbQty;
+          const mergedRejectedArea = Number(((target.rejectedAreaSqm || 0) + updatedRejectedAreaSqm).toFixed(2));
+          const mergedLogs = [...(target.rejectionLogs || []), ...(rejectPcb > 0 ? newRejectionLogs : [])];
+
           return otherItems.map((j, idx) =>
             idx === existingNextIdx
               ? {
@@ -1271,6 +1303,9 @@ export default function JobCardsPage() {
                   prodPnlQty: Math.ceil(mergedQty / 4),
                   custPnlAreaSqm: mergedArea,
                   prodPnlAreaSqm: mergedArea,
+                  rejectedPcbQty: mergedRejectedPcb,
+                  rejectedAreaSqm: mergedRejectedArea,
+                  rejectionLogs: mergedLogs,
                 }
               : j
           );
@@ -1706,6 +1741,44 @@ export default function JobCardsPage() {
     [overdueCards]
   );
 
+  // Top 3 WIP Stages by active Sqm Area
+  const top3WipStages = React.useMemo(() => {
+    const activeCards = jobCards.filter((j) => j.status !== 'COMPLETED');
+    const totalFloorSqm = activeCards.reduce((sum, j) => sum + (j.custPnlAreaSqm || j.prodPnlAreaSqm || 0), 0);
+
+    const stageMap: Record<string, { stageName: string; areaSqm: number; pcbQty: number; cardCount: number }> = {};
+
+    activeCards.forEach((jc) => {
+      const stage = jc.currentStageName || PF01_STAGES[0];
+      const sqm = jc.custPnlAreaSqm || jc.prodPnlAreaSqm || 0;
+      const pcbs = jc.totalPcbQty || jc.custPnlQty || 0;
+
+      if (!stageMap[stage]) {
+        stageMap[stage] = { stageName: stage, areaSqm: 0, pcbQty: 0, cardCount: 0 };
+      }
+      stageMap[stage].areaSqm += sqm;
+      stageMap[stage].pcbQty += pcbs;
+      stageMap[stage].cardCount += 1;
+    });
+
+    return Object.values(stageMap)
+      .sort((a, b) => b.areaSqm - a.areaSqm)
+      .slice(0, 3)
+      .map((item) => ({
+        ...item,
+        areaSqm: Number(item.areaSqm.toFixed(2)),
+        percentage: totalFloorSqm > 0 ? Math.round((item.areaSqm / totalFloorSqm) * 100) : 0,
+      }));
+  }, [jobCards]);
+
+  // Top 5 High Rejection Job Cards (Tracked live upon stage movement entry)
+  const top5RejectedCards = React.useMemo(() => {
+    return jobCards
+      .filter((j) => (j.rejectedPcbQty || 0) > 0)
+      .sort((a, b) => (b.rejectedPcbQty || 0) - (a.rejectedPcbQty || 0))
+      .slice(0, 5);
+  }, [jobCards]);
+
   const getStatusBadge = (status?: string) => {
     switch (status) {
       case 'DONE':
@@ -1959,6 +2032,146 @@ export default function JobCardsPage() {
             <div className="text-[11px] text-purple-700 font-semibold truncate">
               • {activeSqmArea.toFixed(1)} Sqm Active Floor
             </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* 2.5 ANALYTICS & LIVE MOVEMENT WIDGETS SECTION */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-stretch">
+        
+        {/* LEFT: Top 3 WIP Stages by SQM Area (5 Columns) */}
+        <div className="lg:col-span-5 bg-white border border-purple-200/80 rounded-2xl p-4 shadow-xs space-y-3 flex flex-col justify-between">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
+                <BarChart3 className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-xs font-black uppercase text-slate-900 tracking-wider">
+                  TOP 3 WIP STAGES (BY AREA)
+                </h3>
+                <p className="text-[10px] text-slate-500 font-medium">Highest active Sqm volume in production flow</p>
+              </div>
+            </div>
+            <span className="text-[10px] font-extrabold font-mono text-purple-700 bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-200">
+              {top3WipStages.reduce((acc, curr) => acc + curr.areaSqm, 0).toFixed(1)} Sqm Total
+            </span>
+          </div>
+
+          {/* Stage Progress Items */}
+          <div className="space-y-2.5 flex-1 justify-center flex flex-col">
+            {top3WipStages.length > 0 ? (
+              top3WipStages.map((stg, idx) => {
+                const rankColors = [
+                  'bg-amber-500 text-slate-950 border-amber-600',
+                  'bg-slate-300 text-slate-900 border-slate-400',
+                  'bg-amber-700 text-white border-amber-800',
+                ];
+                const barColors = ['bg-purple-600', 'bg-blue-600', 'bg-emerald-600'];
+
+                return (
+                  <div key={stg.stageName} className="space-y-1 bg-slate-50/80 p-2.5 rounded-xl border border-slate-200/80">
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`w-5 h-5 rounded-lg text-[10px] font-black flex items-center justify-center border shrink-0 ${rankColors[idx] || 'bg-slate-200'}`}>
+                          #{idx + 1}
+                        </span>
+                        <span className="font-bold text-slate-900 font-mono text-xs truncate">
+                          {stg.stageName}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 font-mono text-xs shrink-0">
+                        <span className="font-black text-slate-900">{stg.areaSqm} Sqm</span>
+                        <span className="text-[10px] text-slate-500">({stg.pcbQty} PCBs)</span>
+                      </div>
+                    </div>
+                    <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden flex">
+                      <div
+                        className={`h-full ${barColors[idx] || 'bg-purple-600'} transition-all duration-500 rounded-full`}
+                        style={{ width: `${Math.max(5, stg.percentage)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="text-center py-4 text-xs text-slate-400 font-medium">
+                No active WIP stages currently running
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT: Top 5 Rejection Job Cards (Live Movement Entries) (7 Columns) */}
+        <div className="lg:col-span-7 bg-white border border-rose-200/80 rounded-2xl p-4 shadow-xs space-y-3 flex flex-col justify-between">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold">
+                <ShieldAlert className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xs font-black uppercase text-slate-900 tracking-wider">
+                    TOP 5 REJECTION JOB CARDS
+                  </h3>
+                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                </div>
+                <p className="text-[10px] text-slate-500 font-medium">Tracked live when operators enter rejections during stage movement</p>
+              </div>
+            </div>
+            <span className="text-[10px] font-extrabold font-mono text-rose-700 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-200">
+              {top5RejectedCards.reduce((acc, curr) => acc + (curr.rejectedPcbQty || 0), 0)} Total Rejections
+            </span>
+          </div>
+
+          {/* Rejection List */}
+          <div className="space-y-2 flex-1">
+            {top5RejectedCards.length > 0 ? (
+              top5RejectedCards.map((jc, idx) => {
+                const lastLog = jc.rejectionLogs?.[jc.rejectionLogs.length - 1];
+                return (
+                  <div
+                    key={jc.id}
+                    className="flex items-center justify-between gap-3 bg-rose-50/50 hover:bg-rose-50 border border-rose-200/80 p-2.5 rounded-xl transition-all"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <span className="w-5 h-5 rounded-lg bg-rose-600 text-white font-black text-[10px] flex items-center justify-center shrink-0">
+                        #{idx + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-black text-xs text-slate-950 bg-rose-200/80 px-2 py-0.5 rounded border border-rose-300">
+                            {jc.jobCardNo}
+                          </span>
+                          <span className="text-[11px] font-bold text-slate-700 truncate">{jc.customerCode}</span>
+                          <span className="text-[10px] text-slate-500 truncate hidden sm:inline-block">({jc.customerPartNo})</span>
+                        </div>
+                        {lastLog && (
+                          <p className="text-[10px] text-rose-800 font-semibold truncate mt-0.5">
+                            ⚠️ Stage: <span className="font-mono">{lastLog.stageName}</span> — "{lastLog.remark}"
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0 font-mono">
+                      <div className="text-xs font-black text-rose-700 bg-white px-2 py-0.5 rounded border border-rose-200">
+                        {jc.rejectedPcbQty} PCBs
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-bold mt-0.5">
+                        {jc.rejectedAreaSqm || 0} Sqm
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3 text-center text-xs text-emerald-800 font-bold flex items-center justify-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>No Rejections Logged Yet across active job cards. Live movement entries will appear here instantly.</span>
+              </div>
+            )}
           </div>
         </div>
 
