@@ -121,15 +121,11 @@ export class JobCardsService {
     // Auto-correct sub-job card PCB quantities & clean sub-card numbers
     for (const jc of jobCards) {
       if (jc.subJobCards && jc.subJobCards.length > 0) {
-        const masterPnlQty = jc.prodPnlQty || jc.totalQty || 40;
-        const masterPcbQty = jc.totalPcbQty || (masterPnlQty * 2);
-        const pcbPerPnl = masterPcbQty / masterPnlQty || 2;
-
+        const masterPcbQty = jc.totalPcbQty || jc.custPnlQty || (jc.prodPnlQty ? jc.prodPnlQty * 4 : 160);
         const usedLetters = new Set<string>();
 
         for (const sub of jc.subJobCards) {
-          const subPnlQty = sub.prodPnlQty ?? sub.qty ?? masterPnlQty;
-          const expectedPcbQty = Math.round(subPnlQty * pcbPerPnl);
+          const subPcbQty = sub.totalPcbQty || sub.qty || masterPcbQty;
 
           // Clean subJobCardNo if it has nested hyphens e.g. 26-27-1590-A-A -> 26-27-1590-A
           let cleanNo = sub.subJobCardNo;
@@ -152,12 +148,21 @@ export class JobCardsService {
             usedLetters.add(lastSeg);
           }
 
-          if (sub.totalPcbQty !== expectedPcbQty || sub.subJobCardNo !== cleanNo) {
-            sub.totalPcbQty = expectedPcbQty;
+          if (sub.totalPcbQty !== subPcbQty || sub.qty !== subPcbQty || sub.subJobCardNo !== cleanNo) {
+            sub.totalPcbQty = subPcbQty;
+            sub.qty = subPcbQty;
+            sub.custPnlQty = subPcbQty;
+            sub.prodPnlQty = Math.ceil(subPcbQty / 4);
             sub.subJobCardNo = cleanNo;
             this.prisma.subJobCard.update({
               where: { id: sub.id },
-              data: { totalPcbQty: expectedPcbQty, subJobCardNo: cleanNo },
+              data: {
+                totalPcbQty: subPcbQty,
+                qty: subPcbQty,
+                custPnlQty: subPcbQty,
+                prodPnlQty: Math.ceil(subPcbQty / 4),
+                subJobCardNo: cleanNo,
+              },
             }).catch(() => {});
           }
         }
@@ -827,9 +832,11 @@ export class JobCardsService {
     this.validateUserStagePermission(user, subCard.currentStage);
 
     const qtyToMove = Number(body.qtyToMove);
-    if (isNaN(qtyToMove) || qtyToMove <= 0 || qtyToMove >= subCard.qty) {
+    const masterPcbQty = subCard.totalPcbQty || subCard.qty || 160;
+
+    if (isNaN(qtyToMove) || qtyToMove <= 0 || qtyToMove >= masterPcbQty) {
       throw new BadRequestException(
-        `Quantity to move (${qtyToMove}) must be greater than 0 and less than remaining lot quantity (${subCard.qty})`,
+        `Quantity to move (${qtyToMove} PCBs) must be greater than 0 and less than remaining lot quantity (${masterPcbQty} PCBs)`,
       );
     }
 
@@ -842,13 +849,13 @@ export class JobCardsService {
       throw new BadRequestException('Job is already at the final stage and cannot move further');
     }
 
-    const currentTotalArea = subCard.prodPnlAreaSqm || 0;
+    const currentTotalArea = subCard.custPnlAreaSqm || subCard.prodPnlAreaSqm || 0;
     const areaToMove = body.areaToMove
       ? Number(body.areaToMove)
       : currentTotalArea > 0
-        ? Number(((currentTotalArea * qtyToMove) / subCard.qty).toFixed(2))
+        ? Number(((currentTotalArea * qtyToMove) / masterPcbQty).toFixed(2))
         : 0;
-    const remainingQty = subCard.qty - qtyToMove;
+    const remainingQty = masterPcbQty - qtyToMove;
     const remainingArea = Number(Math.max(0, currentTotalArea - areaToMove).toFixed(2));
 
     const userId = user?.id || user?.sub || user?.userId || subCard.createdById;
@@ -859,14 +866,14 @@ export class JobCardsService {
         data: {
           subJobCardId: subCard.id,
           stageId: subCard.currentStageId || steps[0]?.stageId || '',
-          qtyReceived: subCard.qty,
-          qtyProcessed: subCard.qty,
+          qtyReceived: masterPcbQty,
+          qtyProcessed: masterPcbQty,
           qtyForwarded: qtyToMove,
           qtyRejected: 0,
           qtyHold: 0,
           rejectionReason: body.pendingWorkReason || null,
           remarkType: body.remarkType || 'INCOMPLETE_MOVEMENT',
-          remarks: body.remark || `Uncompleted / Partial Job Movement: ${qtyToMove} PNL moved to next stage (${remainingQty} PNL retained)`,
+          remarks: body.remark || `Uncompleted / Partial Job Movement: ${qtyToMove} PCBs moved to next stage (${remainingQty} PCBs retained)`,
           createdById: userId,
         },
       });
@@ -922,8 +929,11 @@ export class JobCardsService {
         data: {
           subJobCardNo: updatedRemainingNo,
           qty: remainingQty,
-          prodPnlQty: remainingQty,
+          totalPcbQty: remainingQty,
+          custPnlQty: remainingQty,
+          prodPnlQty: Math.ceil(remainingQty / 4),
           prodPnlAreaSqm: remainingArea,
+          custPnlAreaSqm: remainingArea,
         },
       });
 
@@ -935,11 +945,11 @@ export class JobCardsService {
           parentSubJobCardId: subCard.id,
           currentStageId: nextStep.stageId,
           qty: qtyToMove,
-          prodPnlQty: qtyToMove,
+          totalPcbQty: qtyToMove,
+          custPnlQty: qtyToMove,
+          prodPnlQty: Math.ceil(qtyToMove / 4),
           prodPnlAreaSqm: areaToMove,
-          custPnlAreaSqm: subCard.custPnlAreaSqm
-            ? Number(((subCard.custPnlAreaSqm * qtyToMove) / subCard.qty).toFixed(2))
-            : null,
+          custPnlAreaSqm: areaToMove,
           status: SubJobCardStatus.IN_STAGE,
           qrCodeValue: `RFE-SJC-${newSubCardNo}-${Date.now().toString().slice(-4)}`,
           createdById: userId,

@@ -148,7 +148,7 @@ export default function StageUpdatePage() {
     setSuccess(null);
 
     try {
-      const effectivePendingReason = pendingWorkReason === 'Other / Custom Pending Reason' ? (customPendingReason || 'Pending PNL Work') : pendingWorkReason;
+      const effectivePendingReason = pendingWorkReason === 'Other / Custom Pending Reason' ? (customPendingReason || 'Pending PCB Work') : pendingWorkReason;
       const isIncomplete = qtyForwarded < qtyReceived;
       const clientRequestId = `mobile-${id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 

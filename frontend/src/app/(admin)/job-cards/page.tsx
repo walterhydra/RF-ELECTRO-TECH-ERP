@@ -818,17 +818,13 @@ export default function JobCardsPage() {
             setJobCards([]);
           } else {
             const mapped: JobCard[] = data.flatMap((j: any) => {
-              const masterPnlQty = j.prodPnlQty || j.totalQty || 40;
-              const masterPcbQty = j.totalPcbQty || (masterPnlQty * 2) || 80;
-              const pcbPerPnl = masterPcbQty / masterPnlQty || 2;
-              const masterAreaSqm = j.prodPnlAreaSqm || 50;
-              const areaPerPnl = masterAreaSqm / masterPnlQty;
+              const masterPcbQty = j.totalPcbQty || j.custPnlQty || (j.prodPnlQty ? j.prodPnlQty * 4 : 160);
+              const masterAreaSqm = j.custPnlAreaSqm || j.prodPnlAreaSqm || 45;
 
               if (j.subJobCards && j.subJobCards.length > 0) {
                 return j.subJobCards.map((sub: any) => {
-                  const subPnlQty = sub.prodPnlQty ?? sub.qty ?? masterPnlQty;
-                  const subPcbQty = (sub.totalPcbQty && subPnlQty < masterPnlQty) ? sub.totalPcbQty : Math.round(subPnlQty * pcbPerPnl);
-                  const subAreaSqm = sub.prodPnlAreaSqm || Number((subPnlQty * areaPerPnl).toFixed(2));
+                  const subPcbQty = sub.totalPcbQty || sub.qty || masterPcbQty;
+                  const subAreaSqm = sub.custPnlAreaSqm || sub.prodPnlAreaSqm || masterAreaSqm;
                   const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
                   const stageIdx = PF01_STAGES.findIndex(
                     (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
@@ -843,7 +839,7 @@ export default function JobCardsPage() {
                     customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
                     targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
                     priority: j.priority || 'NORMAL',
-                    prodPnlQty: subPnlQty,
+                    prodPnlQty: Math.ceil(subPcbQty / 4),
                     custPnlQty: subPcbQty,
                     totalPcbQty: subPcbQty,
                     prodPnlAreaSqm: subAreaSqm,
@@ -853,7 +849,7 @@ export default function JobCardsPage() {
                     currentStageName: stageIdx >= 0 ? PF01_STAGES[stageIdx] : rawStage,
                     customerPoId: j.customerPoId,
                     productId: j.productId,
-                    totalQty: subPnlQty,
+                    totalQty: subPcbQty,
                     status: sub.status === 'CREATED' ? 'UNLAUNCHED' : sub.status || j.status,
                     qrCodeValue: sub.qrCodeValue || sub.subJobCardNo,
                     launchedAt: j.launchedAt,
@@ -880,17 +876,17 @@ export default function JobCardsPage() {
                 customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
                 targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
                 priority: j.priority || 'NORMAL',
-                prodPnlQty: masterPnlQty,
+                prodPnlQty: Math.ceil(masterPcbQty / 4),
                 custPnlQty: masterPcbQty,
                 totalPcbQty: masterPcbQty,
                 prodPnlAreaSqm: masterAreaSqm,
-                custPnlAreaSqm: j.custPnlAreaSqm || 45,
+                custPnlAreaSqm: masterAreaSqm,
                 jobFlowSelection: j.processFlowMaster?.name || 'PF-01',
                 currentStageIndex: stageIdx >= 0 ? stageIdx : 0,
                 currentStageName: stageIdx >= 0 ? PF01_STAGES[stageIdx] : rawStage,
                 customerPoId: j.customerPoId,
                 productId: j.productId,
-                totalQty: masterPnlQty,
+                totalQty: masterPcbQty,
                 status: j.status === 'CREATED' ? 'UNLAUNCHED' : j.status,
                 qrCodeValue: j.qrCodeValue || `${j.jobCardNo}-PARENT`,
                 launchedAt: j.launchedAt,
@@ -936,7 +932,7 @@ export default function JobCardsPage() {
     if (matched) {
       runWithLoading(`Scanning QR/Barcode & Loading Job Card ${matched.jobCardNo}...`, () => {
         setSelectedMovementJob(matched);
-        setPartialMoveQty(Math.max(1, Math.floor(matched.prodPnlQty / 2)));
+        setPartialMoveQty(Math.max(1, Math.floor((matched.totalPcbQty || 160) / 2)));
         setMovementTab('VIEW');
         setBarcodeInput('');
         showToast(`Scanned Job Card ${matched.jobCardNo} successfully`, 'info');
@@ -1194,7 +1190,7 @@ export default function JobCardsPage() {
       setJobCards((prev) => prev.map((j) => (j.id === selectedMovementJob.id ? updated : j)));
       setSelectedMovementJob(null);
       setFullMoveRemarks('');
-      showToast(`Full Lot (${selectedMovementJob.prodPnlQty} PNL) of ${selectedMovementJob.jobCardNo} moved to ${nextStage}`, 'success');
+      showToast(`Full Lot (${selectedMovementJob.totalPcbQty || 160} PCBs) of ${selectedMovementJob.jobCardNo} moved to ${nextStage}`, 'success');
     });
   };
 
@@ -1230,20 +1226,27 @@ export default function JobCardsPage() {
       return;
     }
 
+    const masterPcb = selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || Math.round((selectedMovementJob.prodPnlQty || 0) * 2) || 160;
     const parsedMoveQty = typeof partialMoveQty === 'number' ? partialMoveQty : (parseInt(String(partialMoveQty), 10) || 0);
 
-    if (parsedMoveQty <= 0 || parsedMoveQty >= selectedMovementJob.prodPnlQty) {
-      showToast(`Partial movement qty must be between 1 and ${selectedMovementJob.prodPnlQty - 1} PNL.`, 'error');
+    if (parsedMoveQty <= 0 || parsedMoveQty >= masterPcb) {
+      showToast(`Partial movement qty must be between 1 and ${masterPcb - 1} PCBs.`, 'error');
       return;
     }
 
     const nextIndex = selectedMovementJob.currentStageIndex + 1;
+    if (nextIndex >= PF01_STAGES.length) {
+      showToast('Job has reached the final PACKING stage!', 'info');
+      return;
+    }
     const nextStage = PF01_STAGES[nextIndex];
-    const remainingBalance = selectedMovementJob.prodPnlQty - parsedMoveQty;
-    const areaPerPnl = selectedMovementJob.prodPnlAreaSqm / selectedMovementJob.prodPnlQty;
-    const effectiveReason = incompletePendingReason === 'Other / Custom Pending Reason' ? (incompleteCustomReason || 'Pending PNL Work') : incompletePendingReason;
+    const remainingPcb = masterPcb - parsedMoveQty;
+    const totalArea = selectedMovementJob.custPnlAreaSqm || selectedMovementJob.prodPnlAreaSqm || 45;
+    const movedArea = Number(((parsedMoveQty * totalArea) / masterPcb).toFixed(2));
+    const remArea = Number(((remainingPcb * totalArea) / masterPcb).toFixed(2));
+    const effectiveReason = incompletePendingReason === 'Other / Custom Pending Reason' ? (incompleteCustomReason || 'Pending PCB Work') : incompletePendingReason;
 
-    runWithLoading(`Splitting ${parsedMoveQty} PNL & Moving to ${nextStage}...`, async () => {
+    runWithLoading(`Splitting ${parsedMoveQty} PCBs & Moving to ${nextStage}...`, async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
         await fetch(`http://localhost:3001/api/v1/job-cards/${selectedMovementJob.id}/move-partial`, {
@@ -1254,7 +1257,7 @@ export default function JobCardsPage() {
           },
           body: JSON.stringify({
             qtyToMove: parsedMoveQty,
-            areaToMove: Number((parsedMoveQty * areaPerPnl).toFixed(2)),
+            areaToMove: movedArea,
             pendingWorkReason: effectiveReason,
             remark: incompleteRemarks ? `${effectiveReason} • ${incompleteRemarks}` : `Incomplete Movement: ${effectiveReason}`,
             remarkType: 'INCOMPLETE_MOVEMENT',
@@ -1263,9 +1266,6 @@ export default function JobCardsPage() {
       } catch (err) {
         console.warn('Backend API call failed, using client state update');
       }
-
-      const masterPcbQty = selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || (selectedMovementJob.prodPnlQty * 2);
-      const pcbPerPnl = masterPcbQty / selectedMovementJob.prodPnlQty;
 
       const rawNo = selectedMovementJob.jobCardNo;
       const parts = rawNo.split('-');
@@ -1312,10 +1312,11 @@ export default function JobCardsPage() {
         ...selectedMovementJob,
         id: `jc-part-${Date.now()}-A`,
         jobCardNo: movedSubNo,
-        prodPnlQty: parsedMoveQty,
-        custPnlQty: Math.round(parsedMoveQty * pcbPerPnl),
-        totalPcbQty: Math.round(parsedMoveQty * pcbPerPnl),
-        prodPnlAreaSqm: Number((parsedMoveQty * areaPerPnl).toFixed(2)),
+        prodPnlQty: Math.ceil(parsedMoveQty / 4),
+        custPnlQty: parsedMoveQty,
+        totalPcbQty: parsedMoveQty,
+        prodPnlAreaSqm: movedArea,
+        custPnlAreaSqm: movedArea,
         currentStageIndex: nextIndex,
         currentStageName: nextStage,
       };
@@ -1323,10 +1324,11 @@ export default function JobCardsPage() {
       const remainingBatch: JobCard = {
         ...selectedMovementJob,
         jobCardNo: remainingSubNo,
-        prodPnlQty: remainingBalance,
-        custPnlQty: Math.round(remainingBalance * pcbPerPnl),
-        totalPcbQty: Math.round(remainingBalance * pcbPerPnl),
-        prodPnlAreaSqm: Number((remainingBalance * areaPerPnl).toFixed(2)),
+        prodPnlQty: Math.ceil(remainingPcb / 4),
+        custPnlQty: remainingPcb,
+        totalPcbQty: remainingPcb,
+        prodPnlAreaSqm: remArea,
+        custPnlAreaSqm: remArea,
       };
 
       setJobCards((prev) =>
@@ -1338,7 +1340,7 @@ export default function JobCardsPage() {
       setSelectedMovementJob(null);
       setIncompleteRemarks('');
       showToast(
-        `Incomplete Movement logged: ${parsedMoveQty} PNL moved to ${nextStage}, ${remainingBalance} PNL retained at ${selectedMovementJob.currentStageName} due to "${effectiveReason}"`,
+        `Incomplete Movement logged: ${parsedMoveQty} PCBs moved to ${nextStage}, ${remainingPcb} PCBs retained at ${selectedMovementJob.currentStageName} due to "${effectiveReason}"`,
         'success'
       );
     });
@@ -2877,14 +2879,14 @@ export default function JobCardsPage() {
 
                           <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
                             <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">TOTAL PCB QTY</span>
-                            <strong className="text-indigo-700 font-mono font-black block mt-0.5">
-                              {selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || Math.round((selectedMovementJob.prodPnlQty || 0) * 2)} PCBs <span className="text-indigo-500/90 text-[10px] font-semibold">({selectedMovementJob.prodPnlQty} PNL)</span>
+                            <strong className="text-indigo-700 font-mono font-black block mt-0.5 text-sm">
+                              {selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || Math.round((selectedMovementJob.prodPnlQty || 0) * 2)} PCBs
                             </strong>
                           </div>
 
                           <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
                             <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">WIP AREA</span>
-                            <strong className="text-emerald-700 font-mono font-black block mt-0.5">{selectedMovementJob.prodPnlAreaSqm} Sqm</strong>
+                            <strong className="text-emerald-700 font-mono font-black block mt-0.5">{selectedMovementJob.custPnlAreaSqm || selectedMovementJob.prodPnlAreaSqm} Sqm</strong>
                           </div>
 
                           <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors col-span-2 sm:col-span-1 md:col-span-3">
@@ -2908,15 +2910,12 @@ export default function JobCardsPage() {
                                 SUB-JOB LOTS BREAKDOWN ({selectedMovementJob.subJobCards.length} LOTS)
                               </h5>
                               <span className="text-xs text-amber-900 font-mono font-black bg-amber-200/80 px-2.5 py-0.5 rounded-lg border border-amber-400/80 shadow-2xs">
-                                Total: {selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || Math.round((selectedMovementJob.prodPnlQty || 0) * 2)} PCBs ({selectedMovementJob.prodPnlQty} PNL)
+                                Total: {selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || Math.round((selectedMovementJob.prodPnlQty || 0) * 2)} PCBs
                               </span>
                             </div>
                             <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                               {selectedMovementJob.subJobCards.map((sub) => {
-                                const masterPcb = selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || (selectedMovementJob.prodPnlQty * 2);
-                                const ratio = masterPcb / selectedMovementJob.prodPnlQty || 2;
-                                const sPnl = (sub as any).prodPnlQty ?? (sub as any).qty ?? selectedMovementJob.prodPnlQty;
-                                const sPcb = (sub as any).totalPcbQty || Math.round(sPnl * ratio);
+                                const sPcb = (sub as any).totalPcbQty || (sub as any).qty || selectedMovementJob.totalPcbQty || 160;
 
                                 return (
                                   <div key={sub.id} className="bg-white p-3 rounded-xl border border-slate-200 flex items-center justify-between text-xs font-sans shadow-2xs hover:border-amber-400 transition-all">
@@ -2925,8 +2924,8 @@ export default function JobCardsPage() {
                                       <span className="text-[10px] text-slate-400">QR: {sub.qrCodeValue}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                      <span className="font-mono font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 text-[11px]">
-                                        {sPcb} PCBs <span className="text-[9px] font-normal text-slate-500">({sPnl} PNL)</span>
+                                      <span className="font-mono font-black text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded border border-indigo-200 text-[11px]">
+                                        {sPcb} PCBs
                                       </span>
                                       <span className="font-bold text-[11px] text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
                                         {sub.currentStage?.name || selectedMovementJob.currentStageName}
@@ -3006,7 +3005,7 @@ export default function JobCardsPage() {
                           Full Lot Stage Movement Confirmation
                         </p>
                         <p className="text-xs leading-relaxed text-blue-950 mt-2">
-                          Are you sure you want to move Job Card No. <strong className="text-slate-900 font-mono font-black">{selectedMovementJob.jobCardNo}</strong> ({selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || Math.round((selectedMovementJob.prodPnlQty || 0) * 2)} PCBs / {selectedMovementJob.prodPnlQty} PNL, {selectedMovementJob.prodPnlAreaSqm} Sqm) to the next process stage?
+                          Are you sure you want to move Job Card No. <strong className="text-slate-900 font-mono font-black">{selectedMovementJob.jobCardNo}</strong> ({selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || 160} PCBs, {selectedMovementJob.custPnlAreaSqm || selectedMovementJob.prodPnlAreaSqm || 45} Sqm) to the next process stage?
                         </p>
                       </div>
                       <div className="p-3 font-bold text-blue-900 bg-white rounded-xl border border-blue-200 font-mono text-xs shadow-2xs">
@@ -3046,7 +3045,7 @@ export default function JobCardsPage() {
                           onClick={handleFullJobMovement}
                           className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl text-xs shadow-md transition-all cursor-pointer active:scale-98 border border-blue-500/40"
                         >
-                          CONFIRM FULL MOVEMENT ({selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || Math.round((selectedMovementJob.prodPnlQty || 0) * 2)} PCBs ➔ Next Stage)
+                          CONFIRM FULL MOVEMENT ({selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || 160} PCBs ➔ Next Stage)
                         </button>
 
                         {selectedMovementJob.status === 'IN_PROGRESS' && (
@@ -3065,13 +3064,13 @@ export default function JobCardsPage() {
 
                 {/* TAB C: UNCOMPLETED / SPLIT MOVEMENT (HORIZONTAL SIDE-BY-SIDE) */}
                 {movementTab === 'PARTIAL' && (() => {
-                  const masterPcb = selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || (selectedMovementJob.prodPnlQty * 2);
-                  const pcbRatio = masterPcb / selectedMovementJob.prodPnlQty || 2;
+                  const masterPcb = selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || Math.round((selectedMovementJob.prodPnlQty || 0) * 2) || 160;
                   const parsedMoveQty = typeof partialMoveQty === 'number' ? partialMoveQty : (parseInt(String(partialMoveQty), 10) || 0);
-                  const validMoveQty = Math.min(Math.max(1, parsedMoveQty), Math.max(1, selectedMovementJob.prodPnlQty - 1));
-                  const movedPcb = Math.round(validMoveQty * pcbRatio);
-                  const remPnl = Math.max(0, selectedMovementJob.prodPnlQty - validMoveQty);
-                  const remPcb = Math.round(remPnl * pcbRatio);
+                  const validMoveQty = Math.min(Math.max(1, parsedMoveQty), Math.max(1, masterPcb - 1));
+                  const remPcb = Math.max(0, masterPcb - validMoveQty);
+                  const totalArea = selectedMovementJob.custPnlAreaSqm || selectedMovementJob.prodPnlAreaSqm || 45;
+                  const movedArea = Number(((validMoveQty * totalArea) / masterPcb).toFixed(2));
+                  const remArea = Number(((remPcb * totalArea) / masterPcb).toFixed(2));
 
                   return (
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 text-xs font-sans">
@@ -3079,26 +3078,26 @@ export default function JobCardsPage() {
                         <div>
                           <p className="font-black text-amber-900 flex items-center gap-2 text-sm">
                             <Split className="w-4.5 h-4.5 text-amber-700 shrink-0" />
-                            Uncompleted / Partial Job Movement (Lot Split)
+                            Uncompleted / Partial Job Movement (PCB Split)
                           </p>
                           <p className="mt-2 text-xs text-amber-900/90 leading-relaxed">
-                            Required when complete lot is not ready to move forward. The system automatically maintains balance quantity and area for both portions.
+                            Required when complete PCB lot is not ready to move forward. Enter exact PCB quantity moving to next stage.
                           </p>
                         </div>
                         <div className="space-y-2 pt-3">
                           <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-emerald-950 font-medium">
-                            <div className="font-bold text-emerald-900">Next Stage: {PF01_STAGES[selectedMovementJob.currentStageIndex + 1]}</div>
-                            <div className="text-sm font-black text-emerald-700 font-mono mt-1">{movedPcb} PCBs ({validMoveQty} PNL Moved)</div>
+                            <div className="font-bold text-emerald-900">Next Stage: {PF01_STAGES[selectedMovementJob.currentStageIndex + 1] || 'COMPLETED'}</div>
+                            <div className="text-sm font-black text-emerald-700 font-mono mt-1">{validMoveQty} PCBs Moved</div>
                             <div className="text-[10px] text-slate-500 font-mono">
-                              Sqm: {((validMoveQty * selectedMovementJob.prodPnlAreaSqm) / selectedMovementJob.prodPnlQty).toFixed(2)} Sqm
+                              Area: {movedArea} Sqm
                             </div>
                           </div>
 
                           <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-amber-950 font-medium">
                             <div className="font-bold text-amber-900">Stays at: {selectedMovementJob.currentStageName}</div>
-                            <div className="text-sm font-black text-amber-700 font-mono mt-1">{remPcb} PCBs ({remPnl} PNL Remaining)</div>
+                            <div className="text-sm font-black text-amber-700 font-mono mt-1">{remPcb} PCBs Balance</div>
                             <div className="text-[10px] text-slate-500 font-mono">
-                              Sqm: {((remPnl * selectedMovementJob.prodPnlAreaSqm) / selectedMovementJob.prodPnlQty).toFixed(2)} Sqm
+                              Area: {remArea} Sqm
                             </div>
                           </div>
                         </div>
@@ -3109,16 +3108,16 @@ export default function JobCardsPage() {
                           <div>
                             <div className="flex items-center justify-between mb-1">
                               <label className="block text-xs font-bold text-slate-700">
-                                Quantity Ready to Move Forward:
+                                Quantity Ready to Move Forward (PCBs) *
                               </label>
                               <span className="text-xs font-black text-indigo-700 font-mono bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
-                                = {movedPcb} PCBs
+                                = {validMoveQty} PCBs
                               </span>
                             </div>
                             <input
                               type="number"
                               min={1}
-                              max={selectedMovementJob.prodPnlQty - 1}
+                              max={masterPcb - 1}
                               value={partialMoveQty}
                               onChange={(e) => {
                                 const raw = e.target.value;
@@ -3130,10 +3129,11 @@ export default function JobCardsPage() {
                                 }
                               }}
                               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-900 focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
+                              placeholder={`Enter PCBs (1 to ${masterPcb - 1})`}
                             />
-                            {parsedMoveQty >= selectedMovementJob.prodPnlQty && (
+                            {parsedMoveQty >= masterPcb && (
                               <p className="text-[11px] text-rose-600 font-bold mt-1">
-                                ⚠ Quantity cannot exceed {selectedMovementJob.prodPnlQty - 1} PNL / {Math.round((selectedMovementJob.prodPnlQty - 1) * pcbRatio)} PCBs (Total Lot: {selectedMovementJob.prodPnlQty} PNL / {masterPcb} PCBs).
+                                ⚠ Quantity cannot exceed {masterPcb - 1} PCBs (Total Lot: {masterPcb} PCBs).
                               </p>
                             )}
                           </div>
@@ -3179,7 +3179,7 @@ export default function JobCardsPage() {
                             </label>
                             <textarea
                               rows={2}
-                              placeholder="Enter specific work details pending on remaining PNL..."
+                              placeholder="Enter specific work details pending on remaining PCBs..."
                               value={incompleteRemarks}
                               onChange={(e) => setIncompleteRemarks(e.target.value)}
                               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-amber-500"
@@ -3191,7 +3191,7 @@ export default function JobCardsPage() {
                           onClick={handlePartialJobMovement}
                           className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-2xl text-xs shadow-md transition-all cursor-pointer border border-amber-600 active:scale-98 mt-2"
                         >
-                          CONFIRM PARTIAL MOVEMENT ({movedPcb} PCBs / {validMoveQty} PNL Forward • {remPcb} PCBs / {remPnl} PNL Balance)
+                          CONFIRM PARTIAL MOVEMENT ({validMoveQty} PCBs Forward • {remPcb} PCBs Balance)
                         </button>
                       </div>
                     </div>

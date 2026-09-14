@@ -140,7 +140,7 @@ export default function JobMovementUpdatePage() {
   const [movementTab, setMovementTab] = useState<'VIEW' | 'FULL' | 'PARTIAL'>('VIEW');
   const [remarkCategory, setRemarkCategory] = useState<string>('Clear Movement');
   const [remarksText, setRemarksText] = useState<string>('');
-  const [partialQty, setPartialQty] = useState<number>(35);
+  const [partialQty, setPartialQty] = useState<number | string>(35);
   const [photoLightbox, setPhotoLightbox] = useState<string | null>(null);
 
   // Sync from NestJS Backend if available
@@ -154,17 +154,13 @@ export default function JobMovementUpdatePage() {
             setJobs([]);
           } else {
             const mapped: JobCard[] = data.flatMap((j: any) => {
-              const masterPnlQty = j.prodPnlQty || j.totalQty || 40;
-              const masterPcbQty = j.totalPcbQty || (masterPnlQty * 2) || 80;
-              const pcbPerPnl = masterPcbQty / masterPnlQty || 2;
-              const masterAreaSqm = j.prodPnlAreaSqm || 50;
-              const areaPerPnl = masterAreaSqm / masterPnlQty;
+              const masterPcbQty = j.totalPcbQty || j.custPnlQty || (j.prodPnlQty ? j.prodPnlQty * 4 : 160);
+              const masterAreaSqm = j.custPnlAreaSqm || j.prodPnlAreaSqm || 45;
 
               if (j.subJobCards && j.subJobCards.length > 0) {
                 return j.subJobCards.map((sub: any) => {
-                  const subPnlQty = sub.prodPnlQty ?? sub.qty ?? masterPnlQty;
-                  const subPcbQty = (sub.totalPcbQty && subPnlQty < masterPnlQty) ? sub.totalPcbQty : Math.round(subPnlQty * pcbPerPnl);
-                  const subAreaSqm = sub.prodPnlAreaSqm || Number((subPnlQty * areaPerPnl).toFixed(2));
+                  const subPcbQty = sub.totalPcbQty || sub.qty || masterPcbQty;
+                  const subAreaSqm = sub.custPnlAreaSqm || sub.prodPnlAreaSqm || masterAreaSqm;
                   const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
                   const stageIdx = PF01_STAGES.findIndex(
                     (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
@@ -179,7 +175,7 @@ export default function JobMovementUpdatePage() {
                     customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
                     targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
                     priority: j.priority || 'NORMAL',
-                    prodPnlQty: subPnlQty,
+                    prodPnlQty: Math.ceil(subPcbQty / 4),
                     custPnlQty: subPcbQty,
                     totalPcbQty: subPcbQty,
                     prodPnlAreaSqm: subAreaSqm,
@@ -206,11 +202,11 @@ export default function JobMovementUpdatePage() {
                 customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
                 targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
                 priority: j.priority || 'NORMAL',
-                prodPnlQty: masterPnlQty,
+                prodPnlQty: Math.ceil(masterPcbQty / 4),
                 custPnlQty: masterPcbQty,
                 totalPcbQty: masterPcbQty,
                 prodPnlAreaSqm: masterAreaSqm,
-                custPnlAreaSqm: j.custPnlAreaSqm || 45,
+                custPnlAreaSqm: masterAreaSqm,
                 currentStageIndex: stageIdx >= 0 ? stageIdx : 0,
                 currentStageName: stageIdx >= 0 ? PF01_STAGES[stageIdx] : rawStage,
                 status: j.status === 'CREATED' ? 'UNLAUNCHED' : j.status,
@@ -292,15 +288,19 @@ export default function JobMovementUpdatePage() {
       return;
     }
 
-    const maxPcbQty = selectedJob.totalPcbQty || (selectedJob.custPnlQty || (selectedJob.prodPnlQty * 2)) || 160;
-    if (partialQty <= 0 || partialQty >= maxPcbQty) {
+    const maxPcbQty = selectedJob.totalPcbQty || (selectedJob.custPnlQty || (selectedJob.prodPnlQty * 4)) || 160;
+    const parsedMoveQty = typeof partialQty === 'number' ? partialQty : (parseInt(String(partialQty), 10) || 0);
+
+    if (parsedMoveQty <= 0 || parsedMoveQty >= maxPcbQty) {
       showToastMsg(`Partial quantity must be between 1 and ${maxPcbQty - 1} PCBs`);
       return;
     }
 
     const totalArea = selectedJob.custPnlAreaSqm || selectedJob.prodPnlAreaSqm || 45;
-    const sqmMoved = Number(((partialQty * totalArea) / maxPcbQty).toFixed(2));
-    const effectiveReason = pendingWorkReason === 'Other / Custom Pending Reason' ? (customPendingReason || 'Pending PNL Work') : pendingWorkReason;
+    const sqmMoved = Number(((parsedMoveQty * totalArea) / maxPcbQty).toFixed(2));
+    const remPcb = Math.max(0, maxPcbQty - parsedMoveQty);
+    const remArea = Number(Math.max(0, totalArea - sqmMoved).toFixed(2));
+    const effectiveReason = pendingWorkReason === 'Other / Custom Pending Reason' ? (customPendingReason || 'Pending PCB Work') : pendingWorkReason;
 
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -311,7 +311,7 @@ export default function JobMovementUpdatePage() {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          qtyToMove: partialQty,
+          qtyToMove: parsedMoveQty,
           areaToMove: sqmMoved,
           pendingWorkReason: effectiveReason,
           remark: remarksText ? `${effectiveReason} • ${remarksText}` : `Incomplete Movement: ${effectiveReason}`,
@@ -325,10 +325,6 @@ export default function JobMovementUpdatePage() {
     const currentIndex = PF01_STAGES.indexOf(selectedJob.currentStageName);
     const nextIndex = Math.min(currentIndex + 1, PF01_STAGES.length - 1);
     const nextStageName = PF01_STAGES[nextIndex];
-    const remQty = selectedJob.prodPnlQty - partialQty;
-    const sqmPerPnl = selectedJob.prodPnlAreaSqm / selectedJob.prodPnlQty;
-    const masterPcbQty = selectedJob.totalPcbQty || selectedJob.custPnlQty || (selectedJob.prodPnlQty * 2);
-    const pcbPerPnl = masterPcbQty / selectedJob.prodPnlQty;
 
     const rawNo = selectedJob.jobCardNo;
     const parts = rawNo.split('-');
@@ -375,10 +371,11 @@ export default function JobMovementUpdatePage() {
       ...selectedJob,
       id: `jc-part-${Date.now()}-A`,
       jobCardNo: movedSubNo,
-      prodPnlQty: partialQty,
-      custPnlQty: Math.round(partialQty * pcbPerPnl),
-      totalPcbQty: Math.round(partialQty * pcbPerPnl),
-      prodPnlAreaSqm: Number((partialQty * sqmPerPnl).toFixed(2)),
+      prodPnlQty: Math.ceil(parsedMoveQty / 4),
+      custPnlQty: parsedMoveQty,
+      totalPcbQty: parsedMoveQty,
+      prodPnlAreaSqm: sqmMoved,
+      custPnlAreaSqm: sqmMoved,
       currentStageIndex: nextIndex,
       currentStageName: nextStageName,
     };
@@ -386,15 +383,16 @@ export default function JobMovementUpdatePage() {
     const remainingBatch: JobCard = {
       ...selectedJob,
       jobCardNo: remainingSubNo,
-      prodPnlQty: remQty,
-      custPnlQty: Math.round(remQty * pcbPerPnl),
-      totalPcbQty: Math.round(remQty * pcbPerPnl),
-      prodPnlAreaSqm: Number((remQty * sqmPerPnl).toFixed(2)),
+      prodPnlQty: Math.ceil(remPcb / 4),
+      custPnlQty: remPcb,
+      totalPcbQty: remPcb,
+      prodPnlAreaSqm: remArea,
+      custPnlAreaSqm: remArea,
     };
 
     setJobs((prev) => [movedBatch, ...prev.map((j) => (j.id === selectedJob.id ? remainingBatch : j))]);
     setSelectedJob(null);
-    showToastMsg(`Partial Movement: Moved ${partialQty} PNL of ${selectedJob.jobCardNo} to ${nextStageName}. ${remQty} PNL remains at ${selectedJob.currentStageName}.`);
+    showToastMsg(`Partial Movement: Moved ${parsedMoveQty} PCBs of ${selectedJob.jobCardNo} to ${nextStageName}. ${remPcb} PCBs remain at ${selectedJob.currentStageName}.`);
   };
 
   const filteredJobs = jobs.filter((j) => {
@@ -826,23 +824,22 @@ export default function JobMovementUpdatePage() {
 
               {/* TAB C: UNCOMPLETED / SPLIT MOVEMENT */}
               {movementTab === 'PARTIAL' && (() => {
-                const ratio = (selectedJob.totalPcbQty || (selectedJob.prodPnlQty * 2)) / selectedJob.prodPnlQty || 2;
-                const validPnl = Math.min(Math.max(1, partialQty), Math.max(1, selectedJob.prodPnlQty - 1));
-                const movedPcb = Math.round(validPnl * ratio);
-                const remPnl = Math.max(0, selectedJob.prodPnlQty - validPnl);
-                const remPcb = Math.round(remPnl * ratio);
+                const masterPcb = selectedJob.totalPcbQty || selectedJob.custPnlQty || 160;
+                const parsedMoveQty = typeof partialQty === 'number' ? partialQty : (parseInt(String(partialQty), 10) || 0);
+                const movedPcb = parsedMoveQty > 0 ? Math.min(parsedMoveQty, masterPcb - 1) : 0;
+                const remPcb = Math.max(0, masterPcb - movedPcb);
 
                 return (
                   <div className="space-y-4 text-xs font-sans">
                     <div className="bg-amber-950/40 border border-amber-800/80 p-3.5 rounded-2xl text-amber-200 space-y-1">
-                      <p className="font-extrabold text-amber-300">Uncompleted / Partial Job Movement</p>
-                      <p className="text-[11px] text-amber-200/80">Move partial quantity forward while maintaining balance quantity at current stage with exact pending work reason.</p>
+                      <p className="font-extrabold text-amber-300">Uncompleted / Partial Job Movement (PCB Split)</p>
+                      <p className="text-[11px] text-amber-200/80">Move partial PCB quantity forward while maintaining balance PCBs at current stage with exact pending work reason.</p>
                     </div>
 
                     <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
                       <div>
                         <div className="flex items-center justify-between mb-1">
-                          <label className="block text-xs font-bold text-slate-300">Ready Qty to Move Forward:</label>
+                          <label className="block text-xs font-bold text-slate-300">Quantity Ready to Move Forward (PCBs):</label>
                           <span className="text-xs font-bold text-amber-300 font-mono bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
                             = {movedPcb} PCBs
                           </span>
@@ -850,14 +847,23 @@ export default function JobMovementUpdatePage() {
                         <input
                           type="number"
                           min={1}
-                          max={selectedJob.prodPnlQty - 1}
+                          max={masterPcb - 1}
                           value={partialQty}
-                          onChange={(e) => setPartialQty(Number(e.target.value))}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            if (raw === '') {
+                              setPartialQty('');
+                            } else {
+                              const parsed = parseInt(raw, 10);
+                              setPartialQty(isNaN(parsed) ? '' : Math.min(parsed, masterPcb - 1));
+                            }
+                          }}
                           className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-amber-300 font-mono"
+                          placeholder={`Enter PCBs (1 to ${masterPcb - 1})`}
                         />
-                        {partialQty >= selectedJob.prodPnlQty && (
+                        {parsedMoveQty >= masterPcb && (
                           <p className="text-[11px] text-rose-400 font-bold mt-1">
-                            ⚠ Quantity cannot exceed {selectedJob.prodPnlQty - 1} PNL.
+                            ⚠ Quantity cannot exceed {masterPcb - 1} PCBs (Total Lot: {masterPcb} PCBs).
                           </p>
                         )}
                       </div>
