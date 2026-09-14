@@ -255,13 +255,14 @@ const DEFAULT_OPEN_POS: OpenPO[] = [
 
 // Printable Horizontal Industrial Job Card QR Tag Component
 const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint?: () => void; onClose?: () => void }) => {
-  const [serverHost, setServerHost] = useState<string>(() => {
+  const [serverHost, setServerHost] = useState<string>('https://rf-electro-erp.loca.lt');
+
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('erp_qr_server_host');
-      if (saved) return saved;
+      if (saved) setServerHost(saved);
     }
-    return 'https://rf-electro-erp.loca.lt';
-  });
+  }, []);
 
   const [isEditingHost, setIsEditingHost] = useState(false);
 
@@ -636,15 +637,8 @@ const markJobCardAsDeleted = (id: string, jobCardNo?: string) => {
 };
 
 export default function JobCardsPage() {
-  const [jobCards, setJobCards] = useState<JobCard[]>(() => {
-    if (typeof window === 'undefined') return INITIAL_JOB_CARDS;
-    const deleted = getDeletedJobCardIds();
-    const stored = getStoredJobCards();
-    if (stored !== null) {
-      return stored.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
-    }
-    return INITIAL_JOB_CARDS.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
-  });
+  const [isMounted, setIsMounted] = useState(false);
+  const [jobCards, setJobCards] = useState<JobCard[]>(INITIAL_JOB_CARDS);
   const [searchQuery, setSearchQuery] = useState('');
   const [barcodeInput, setBarcodeInput] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -672,16 +666,24 @@ export default function JobCardsPage() {
   const [incompleteCustomReason, setIncompleteCustomReason] = useState<string>('');
   const [incompleteRemarks, setIncompleteRemarks] = useState<string>('');
 
-  const isMountedRef = React.useRef(false);
+  // Load stored job cards from localStorage after client mounts to avoid hydration mismatch
+  useEffect(() => {
+    setIsMounted(true);
+    const deleted = getDeletedJobCardIds();
+    const stored = getStoredJobCards();
+    if (stored !== null) {
+      setJobCards(stored.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo)));
+    } else {
+      setJobCards(INITIAL_JOB_CARDS.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo)));
+    }
+  }, []);
 
   // Save jobCards to localStorage whenever state updates (only after mount)
   useEffect(() => {
-    if (!isMountedRef.current) {
-      isMountedRef.current = true;
-      return;
+    if (isMounted) {
+      saveJobCardsToStorage(jobCards);
     }
-    saveJobCardsToStorage(jobCards);
-  }, [jobCards]);
+  }, [jobCards, isMounted]);
 
   // Sync userRole from localStorage if set
   useEffect(() => {

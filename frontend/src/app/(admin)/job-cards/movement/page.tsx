@@ -146,31 +146,32 @@ const getDeletedJobCardIds = (): string[] => {
 };
 
 export default function JobMovementUpdatePage() {
-  const [jobs, setJobs] = useState<JobCard[]>(() => {
-    if (typeof window === 'undefined') return SAMPLE_ACTIVE_JOBS;
-    const deleted = getDeletedJobCardIds();
-    const stored = getStoredJobCards();
-    if (stored !== null) {
-      return stored.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
-    }
-    return SAMPLE_ACTIVE_JOBS.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
-  });
+  const [isMounted, setIsMounted] = useState(false);
+  const [jobs, setJobs] = useState<JobCard[]>(SAMPLE_ACTIVE_JOBS);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedJob, setSelectedJob] = useState<JobCard | null>(null);
   const [userRole, setUserRole] = useState<'MASTER' | 'SUPER_USER' | 'NORMAL'>('MASTER');
   const [assignedStage, setAssignedStage] = useState<string>('2. DRILLING');
   const [toast, setToast] = useState<string | null>(null);
 
-  const isMountedRef = React.useRef(false);
+  // Load stored job cards from localStorage after client mounts to avoid hydration mismatch
+  useEffect(() => {
+    setIsMounted(true);
+    const deleted = getDeletedJobCardIds();
+    const stored = getStoredJobCards();
+    if (stored !== null) {
+      setJobs(stored.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo)));
+    } else {
+      setJobs(SAMPLE_ACTIVE_JOBS.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo)));
+    }
+  }, []);
 
   // Save jobs to localStorage whenever state updates (only after mount)
   useEffect(() => {
-    if (!isMountedRef.current) {
-      isMountedRef.current = true;
-      return;
+    if (isMounted) {
+      saveJobCardsToStorage(jobs);
     }
-    saveJobCardsToStorage(jobs);
-  }, [jobs]);
+  }, [jobs, isMounted]);
 
   // Movement Modal Options State
   const [movementTab, setMovementTab] = useState<'VIEW' | 'FULL' | 'PARTIAL'>('VIEW');
