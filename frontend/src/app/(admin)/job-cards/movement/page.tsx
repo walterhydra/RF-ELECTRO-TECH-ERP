@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { Portal } from '@/components/ui/Portal';
 
-// Process Flow PF-01 19 Predefined Stages
+// Process Flow PF-01 20 Predefined Stages (PDF Spec 14-09-2026)
 const PF01_STAGES = [
   '1. SHEARING',
   '2. DRILLING',
@@ -42,11 +42,12 @@ const PF01_STAGES = [
   '12. HASL',
   '13. HASL-QC',
   '14. LEGEND PRINT',
-  '15. ROUTING & VG',
-  '16. BBT',
-  '17. FQC (AI)',
-  '18. PDI-AQL',
-  '19. PACKING',
+  '15. ROUTING',
+  '16. VG',
+  '17. BBT',
+  '18. FQC (AI)',
+  '19. PDI-AQL',
+  '20. PACKING',
 ];
 
 interface JobCard {

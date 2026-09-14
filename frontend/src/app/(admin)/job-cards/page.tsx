@@ -44,7 +44,7 @@ import {
 import { Portal } from '@/components/ui/Portal';
 
 
-// Process Flow PF-01 19 Predefined Stages
+// Process Flow PF-01 20 Predefined Stages (PDF Spec 14-09-2026)
 const PF01_STAGES = [
   '1. SHEARING',
   '2. DRILLING',
@@ -60,11 +60,12 @@ const PF01_STAGES = [
   '12. HASL',
   '13. HASL-QC',
   '14. LEGEND PRINT',
-  '15. ROUTING & VG',
-  '16. BBT',
-  '17. FQC (AI)',
-  '18. PDI-AQL',
-  '19. PACKING',
+  '15. ROUTING',
+  '16. VG',
+  '17. BBT',
+  '18. FQC (AI)',
+  '19. PDI-AQL',
+  '20. PACKING',
 ];
 
 interface SubJobCard {
@@ -953,9 +954,10 @@ export default function JobCardsPage() {
     fetchBackendJobCards();
   }, [fetchBackendJobCards]);
 
-  // Movement Form
-  const [fullMoveRemarkType, setFullMoveRemarkType] = useState('Process issue');
+  // Movement Form & Rejection PCB State
+  const [fullMoveRemarkType, setFullMoveRemarkType] = useState('Clear Movement');
   const [fullMoveRemarks, setFullMoveRemarks] = useState('');
+  const [fullMoveRejectQty, setFullMoveRejectQty] = useState<number | string>(0);
   const [partialMoveQty, setPartialMoveQty] = useState<number | string>(35);
 
   // Barcode Lookup Trigger
@@ -1208,13 +1210,26 @@ export default function JobCardsPage() {
     });
   };
 
-  // Full Job Movement
+  // Full Lot Job Stage Movement with optional Rejection PCB Qty & Mandatory Remarks
   const handleFullJobMovement = () => {
     if (!selectedMovementJob) return;
     if (!canUserMoveStage(selectedMovementJob.currentStageName)) {
-      showToast(`Permission Denied: Cannot move jobs out of stage "${selectedMovementJob.currentStageName}".`, 'error');
+      showToast(`Permission Denied: Operator assigned to "${assignedStage}" cannot move jobs out of "${selectedMovementJob.currentStageName}".`, 'error');
       return;
     }
+
+    const currentPcb = selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || Math.round((selectedMovementJob.prodPnlQty || 0) * 2) || 160;
+    const currentArea = selectedMovementJob.custPnlAreaSqm || selectedMovementJob.prodPnlAreaSqm || 45;
+    const rejectPcb = Math.min(Math.max(0, Number(fullMoveRejectQty) || 0), currentPcb);
+
+    if (rejectPcb > 0 && !fullMoveRemarks.trim()) {
+      showToast('Rejection Remarks/Details are mandatory when PCBs are rejected.', 'error');
+      return;
+    }
+
+    const movedPcb = currentPcb - rejectPcb;
+    const unitArea = currentPcb > 0 ? currentArea / currentPcb : 0.2;
+    const movedArea = Number((movedPcb * unitArea).toFixed(2));
 
     const nextIndex = selectedMovementJob.currentStageIndex + 1;
     if (nextIndex >= PF01_STAGES.length) {
@@ -1229,6 +1244,11 @@ export default function JobCardsPage() {
         ...selectedMovementJob,
         currentStageIndex: nextIndex,
         currentStageName: nextStage,
+        totalPcbQty: movedPcb,
+        custPnlQty: movedPcb,
+        prodPnlQty: Math.ceil(movedPcb / 4),
+        custPnlAreaSqm: movedArea,
+        prodPnlAreaSqm: movedArea,
         status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
         isNewlyCreated: false,
       };
@@ -1236,7 +1256,12 @@ export default function JobCardsPage() {
       setJobCards((prev) => prev.map((j) => (j.id === selectedMovementJob.id ? updated : j)));
       setSelectedMovementJob(null);
       setFullMoveRemarks('');
-      showToast(`Full Lot (${selectedMovementJob.totalPcbQty || 160} PCBs) of ${selectedMovementJob.jobCardNo} moved to ${nextStage}`, 'success');
+      setFullMoveRejectQty(0);
+      if (rejectPcb > 0) {
+        showToast(`Full Lot moved to ${nextStage}: ${movedPcb} PCBs moved (${movedArea} Sqm), ${rejectPcb} PCBs REJECTED due to "${fullMoveRemarks}"`, 'success');
+      } else {
+        showToast(`Full Lot (${movedPcb} PCBs) of ${selectedMovementJob.jobCardNo} moved to ${nextStage}`, 'success');
+      }
     });
   };
 
@@ -1314,51 +1339,10 @@ export default function JobCardsPage() {
         console.warn('Backend API call failed, using client state update');
       }
 
-      const rawNo = selectedMovementJob.jobCardNo;
-      const parts = rawNo.split('-');
-      const baseMasterNo = parts.length >= 3 ? parts.slice(0, 3).join('-') : rawNo;
-
-      const usedLetters = new Set<string>();
-      jobCards.forEach((j) => {
-        if (j.jobCardNo.startsWith(`${baseMasterNo}-`)) {
-          const rem = j.jobCardNo.slice(baseMasterNo.length + 1);
-          const match = rem.match(/^([A-Z]+)/);
-          if (match) usedLetters.add(match[1]);
-        }
-      });
-
-      let nextMovedLetter = 'A';
-      for (let i = 0; i < 26; i++) {
-        const l = String.fromCharCode(65 + i);
-        if (!usedLetters.has(l)) {
-          nextMovedLetter = l;
-          break;
-        }
-      }
-
-      let movedSubNo = `${baseMasterNo}-${nextMovedLetter}`;
-      let remainingSubNo = rawNo;
-
-      const lastSegment = parts[parts.length - 1];
-      const isLetterSuffix = /^[A-Z]+$/.test(lastSegment);
-
-      if (!isLetterSuffix) {
-        usedLetters.add(nextMovedLetter);
-        let remLetter = 'B';
-        for (let i = 0; i < 26; i++) {
-          const l = String.fromCharCode(65 + i);
-          if (!usedLetters.has(l)) {
-            remLetter = l;
-            break;
-          }
-        }
-        remainingSubNo = `${baseMasterNo}-${remLetter}`;
-      }
-
       const movedBatch: JobCard = {
         ...selectedMovementJob,
-        id: `jc-part-${Date.now()}-A`,
-        jobCardNo: movedSubNo,
+        id: `jc-part-${Date.now()}-moved`,
+        jobCardNo: selectedMovementJob.jobCardNo, // Same Job Card Number (No -A, -B suffix as per PDF spec)
         prodPnlQty: Math.ceil(parsedMoveQty / 4),
         custPnlQty: parsedMoveQty,
         totalPcbQty: parsedMoveQty,
@@ -1372,7 +1356,7 @@ export default function JobCardsPage() {
 
       const remainingBatch: JobCard = {
         ...selectedMovementJob,
-        jobCardNo: remainingSubNo,
+        jobCardNo: selectedMovementJob.jobCardNo, // Same Job Card Number (No -A, -B suffix as per PDF spec)
         prodPnlQty: Math.ceil(remainingPcb / 4),
         custPnlQty: remainingPcb,
         totalPcbQty: remainingPcb,
@@ -3158,8 +3142,37 @@ export default function JobCardsPage() {
                     </div>
 
                     <div className="lg:col-span-6 bg-white p-5 rounded-2xl border border-slate-200 space-y-4 shadow-xs">
+                      {/* Rejection PCB Qty Input Option (PDF Point 8) */}
+                      <div className="bg-rose-50/80 border border-rose-200 p-3.5 rounded-xl space-y-2">
+                        <label className="block text-xs font-bold text-rose-950 flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                            Reject PCB Quantity during Movement (Optional)
+                          </span>
+                          <span className="text-[10px] font-mono font-black text-rose-700">
+                            Available: {selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || 160} PCBs
+                          </span>
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || 160}
+                          value={fullMoveRejectQty}
+                          onChange={(e) => setFullMoveRejectQty(e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0))}
+                          placeholder="Enter rejected PCB qty (0 if none)..."
+                          className="w-full bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-rose-500 shadow-2xs"
+                        />
+                        {Number(fullMoveRejectQty) > 0 && (
+                          <p className="text-[11px] text-rose-800 font-bold">
+                            ⚠️ {fullMoveRejectQty} PCBs will be rejected. Only {(selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || 160) - Number(fullMoveRejectQty)} PCBs will move to next stage. Remarks are mandatory below!
+                          </p>
+                        )}
+                      </div>
+
                       <div>
-                        <label className="block text-xs font-bold text-slate-700 mb-1">Movement Remarks Category *</label>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Movement Remarks Category {Number(fullMoveRejectQty) > 0 ? '*' : ''}
+                        </label>
                         <select
                           value={fullMoveRemarkType}
                           onChange={(e) => setFullMoveRemarkType(e.target.value)}
@@ -3174,13 +3187,18 @@ export default function JobCardsPage() {
                       </div>
 
                       <div>
-                        <label className="block text-xs font-bold text-slate-700 mb-1">Remarks Details (Optional)</label>
+                        <label className="block text-xs font-bold text-slate-700 mb-1">
+                          Remarks / Rejection Details {Number(fullMoveRejectQty) > 0 ? '(MANDATORY *)' : '(Optional)'}
+                        </label>
                         <textarea
                           rows={3}
+                          required={Number(fullMoveRejectQty) > 0}
                           value={fullMoveRemarks}
                           onChange={(e) => setFullMoveRemarks(e.target.value)}
-                          placeholder="Enter optional stage movement remarks..."
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-900 focus:bg-white focus:outline-none focus:border-blue-500 shadow-2xs"
+                          placeholder={Number(fullMoveRejectQty) > 0 ? "Enter mandatory rejection reason details..." : "Enter optional stage movement remarks..."}
+                          className={`w-full border rounded-xl p-3 text-xs text-slate-900 focus:bg-white focus:outline-none shadow-2xs ${
+                            Number(fullMoveRejectQty) > 0 ? 'bg-rose-50/50 border-rose-300 focus:border-rose-500 font-medium' : 'bg-slate-50 border-slate-200 focus:border-blue-500'
+                          }`}
                         />
                       </div>
 
