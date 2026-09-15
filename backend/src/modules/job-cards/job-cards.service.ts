@@ -241,7 +241,10 @@ export class JobCardsService {
           },
           subJobCards: { include: { currentStage: true }, orderBy: { subJobCardNo: 'asc' } },
         },
-      }).catch(() => null);
+      }).catch((err) => {
+        console.error('findOne full include error:', err);
+        return null;
+      });
 
       if (!jobCard) {
         jobCard = await db.jobCard.findUnique({
@@ -252,7 +255,19 @@ export class JobCardsService {
             processFlowMaster: true,
             subJobCards: true,
           },
-        }).catch(() => null);
+        }).catch((err) => {
+          console.error('findOne simple include error:', err);
+          return null;
+        });
+      }
+
+      if (!jobCard) {
+        jobCard = await db.jobCard.findUnique({
+          where: { id },
+        }).catch((err) => {
+          console.error('findOne plain error:', err);
+          return null;
+        });
       }
     } else {
       jobCard = await db.jobCard.findFirst({
@@ -267,7 +282,16 @@ export class JobCardsService {
           },
           subJobCards: { include: { currentStage: true }, orderBy: { subJobCardNo: 'asc' } },
         },
-      }).catch(() => null);
+      }).catch((err) => {
+        console.error('findOne jobCardNo search error:', err);
+        return null;
+      });
+
+      if (!jobCard) {
+        jobCard = await db.jobCard.findFirst({
+          where: { jobCardNo: id },
+        }).catch(() => null);
+      }
     }
 
     if (!jobCard) {
