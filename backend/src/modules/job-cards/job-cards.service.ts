@@ -200,6 +200,32 @@ export class JobCardsService {
         (jc as any).rejectedPcbQty = totalRejectedPcb;
         (jc as any).rejectedAreaSqm = Number(totalRejectedArea.toFixed(2));
         (jc as any).rejectionLogs = formattedLogs;
+
+        // Populate active stage info directly on job card object for client sync
+        const sortedSubCards = [...(jc.subJobCards || [])].sort((a: any, b: any) => {
+          const orderA = a.currentStage?.defaultOrder || 0;
+          const orderB = b.currentStage?.defaultOrder || 0;
+          return orderB - orderA;
+        });
+        const topSub = sortedSubCards[0];
+        if (topSub && topSub.currentStage) {
+          (jc as any).currentStageName = topSub.currentStage.name;
+          (jc as any).currentStageIndex = Math.max(0, (topSub.currentStage.defaultOrder || 1) - 1);
+        } else if (jc.status === JobCardStatus.COMPLETED) {
+          (jc as any).currentStageName = '19. DISPATCH';
+          (jc as any).currentStageIndex = 18;
+        } else {
+          (jc as any).currentStageName = '1. SHEARING';
+          (jc as any).currentStageIndex = 0;
+        }
+      } else {
+        if (jc.status === JobCardStatus.COMPLETED) {
+          (jc as any).currentStageName = '19. DISPATCH';
+          (jc as any).currentStageIndex = 18;
+        } else {
+          (jc as any).currentStageName = '1. SHEARING';
+          (jc as any).currentStageIndex = 0;
+        }
       }
     }
 
@@ -288,6 +314,23 @@ export class JobCardsService {
 
     if (!jobCard) {
       throw new NotFoundException(`Job Card with ID "${id}" not found`);
+    }
+
+    const sortedSubCards = [...((jobCard as any).subJobCards || [])].sort((a: any, b: any) => {
+      const orderA = a.currentStage?.defaultOrder || 0;
+      const orderB = b.currentStage?.defaultOrder || 0;
+      return orderB - orderA;
+    });
+    const topSub = sortedSubCards[0];
+    if (topSub && topSub.currentStage) {
+      (jobCard as any).currentStageName = topSub.currentStage.name;
+      (jobCard as any).currentStageIndex = Math.max(0, (topSub.currentStage.defaultOrder || 1) - 1);
+    } else if (jobCard.status === JobCardStatus.COMPLETED) {
+      (jobCard as any).currentStageName = '19. DISPATCH';
+      (jobCard as any).currentStageIndex = 18;
+    } else {
+      (jobCard as any).currentStageName = '1. SHEARING';
+      (jobCard as any).currentStageIndex = 0;
     }
 
     return jobCard;
