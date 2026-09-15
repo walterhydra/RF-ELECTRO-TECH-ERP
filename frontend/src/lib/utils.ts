@@ -49,3 +49,25 @@ export function getApiBaseUrl(): string {
   return 'http://localhost:3001/api/v1';
 }
 
+export async function fetchApi(urlOrPath: string, options: RequestInit = {}): Promise<Response> {
+  const baseUrl = getApiBaseUrl();
+  const fullUrl = urlOrPath.startsWith('http://') || urlOrPath.startsWith('https://')
+    ? urlOrPath
+    : `${baseUrl}${urlOrPath.startsWith('/') ? '' : '/'}${urlOrPath}`;
+
+  const headers = new Headers(options.headers || {});
+  if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
+  headers.set('bypass-tunnel-reminder', 'true');
+  headers.set('Bypass-Tunnel-Reminder', 'true');
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('token');
+    if (token && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+  }
+
+  return fetch(fullUrl, { ...options, headers });
+}
+

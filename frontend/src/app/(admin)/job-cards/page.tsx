@@ -886,6 +886,8 @@ export default function JobCardsPage() {
       const res = await fetch(`${targetUrl}/job-cards`, {
         headers: {
           'Content-Type': 'application/json',
+          'bypass-tunnel-reminder': 'true',
+          'Bypass-Tunnel-Reminder': 'true',
           Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
         },
       });
