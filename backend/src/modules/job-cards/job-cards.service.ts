@@ -287,10 +287,106 @@ export class JobCardsService {
     });
   }
 
+  private async ensureDependencies() {
+    let superAdminRole = await this.prisma.role.findFirst({
+      where: { name: 'SUPER_ADMIN' },
+    });
+    if (!superAdminRole) {
+      superAdminRole = await this.prisma.role.create({
+        data: { name: 'SUPER_ADMIN', description: 'Super Administrator' },
+      });
+    }
+
+    let defaultUser = await this.prisma.user.findFirst();
+    if (!defaultUser) {
+      defaultUser = await this.prisma.user.create({
+        data: {
+          name: 'System Admin',
+          email: 'admin@rfelectro.com',
+          passwordHash: 'dummy_hash',
+          roleId: superAdminRole.id,
+        },
+      });
+    }
+
+    let processFlow = await this.prisma.processFlowMaster.findFirst({
+      where: { isActive: true },
+      include: { steps: { orderBy: { stepOrder: 'asc' } } },
+    });
+    if (!processFlow) {
+      processFlow = await this.prisma.processFlowMaster.create({
+        data: {
+          name: 'PF-01 Standard Flow',
+          totalSteps: 20,
+          createdById: defaultUser.id,
+        },
+        include: { steps: { orderBy: { stepOrder: 'asc' } } },
+      });
+    }
+
+    let customer = await this.prisma.customer.findFirst();
+    if (!customer) {
+      customer = await this.prisma.customer.create({
+        data: {
+          companyName: 'Apex Electronics Ltd',
+          code: 'CUST-RF045',
+          contactPerson: 'John Manager',
+          email: 'contact@apexelectronics.com',
+          phone: '9876543210',
+        },
+      });
+    }
+
+    let product = await this.prisma.product.findFirst();
+    if (!product) {
+      product = await this.prisma.product.create({
+        data: {
+          specCardNo: 'D3625',
+          revisionNo: 'Rev-00',
+          name: 'Main Motherboard V2',
+          code: 'EV-900W-WP-TO247',
+          customerId: customer.id,
+          pcbSize: '100x150mm',
+          layers: 4,
+          thicknessMm: 1.6,
+          copperWeight: '1oz',
+          solderMask: 'Green',
+          legend: 'White',
+          surfaceFinish: 'HASL',
+          processFlowId: processFlow.id,
+          createdById: defaultUser.id,
+        },
+      });
+    }
+
+    let customerPO = await this.prisma.customerPO.findFirst();
+    if (!customerPO) {
+      customerPO = await this.prisma.customerPO.create({
+        data: {
+          poNo: `PO-2026-${Date.now().toString().slice(-4)}`,
+          customerId: customer.id,
+          productId: product.id,
+          orderQty: 1000,
+          poDate: new Date(),
+          expectedDeliveryDate: new Date(Date.now() + 7 * 86400000),
+          createdById: defaultUser.id,
+        },
+      });
+    }
+
+    return {
+      defaultUser,
+      processFlow,
+      customer,
+      product,
+      customerPO,
+    };
+  }
+
   async createJobCard(data: any, createdById: string) {
+    const deps = await this.ensureDependencies();
     if (!createdById) {
-      const defaultUser = await this.prisma.user.findFirst();
-      createdById = defaultUser?.id || '';
+      createdById = deps.defaultUser.id;
     }
     // Generate sequential jobCardNo if not provided
     let jobCardNo = data.jobCardNo;
@@ -319,17 +415,8 @@ export class JobCardsService {
       where: { isActive: true },
       include: { steps: { orderBy: { stepOrder: 'asc' } } },
     });
-
     if (!processFlow) {
-      // Find or create default ProcessFlowMaster
-      processFlow = await this.prisma.processFlowMaster.create({
-        data: {
-          name: data.jobFlowSelection || 'PF-01',
-          totalSteps: 19,
-          createdById,
-        },
-        include: { steps: { orderBy: { stepOrder: 'asc' } } },
-      });
+      processFlow = deps.processFlow;
     }
 
     // Find or fallback customer & product
@@ -337,28 +424,34 @@ export class JobCardsService {
       where: { code: data.customerCode },
     });
     if (!customer) {
-      customer = await this.prisma.customer.findFirst();
+      customer = deps.customer;
     }
 
     let product = await this.prisma.product.findFirst({
       where: { specCardNo: data.rfePartCode },
     });
     if (!product) {
-      product = await this.prisma.product.findFirst();
+      product = deps.product;
     }
 
     let customerPO = await this.prisma.customerPO.findFirst({
       where: { customerId: customer?.id },
     });
+    if (!customerPO) {
+      customerPO = deps.customerPO;
+    }
 
     return this.prisma.$transaction(async (tx) => {
-      const fallbackPo = customerPO || (await tx.customerPO.findFirst());
+      const fallbackPo = customerPO || deps.customerPO;
+      const fallbackProduct = product || deps.product;
+      const fallbackFlow = processFlow || deps.processFlow;
+
       const jobCard = await tx.jobCard.create({
         data: {
           jobCardNo,
-          customerPoId: fallbackPo?.id || '',
-          productId: product?.id || fallbackPo?.productId || (await tx.product.findFirst())?.id || '',
-          processFlowMasterId: processFlow?.id || '',
+          customerPoId: fallbackPo.id,
+          productId: fallbackProduct.id,
+          processFlowMasterId: fallbackFlow.id,
           totalQty: Number(data.prodPnlQty) || 40,
           photoUrl: data.photoUrl || null,
           customerPartNo: data.customerPartNo || '',
