@@ -2538,7 +2538,37 @@ export default function JobCardsPage() {
               {filteredCards.length === 0 ? (
                 <tr>
                   <td colSpan={13} className="py-12 text-center text-slate-400 text-xs font-mono">
-                    No production jobs found matching filters.
+                    <div className="flex flex-col items-center justify-center gap-3 py-4">
+                      <p className="text-slate-600 font-sans font-semibold text-sm">No job cards found matching current filters.</p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGenerateForm({
+                              jobCardNo: '',
+                              customerCode: 'CUST-RF045',
+                              rfePartCode: 'D3625',
+                              customerPartNo: 'EV-900W-WP-TO247',
+                              priority: 'NORMAL',
+                              prodPnlQty: 40,
+                              custPnlQty: 160,
+                              totalPcbQty: 160,
+                              prodPnlAreaSqm: 50,
+                              custPnlAreaSqm: 45,
+                              jobFlowSelection: 'PF-01',
+                              autoLaunch: true,
+                              enablePreSplit: false,
+                              splitCount: 1,
+                              customSplits: [{ subNo: '26-27-0001-1', qty: 160 }],
+                            });
+                            setShowGenerateModal(true);
+                          }}
+                          className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                        >
+                          ➕ Create New Job Card
+                        </button>
+                      </div>
+                    </div>
                   </td>
                 </tr>
               ) : (
