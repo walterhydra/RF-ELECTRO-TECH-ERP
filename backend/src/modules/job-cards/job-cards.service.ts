@@ -122,7 +122,7 @@ export class JobCardsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Auto-correct sub-job card PCB quantities & clean sub-card numbers
+    // Auto-correct sub-job card PCB quantities & calculate rejection logs
     for (const jc of jobCards) {
       if (jc.subJobCards && jc.subJobCards.length > 0) {
         const masterPcbQty = jc.totalPcbQty || (jc.custPnlQty && jc.custPnlQty > 50 ? jc.custPnlQty : (jc.prodPnlQty ? jc.prodPnlQty * 4 : 160));
@@ -170,6 +170,36 @@ export class JobCardsService {
             }).catch(() => {});
           }
         }
+
+        // Calculate live rejection statistics & logs from stageMovementLog
+        const subCardIds = jc.subJobCards.map((s) => s.id);
+        const rejectionLogs = await this.prisma.stageMovementLog.findMany({
+          where: {
+            subJobCardId: { in: subCardIds },
+            qtyRejected: { gt: 0 },
+          },
+          include: { stage: true },
+          orderBy: { createdAt: 'asc' },
+        }).catch(() => []);
+
+        let totalRejectedPcb = 0;
+        let totalRejectedArea = 0;
+        const formattedLogs = rejectionLogs.map((log) => {
+          totalRejectedPcb += log.qtyRejected || 0;
+          const sqm = jc.prodPnlAreaSqm && jc.totalPcbQty ? Number(((jc.prodPnlAreaSqm * log.qtyRejected) / jc.totalPcbQty).toFixed(2)) : 0;
+          totalRejectedArea += sqm;
+          return {
+            stageName: log.stage?.name || '1. SHEARING',
+            rejectedPcbQty: log.qtyRejected,
+            rejectedAreaSqm: sqm,
+            remark: log.remarks || 'Stage Rejection',
+            timestamp: log.createdAt.toISOString(),
+          };
+        });
+
+        (jc as any).rejectedPcbQty = totalRejectedPcb;
+        (jc as any).rejectedAreaSqm = Number(totalRejectedArea.toFixed(2));
+        (jc as any).rejectionLogs = formattedLogs;
       }
     }
 

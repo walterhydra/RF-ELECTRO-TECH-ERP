@@ -1003,6 +1003,9 @@ export default function JobCardsPage() {
               customerPO: j.customerPO,
               product: j.product,
               subJobCards: j.subJobCards || [],
+              rejectedPcbQty: j.rejectedPcbQty || 0,
+              rejectedAreaSqm: j.rejectedAreaSqm || 0,
+              rejectionLogs: j.rejectionLogs || [],
             };
           });
 
@@ -1013,12 +1016,24 @@ export default function JobCardsPage() {
             const localMap = new Map(prevLocalCards.map((c) => [c.jobCardNo, c]));
             const merged = filtered.map((backendCard) => {
               const local = localMap.get(backendCard.jobCardNo);
-              if (local && (local.currentStageIndex || 0) > (backendCard.currentStageIndex || 0)) {
+              if (local) {
+                const localRejectedQty = local.rejectedPcbQty || 0;
+                const backendRejectedQty = backendCard.rejectedPcbQty || 0;
+                const maxRejectedQty = Math.max(localRejectedQty, backendRejectedQty);
+                const logs = (maxRejectedQty === localRejectedQty && localRejectedQty > 0)
+                  ? (local.rejectionLogs || [])
+                  : (backendCard.rejectionLogs && backendCard.rejectionLogs.length > 0 ? backendCard.rejectionLogs : (local.rejectionLogs || []));
+
+                const higherStageIdx = Math.max(local.currentStageIndex || 0, backendCard.currentStageIndex || 0);
+
                 return {
                   ...backendCard,
-                  currentStageIndex: local.currentStageIndex,
-                  currentStageName: local.currentStageName,
-                  status: local.status,
+                  currentStageIndex: higherStageIdx,
+                  currentStageName: (local.currentStageIndex || 0) > (backendCard.currentStageIndex || 0) ? local.currentStageName : backendCard.currentStageName,
+                  status: local.status || backendCard.status,
+                  rejectedPcbQty: maxRejectedQty,
+                  rejectedAreaSqm: Math.max(local.rejectedAreaSqm || 0, backendCard.rejectedAreaSqm || 0),
+                  rejectionLogs: logs,
                 };
               }
               return backendCard;
