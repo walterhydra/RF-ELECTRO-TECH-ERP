@@ -2613,7 +2613,7 @@ export default function JobCardsPage() {
                   const isCompleted = jc.status === 'COMPLETED';
                   const stageIndex = PF01_STAGES.indexOf(jc.currentStageName || PF01_STAGES[0]);
                   const progressPct = isUnlaunched ? 0 : isCompleted ? 100 : Math.round(((stageIndex + 1) / PF01_STAGES.length) * 100);
-                  const isNewTagVisible = Boolean(jc.isNewlyCreated) && isUnlaunched;
+                  const isNewTagVisible = isUnlaunched || Boolean(jc.isNewlyCreated) || (!jc.launchedAt && !isCompleted);
 
                   return (
                     <tr
