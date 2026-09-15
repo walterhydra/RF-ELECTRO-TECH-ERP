@@ -331,8 +331,10 @@ export class JobCardsService {
         createdSubCards.push(subCard);
       }
 
-      return this.findOne(id, tx);
+      return id;
     });
+
+    return this.findOne(id);
   }
 
   private async ensureDependencies() {
@@ -489,7 +491,7 @@ export class JobCardsService {
       customerPO = deps.customerPO;
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const createdId = await this.prisma.$transaction(async (tx) => {
       const fallbackPo = customerPO || deps.customerPO;
       const fallbackProduct = product || deps.product;
       const fallbackFlow = processFlow || deps.processFlow;
@@ -563,8 +565,10 @@ export class JobCardsService {
         });
       }
 
-      return this.findOne(jobCard.id, tx);
+      return jobCard.id;
     });
+
+    return this.findOne(createdId);
   }
 
   async updateJobCard(id: string, data: any) {
