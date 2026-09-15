@@ -1394,9 +1394,12 @@ export default function JobCardsPage() {
           if (createdData && createdData.id) {
             newJobCard.id = createdData.id;
           }
+        } else {
+          const errorMsg = await createRes.text().catch(() => '');
+          showToast(`Backend Create Error (${createRes.status}): ${errorMsg.slice(0, 80) || 'Server rejected creation'}`, 'error');
         }
-      } catch (err) {
-        // Fallback to client state
+      } catch (err: any) {
+        showToast(`Backend unreachable: Job Card created in offline cache`, 'info');
       }
 
       setJobCards((prev) => [newJobCard, ...prev]);
@@ -1473,7 +1476,7 @@ export default function JobCardsPage() {
         });
 
         if (!res.ok && cardId && cardId !== targetNo) {
-          await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(cardId)}/move-stage`, {
+          res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(cardId)}/move-stage`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -1486,8 +1489,13 @@ export default function JobCardsPage() {
             }),
           });
         }
-      } catch (err) {
-        console.warn('Backend API call failed, saved client state');
+
+        if (!res.ok) {
+          const errBody = await res.text().catch(() => '');
+          showToast(`Backend Stage Move Alert (${res.status}): ${errBody.slice(0, 80) || 'Check server connection'}`, 'error');
+        }
+      } catch (err: any) {
+        showToast(`Backend connection issue: Local state updated`, 'info');
       }
 
       await fetchBackendJobCards();
@@ -1559,7 +1567,7 @@ export default function JobCardsPage() {
         });
 
         if (!res.ok && targetId && targetId !== targetNo) {
-          await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetId)}/move-stage`, {
+          res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetId)}/move-stage`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -1573,8 +1581,13 @@ export default function JobCardsPage() {
             }),
           });
         }
-      } catch (err) {
-        console.warn('Backend API call failed, using client state update');
+
+        if (!res.ok) {
+          const errTxt = await res.text().catch(() => '');
+          showToast(`Backend Stage Move Alert (${res.status}): ${errTxt.slice(0, 80) || 'Check server connection'}`, 'error');
+        }
+      } catch (err: any) {
+        showToast(`Backend connection issue: Local state updated`, 'info');
       }
 
       setJobCards((prev) =>
