@@ -510,9 +510,13 @@ export class JobCardsService {
 
   async createJobCard(data: any, createdById: string) {
     const deps = await this.ensureDependencies();
-    if (!createdById) {
-      createdById = deps.defaultUser.id;
+    
+    let validUser = null;
+    if (createdById) {
+      validUser = await this.prisma.user.findUnique({ where: { id: createdById } }).catch(() => null);
     }
+    const finalUserId = validUser ? validUser.id : deps.defaultUser.id;
+
     // Generate sequential jobCardNo if not provided
     let jobCardNo = data.jobCardNo;
     if (!jobCardNo) {
@@ -599,7 +603,7 @@ export class JobCardsService {
           status: data.autoLaunch ? JobCardStatus.IN_PROGRESS : JobCardStatus.CREATED,
           launchedAt: data.autoLaunch ? new Date() : null,
           qrCodeValue,
-          createdById,
+          createdById: finalUserId,
         },
         include: {
           customerPO: { include: { customer: true } },
@@ -640,9 +644,9 @@ export class JobCardsService {
                 status: data.autoLaunch ? SubJobCardStatus.IN_STAGE : SubJobCardStatus.PENDING_LAUNCH,
                 currentStageId: initialStageId,
                 qrCodeValue: `RFE-SJC-${subJobCardNo}-${Date.now().toString().slice(-4)}`,
-                createdById,
+                createdById: finalUserId,
               },
-            }).catch(() => {});
+            });
           }
         }
       } else {
@@ -662,9 +666,9 @@ export class JobCardsService {
               status: data.autoLaunch ? SubJobCardStatus.IN_STAGE : SubJobCardStatus.PENDING_LAUNCH,
               currentStageId: initialStageId,
               qrCodeValue: `RFE-SJC-${subJobCardNo}-${Date.now().toString().slice(-4)}`,
-              createdById,
+              createdById: finalUserId,
             },
-          }).catch(() => {});
+          });
         }
       }
 
