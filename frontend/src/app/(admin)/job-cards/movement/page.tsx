@@ -331,6 +331,7 @@ export default function JobMovementUpdatePage() {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
+          jobCardNo: selectedJob.jobCardNo,
           rejectPcbQty: actualRejected,
           remark: actualRejected > 0
             ? `Rejection: ${actualRejected} PCBs rejected. Reason: ${effectiveReason}`
@@ -372,6 +373,7 @@ export default function JobMovementUpdatePage() {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
+          jobCardNo: targetJob.jobCardNo,
           status: 'COMPLETED',
           remark: 'Direct Job Dispatch from Packing stage',
         }),
