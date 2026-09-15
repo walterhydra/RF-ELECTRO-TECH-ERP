@@ -7,17 +7,12 @@ export function cn(...inputs: ClassValue[]) {
 
 export function getApiBaseUrl(): string {
   if (typeof window !== 'undefined') {
-    // Purge legacy localtunnel overrides if present in browser storage
-    const savedApiHost = localStorage.getItem('erp_backend_api_url') || localStorage.getItem('erp_qr_server_host');
-    if (savedApiHost && savedApiHost.includes('loca.lt')) {
-      localStorage.removeItem('erp_backend_api_url');
-      localStorage.removeItem('erp_qr_server_host');
-    }
+
 
     // 1. Handle Vercel deployment (e.g. rf-electrotech.vercel.app)
     const hostname = window.location.hostname || 'localhost';
     if (hostname.includes('vercel.app')) {
-      return 'https://rf-electro-tech-erp.onrender.com/api/v1';
+      return 'https://bitter-nights-raise.loca.lt/api/v1';
     }
 
     // 2. Check explicit localStorage override (user custom server IP or custom cloud URL)
@@ -53,7 +48,7 @@ export function getApiBaseUrl(): string {
     }
     return cleaned.endsWith('/api/v1') ? cleaned : `${cleaned}/api/v1`;
   }
-  return 'https://rf-electro-tech-erp.onrender.com/api/v1';
+  return 'https://bitter-nights-raise.loca.lt/api/v1';
 }
 
 export async function fetchApi(urlOrPath: string, options: RequestInit = {}): Promise<Response> {
