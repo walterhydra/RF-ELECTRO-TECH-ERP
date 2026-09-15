@@ -27,8 +27,15 @@ export class JobCardsController {
   @ApiResponse({ status: 201, description: 'Job Card created successfully' })
   async createJobCard(@Body() body: any, @Req() req: any) {
     console.log('--- ROUTE HIT: POST /job-cards/create ---', body?.jobCardNo);
-    const createdById = req.user?.sub || req.user?.id || req.user?.userId;
-    return this.jobCardsService.createJobCard(body, createdById);
+    try {
+      const createdById = req.user?.sub || req.user?.id || req.user?.userId;
+      const res = await this.jobCardsService.createJobCard(body, createdById);
+      console.log('--- SUCCESS IN CONTROLLER createJobCard ---', res?.jobCardNo || res?.id);
+      return res;
+    } catch (err: any) {
+      console.error('--- ERROR IN CONTROLLER createJobCard ---', err?.stack || err);
+      throw err;
+    }
   }
 
   @Post('generate')
