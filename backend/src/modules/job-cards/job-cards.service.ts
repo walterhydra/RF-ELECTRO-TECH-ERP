@@ -173,6 +173,53 @@ export class JobCardsService {
       }
     }
 
+    if (jobCards.length === 0 && !query?.status && !query?.customerPoId && !query?.productId && !query?.search) {
+      try {
+        await this.createJobCard({
+          jobCardNo: '26-27-0001',
+          customerCode: 'CUST-RF045',
+          rfePartCode: 'D3625',
+          customerPartNo: 'EV-900W-WP-TO247',
+          priority: 'NORMAL',
+          prodPnlQty: 40,
+          custPnlQty: 160,
+          totalPcbQty: 160,
+          prodPnlAreaSqm: 50,
+          custPnlAreaSqm: 45,
+          jobFlowSelection: 'PF-01',
+          autoLaunch: true,
+        }, '');
+
+        await this.createJobCard({
+          jobCardNo: '26-27-0002',
+          customerCode: 'CUST-RF045',
+          rfePartCode: 'D3625',
+          customerPartNo: 'EV-900W-WP-TO247',
+          priority: 'HIGH',
+          prodPnlQty: 80,
+          custPnlQty: 320,
+          totalPcbQty: 320,
+          prodPnlAreaSqm: 100,
+          custPnlAreaSqm: 90,
+          jobFlowSelection: 'PF-01',
+          autoLaunch: true,
+        }, '');
+
+        return this.prisma.jobCard.findMany({
+          where,
+          include: {
+            customerPO: { include: { customer: true } },
+            product: true,
+            processFlowMaster: true,
+            subJobCards: { include: { currentStage: true }, orderBy: { subJobCardNo: 'asc' } },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+      } catch (err) {
+        console.error('Auto seed job cards failed:', err);
+      }
+    }
+
     return jobCards;
   }
 
