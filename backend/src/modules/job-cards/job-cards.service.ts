@@ -599,11 +599,10 @@ export class JobCardsService {
   }
 
   async updateJobCard(id: string, data: any) {
-    const existing = await this.prisma.jobCard.findFirst({
-      where: {
-        OR: [{ id }, { jobCardNo: id }],
-      },
-    });
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const where: any = isUuid ? { OR: [{ id }, { jobCardNo: id }] } : { jobCardNo: id };
+
+    const existing = await this.prisma.jobCard.findFirst({ where });
 
     if (!existing) {
       return this.createJobCard(data, '');
@@ -866,10 +865,11 @@ export class JobCardsService {
       );
     }
 
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const where: any = isUuid ? { OR: [{ id }, { jobCardNo: id }] } : { jobCardNo: id };
+
     const jobCard = await this.prisma.jobCard.findFirst({
-      where: {
-        OR: [{ id }, { jobCardNo: id }],
-      },
+      where,
       include: { subJobCards: true },
     });
 
