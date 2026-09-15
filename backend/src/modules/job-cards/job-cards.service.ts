@@ -662,7 +662,8 @@ export class JobCardsService {
         }
       }
 
-      return this.findOne(jobCard.id, tx);
+      const fullCard = await this.findOne(jobCard.id, tx).catch(() => jobCard);
+      return fullCard || jobCard;
     });
   }
 
