@@ -12,7 +12,7 @@ export function getApiBaseUrl(): string {
     // 1. Handle Vercel deployment (e.g. rf-electrotech.vercel.app)
     const hostname = window.location.hostname || 'localhost';
     if (hostname.includes('vercel.app')) {
-      return 'https://wet-rules-fix.loca.lt/api/v1';
+      return 'https://lazy-cups-cheer.loca.lt/api/v1';
     }
 
     // 2. Check explicit localStorage override (user custom server IP or custom cloud URL)
@@ -48,7 +48,7 @@ export function getApiBaseUrl(): string {
     }
     return cleaned.endsWith('/api/v1') ? cleaned : `${cleaned}/api/v1`;
   }
-  return 'https://wet-rules-fix.loca.lt/api/v1';
+  return 'https://lazy-cups-cheer.loca.lt/api/v1';
 }
 
 export async function fetchApi(urlOrPath: string, options: RequestInit = {}): Promise<Response> {
