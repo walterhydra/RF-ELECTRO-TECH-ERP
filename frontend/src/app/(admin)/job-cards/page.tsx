@@ -1895,25 +1895,43 @@ export default function JobCardsPage() {
       )}
 
       {serverConnectionState.status === 'DISCONNECTED' && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-red-900 text-xs shadow-xs">
+        <div className="bg-gradient-to-r from-red-500/10 via-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-red-900 text-xs shadow-xs">
           <div className="flex items-start gap-2.5">
-            <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
             <div>
-              <span className="font-extrabold text-sm block text-red-950">Backend Server Offline or Unreachable</span>
-              <p className="mt-0.5 text-red-800">
-                Target Backend URL: <code className="font-mono bg-red-100 px-1 py-0.5 rounded text-red-900 font-bold">{serverConnectionState.url}</code> is currently not responding.
+              <span className="font-extrabold text-sm block text-slate-900">
+                Live Data Server Disconnected or Needs 1-Click Enable
+              </span>
+              <p className="mt-0.5 text-slate-700">
+                Target Backend API: <code className="font-mono bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-900 font-bold">{serverConnectionState.url}</code>
+              </p>
+              <p className="mt-1 text-slate-600">
+                👉 <span className="font-bold text-slate-900">If using Localtunnel on phone/other device:</span> Click the button on the right to authorize access once, then return here.
               </p>
             </div>
           </div>
-          <button
-            onClick={() => {
-              const custom = prompt('Enter your Backend API URL (e.g. http://192.168.1.50:3001 or https://rf-electro-erp.loca.lt):', serverConnectionState.url);
-              if (custom) handleSaveHost(custom);
-            }}
-            className="px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white font-black rounded-xl text-xs whitespace-nowrap cursor-pointer shadow-xs active:scale-95 shrink-0"
-          >
-            Change Server URL
-          </button>
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
+            {serverConnectionState.url.includes('loca.lt') && (
+              <a
+                href={serverConnectionState.url.replace('/api/v1', '')}
+                target="_blank"
+                rel="noreferrer"
+                className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs flex items-center gap-1.5 whitespace-nowrap cursor-pointer shadow-xs active:scale-95"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                ⚡ 1-Click Enable Live Sync
+              </a>
+            )}
+            <button
+              onClick={() => {
+                const custom = prompt('Enter your Backend API URL (e.g. https://rf-electro-erp.loca.lt or http://192.168.103.206:3001):', serverConnectionState.url);
+                if (custom) handleSaveHost(custom);
+              }}
+              className="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs whitespace-nowrap cursor-pointer shadow-xs active:scale-95"
+            >
+              Change Server URL
+            </button>
+          </div>
         </div>
       )}
 
