@@ -47,28 +47,27 @@ import { Portal } from '@/components/ui/Portal';
 import { getApiBaseUrl } from '@/lib/utils';
 
 
-// Process Flow PF-01 20 Predefined Stages (PDF Spec 14-09-2026)
+// Process Flow PF-01 19 Predefined Stages (Matching Database ProcessStage Master)
 const PF01_STAGES = [
   '1. SHEARING',
   '2. DRILLING',
   '3. DRL-QC',
-  '4. DML',
-  '5. PIT',
-  '6. PIT-QC',
-  '7. PLATING',
-  '8. ETCHING',
-  '9. PREMASK-QC/AOI',
-  '10. PISM',
-  '11. PISM-QC',
-  '12. HASL',
-  '13. HASL-QC',
-  '14. LEGEND PRINT',
-  '15. ROUTING',
-  '16. VG',
-  '17. BBT',
-  '18. FQC (AI)',
-  '19. PDI-AQL',
-  '20. PACKING',
+  '4. PTH',
+  '5. PTH-QC',
+  '6. PHOTO PRINTING',
+  '7. PHOTO-QC',
+  '8. PATTERN PLATING',
+  '9. ETCHING',
+  '10. ETCHING-QC',
+  '11. SOLDER MASK',
+  '12. SOLDER MASK-QC',
+  '13. LEGEND PRINTING',
+  '14. HAL / ENIG',
+  '15. PUNCHING / ROUTING',
+  '16. E-TESTING',
+  '17. FINAL QC',
+  '18. PACKING',
+  '19. DISPATCH',
 ];
 
 const normalizeStageIndex = (stageName?: string | null): number => {
@@ -78,41 +77,42 @@ const normalizeStageIndex = (stageName?: string | null): number => {
   const numMatch = s.match(/^(\d+)\./);
   if (numMatch) {
     const num = parseInt(numMatch[1], 10);
-    if (num >= 1 && num <= 20) return num - 1;
+    if (num >= 1 && num <= 19) return num - 1;
+    if (num >= 20) return 17; // PACKING
   }
 
   if (s.includes('shear') || s.includes('cutting')) return 0;
   if (s.includes('drl-qc') || s.includes('drill-qc')) return 2;
   if (s.includes('drill')) return 1;
-  if (s.includes('dml')) return 3;
-  if (s.includes('pth-qc')) return 4;
-  if (s.includes('pth')) return 3;
+  if (s.includes('pth-qc') || s.includes('pit-qc')) return 4;
+  if (s.includes('pth') || s.includes('dml') || s.includes('pit')) return 3;
   if (s.includes('photo-qc')) return 6;
   if (s.includes('photo printing') || s.includes('photo')) return 5;
   if (s.includes('pattern plating')) return 7;
-  if (s.includes('plating')) return 6;
+  if (s.includes('plating')) return 7;
   if (s.includes('etching-qc')) return 9;
   if (s.includes('etching') || s.includes('etch')) return 8;
   if (s.includes('premask') || s.includes('aoi')) return 8;
   if (s.includes('solder mask-qc')) return 11;
-  if (s.includes('solder mask') || s.includes('solder')) return 10;
-  if (s.includes('pism-qc')) return 10;
-  if (s.includes('pism')) return 9;
-  if (s.includes('hasl-qc')) return 12;
+  if (s.includes('solder mask') || s.includes('solder') || s.includes('pism-qc')) return 11;
+  if (s.includes('pism')) return 10;
+  if (s.includes('hasl-qc')) return 13;
   if (s.includes('hasl') || s.includes('hal') || s.includes('enig')) return 13;
   if (s.includes('legend printing') || s.includes('legend') || s.includes('silk')) return 12;
   if (s.includes('punching') || s.includes('routing') || s.includes('rout') || s.includes('cnc')) return 14;
-  if (s.includes('vg') || s.includes('v-cut') || s.includes('vcut')) return 15;
+  if (s.includes('vg') || s.includes('v-cut') || s.includes('vcut')) return 14;
   if (s.includes('e-testing') || s.includes('bbt') || s.includes('bare board') || s.includes('testing')) return 15;
-  if (s.includes('final qc') || s.includes('fqc')) return 17;
-  if (s.includes('pdi') || s.includes('aql')) return 18;
-  if (s.includes('pack') || s.includes('dispatch')) return 19;
+  if (s.includes('final qc') || s.includes('fqc')) return 16;
+  if (s.includes('pdi') || s.includes('aql')) return 17;
+  if (s.includes('pack')) return 17;
+  if (s.includes('dispatch')) return 18;
 
   const foundIdx = PF01_STAGES.findIndex(
     (stg) => stg.toLowerCase() === s || stg.toLowerCase().includes(s) || s.includes(stg.toLowerCase())
   );
   return foundIdx >= 0 ? foundIdx : 0;
 };
+
 
 
 interface SubJobCard {

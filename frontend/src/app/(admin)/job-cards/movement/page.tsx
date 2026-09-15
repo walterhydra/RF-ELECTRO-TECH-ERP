@@ -27,29 +27,29 @@ import {
 import { Portal } from '@/components/ui/Portal';
 import { getApiBaseUrl } from '@/lib/utils';
 
-// Process Flow PF-01 20 Predefined Stages (PDF Spec 14-09-2026)
+// Process Flow PF-01 19 Predefined Stages (Matching Database ProcessStage Master)
 const PF01_STAGES = [
   '1. SHEARING',
   '2. DRILLING',
   '3. DRL-QC',
-  '4. DML',
-  '5. PIT',
-  '6. PIT-QC',
-  '7. PLATING',
-  '8. ETCHING',
-  '9. PREMASK-QC/AOI',
-  '10. PISM',
-  '11. PISM-QC',
-  '12. HASL',
-  '13. HASL-QC',
-  '14. LEGEND PRINT',
-  '15. ROUTING',
-  '16. VG',
-  '17. BBT',
-  '18. FQC (AI)',
-  '19. PDI-AQL',
-  '20. PACKING',
+  '4. PTH',
+  '5. PTH-QC',
+  '6. PHOTO PRINTING',
+  '7. PHOTO-QC',
+  '8. PATTERN PLATING',
+  '9. ETCHING',
+  '10. ETCHING-QC',
+  '11. SOLDER MASK',
+  '12. SOLDER MASK-QC',
+  '13. LEGEND PRINTING',
+  '14. HAL / ENIG',
+  '15. PUNCHING / ROUTING',
+  '16. E-TESTING',
+  '17. FINAL QC',
+  '18. PACKING',
+  '19. DISPATCH',
 ];
+
 
 interface JobCard {
   id: string;
@@ -199,9 +199,12 @@ export default function JobMovementUpdatePage() {
                 const subPcbQty = sub.totalPcbQty || sub.qty || masterPcbQty;
                 const subAreaSqm = sub.custPnlAreaSqm || sub.prodPnlAreaSqm || masterAreaSqm;
                 const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
-                const stageIdx = PF01_STAGES.findIndex(
-                  (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
-                );
+                let stageIdx = sub.currentStage?.defaultOrder
+                  ? Math.min(Math.max(0, sub.currentStage.defaultOrder - 1), 18)
+                  : PF01_STAGES.findIndex(
+                      (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
+                    );
+                if (stageIdx < 0) stageIdx = 0;
 
                 return {
                   id: sub.id,
@@ -217,8 +220,8 @@ export default function JobMovementUpdatePage() {
                   totalPcbQty: subPcbQty,
                   prodPnlAreaSqm: subAreaSqm,
                   custPnlAreaSqm: subAreaSqm,
-                  currentStageIndex: stageIdx >= 0 ? stageIdx : 0,
-                  currentStageName: stageIdx >= 0 ? PF01_STAGES[stageIdx] : rawStage,
+                  currentStageIndex: stageIdx,
+                  currentStageName: PF01_STAGES[stageIdx] || rawStage,
                   status: sub.status === 'CREATED' ? 'UNLAUNCHED' : sub.status || j.status,
                   createdAt: j.createdAt,
                 };
@@ -226,9 +229,12 @@ export default function JobMovementUpdatePage() {
             }
 
             const rawStage = j.subJobCards?.[0]?.currentStage?.name || j.currentStageName || j.currentStage?.name || PF01_STAGES[0];
-            const stageIdx = PF01_STAGES.findIndex(
-              (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
-            );
+            let stageIdx = j.subJobCards?.[0]?.currentStage?.defaultOrder
+              ? Math.min(Math.max(0, j.subJobCards[0].currentStage.defaultOrder - 1), 18)
+              : PF01_STAGES.findIndex(
+                  (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
+                );
+            if (stageIdx < 0) stageIdx = 0;
 
             return [{
               id: j.id,
@@ -244,11 +250,12 @@ export default function JobMovementUpdatePage() {
               totalPcbQty: masterPcbQty,
               prodPnlAreaSqm: masterAreaSqm,
               custPnlAreaSqm: masterAreaSqm,
-              currentStageIndex: stageIdx >= 0 ? stageIdx : 0,
-              currentStageName: stageIdx >= 0 ? PF01_STAGES[stageIdx] : rawStage,
+              currentStageIndex: stageIdx,
+              currentStageName: PF01_STAGES[stageIdx] || rawStage,
               status: j.status === 'CREATED' ? 'UNLAUNCHED' : j.status,
               createdAt: j.createdAt,
             }];
+
           }).filter((j: JobCard) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
 
           setJobs(mapped);
