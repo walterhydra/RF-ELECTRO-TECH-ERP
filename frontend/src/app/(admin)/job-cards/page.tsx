@@ -91,6 +91,7 @@ interface RejectionLog {
 
 interface JobCard {
   id: string;
+  parentJobCardId?: string;
   jobCardNo: string;
   photoUrl?: string;
   customerPartNo: string;
@@ -918,6 +919,7 @@ export default function JobCardsPage() {
 
                 return {
                   id: sub.id,
+                  parentJobCardId: j.id,
                   jobCardNo: j.jobCardNo || sub.subJobCardNo,
                   photoUrl: j.photoUrl || '',
                   customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
@@ -1085,25 +1087,35 @@ export default function JobCardsPage() {
     }
 
     const targetJob = jobCards.find((j) => j.id === jobCardId || j.jobCardNo === jobCardId);
-    const cardId = targetJob?.id || jobCardId;
+    const cardId = targetJob?.parentJobCardId || targetJob?.id || jobCardId;
+    const cardNo = targetJob?.jobCardNo || jobCardId;
 
-    runWithLoading('Releasing Job Card into Stage 1 Production (1. SHEARING)...', async () => {
+    runWithLoading(`Releasing Job Card ${cardNo} into Stage 1 Production (1. SHEARING)...`, async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        await fetch(`${getApiBaseUrl()}/job-cards/${cardId}/launch`, {
+        const res = await fetch(`${getApiBaseUrl()}/job-cards/${cardId}/launch`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
-        }).catch(() => {});
-      } catch (e) {
-        console.warn('Backend launch API call failed or offline mode', e);
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          const errMsg = errData.message || res.statusText || 'Failed to launch Job Card';
+          console.error('Launch API error:', res.status, errMsg);
+          showToast(`Launch failed: ${errMsg}`, 'error');
+          return;
+        }
+      } catch (e: any) {
+        console.warn('Backend launch API call failed or network error', e);
+        showToast(`Launch error: ${e.message || 'Network error'}`, 'error');
       }
 
       setJobCards((prev) =>
         prev.map((j) => {
-          if (j.id === cardId || j.jobCardNo === cardId) {
+          if (j.id === cardId || j.id === jobCardId || j.jobCardNo === cardNo || j.parentJobCardId === cardId) {
             return {
               ...j,
               status: 'IN_PROGRESS',
@@ -1117,8 +1129,8 @@ export default function JobCardsPage() {
         })
       );
 
-      showToast(`🚀 Job Card ${targetJob?.jobCardNo || cardId} launched successfully into Stage 1 (${PF01_STAGES[0]})`, 'success');
-      fetchBackendJobCards();
+      await fetchBackendJobCards();
+      showToast(`🚀 Job Card ${cardNo} launched successfully into Stage 1 (${PF01_STAGES[0]})`, 'success');
     });
   };
 

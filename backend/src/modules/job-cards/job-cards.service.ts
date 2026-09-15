@@ -777,17 +777,54 @@ export class JobCardsService {
         },
       });
       if (!existing) {
-        throw new NotFoundException(`Job Card with ID or Number "${id}" not found`);
+        // Fallback: check if id is a SubJobCard ID or SubJobCardNo
+        const subCard = await this.prisma.subJobCard.findFirst({
+          where: { OR: [{ id }, { subJobCardNo: id }] },
+          include: {
+            jobCard: {
+              include: {
+                customerPO: { include: { customer: true } },
+                product: true,
+                processFlowMaster: { include: { steps: { include: { stage: true }, orderBy: { stepOrder: 'asc' } } } },
+                subJobCards: { include: { currentStage: true } },
+              },
+            },
+          },
+        });
+        if (subCard?.jobCard) {
+          jobCard = subCard.jobCard;
+        } else {
+          throw new NotFoundException(`Job Card with ID or Number "${id}" not found`);
+        }
+      } else {
+        jobCard = existing;
       }
-      jobCard = existing;
     }
 
     const realJobCardId = jobCard.id;
-    const firstStep = jobCard.processFlowMaster?.steps?.[0];
-    const firstStageId = firstStep?.stageId || null;
+    let firstStageId = jobCard.processFlowMaster?.steps?.[0]?.stageId || null;
 
     if (!firstStageId) {
-      throw new BadRequestException('Cannot launch Job Card: The associated manufacturing process flow has no process stages configured.');
+      const shearingStage = await this.prisma.processStage.findFirst({
+        where: { OR: [{ name: { contains: 'SHEARING', mode: 'insensitive' } }, { code: 'SHEARING' }] },
+      });
+      if (shearingStage) {
+        firstStageId = shearingStage.id;
+      } else {
+        const firstStage = await this.prisma.processStage.findFirst({ orderBy: { defaultOrder: 'asc' } });
+        if (firstStage) firstStageId = firstStage.id;
+      }
+    }
+
+    if (!firstStageId) {
+      const createdStage = await this.prisma.processStage.create({
+        data: {
+          code: 'SHEARING',
+          name: '1. SHEARING',
+          defaultOrder: 1,
+        },
+      });
+      firstStageId = createdStage.id;
     }
 
     return this.prisma.$transaction(async (tx) => {
