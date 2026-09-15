@@ -325,17 +325,34 @@ export class SubJobCardsService {
       let splitOccurred = false;
       let newSubJobCard = null;
 
-      if (dto.qtyForwarded === subCard.qty) {
+      // Calculate exact 1 PCB SQM ratio (Total Area / Total PCB Qty)
+      const totalJobPcbQty = subCard.jobCard?.totalPcbQty || subCard.jobCard?.totalQty || subCard.qty || 1;
+      const totalJobSqmArea = subCard.jobCard?.prodPnlAreaSqm || subCard.prodPnlAreaSqm || 0;
+      const sqmPerPcb = totalJobPcbQty > 0 ? totalJobSqmArea / totalJobPcbQty : 0;
+
+      // Net Quantity moving forward to Next Stage (subtracting any PCB Rejections occurring during movement)
+      const effectiveRejectedQty = dto.qtyRejected || 0;
+      const netForwardedQty = Math.max(0, dto.qtyForwarded - effectiveRejectedQty);
+
+      if (dto.qtyForwarded >= subCard.qty) {
+        // FULL JOB MOVEMENT (Entire lot moving, minus any PCB Rejections occurring during full movement)
+        const finalNextStageQty = Math.max(0, subCard.qty - effectiveRejectedQty);
+        const finalNextStageSqm = Number((finalNextStageQty * sqmPerPcb).toFixed(2));
+
         if (nextStep) {
           await tx.subJobCard.update({
             where: { id: subCard.id },
             data: {
               currentStageId: nextStep.stageId,
               status: SubJobCardStatus.IN_STAGE,
+              qty: finalNextStageQty,
+              prodPnlQty: finalNextStageQty,
+              prodPnlAreaSqm: finalNextStageSqm,
+              custPnlAreaSqm: finalNextStageSqm,
               qtyReceived: 0,
               qtyProcessed: 0,
               qtyHold: 0,
-              qtyRejected: subCard.qtyRejected + (dto.qtyRejected || 0),
+              qtyRejected: subCard.qtyRejected + effectiveRejectedQty,
             },
           });
         } else {
@@ -344,76 +361,82 @@ export class SubJobCardsService {
             data: {
               currentStageId: null,
               status: SubJobCardStatus.COMPLETED,
+              qty: finalNextStageQty,
+              prodPnlQty: finalNextStageQty,
+              prodPnlAreaSqm: finalNextStageSqm,
+              custPnlAreaSqm: finalNextStageSqm,
               qtyReceived: dto.qtyReceived,
               qtyProcessed: dto.qtyProcessed,
               qtyHold: dto.qtyHold || 0,
-              qtyRejected: subCard.qtyRejected + (dto.qtyRejected || 0),
+              qtyRejected: subCard.qtyRejected + effectiveRejectedQty,
             },
           });
           await this.checkAndUpdateParentJobCard(tx, subCard.jobCardId);
         }
       } else if (dto.qtyForwarded > 0) {
+        // UNCOMPLETED / PARTIAL MOVEMENT (Keep exact same Job Card Number without A/B letter suffix)
         splitOccurred = true;
-        const remainingQty = subCard.qty - dto.qtyForwarded - (dto.qtyRejected || 0);
-        const originalQty = subCard.qty || 1;
-        const areaPerPnl = subCard.prodPnlAreaSqm ? subCard.prodPnlAreaSqm / originalQty : 0;
-        const custAreaPerPnl = subCard.custPnlAreaSqm ? subCard.custPnlAreaSqm / originalQty : 0;
+        const remainingQtyAtCurrentStage = Math.max(0, subCard.qty - dto.qtyForwarded - effectiveRejectedQty);
+        const remainingSqmAtCurrentStage = Number((remainingQtyAtCurrentStage * sqmPerPcb).toFixed(2));
+        const forwardedNextStageSqm = Number((netForwardedQty * sqmPerPcb).toFixed(2));
 
+        // Update remaining WIP at current stage under same Job Card
         await tx.subJobCard.update({
           where: { id: subCard.id },
           data: {
-            qty: Math.max(0, remainingQty),
-            prodPnlQty: Math.max(0, remainingQty),
-            prodPnlAreaSqm: Number((Math.max(0, remainingQty) * areaPerPnl).toFixed(2)),
-            custPnlAreaSqm: Number((Math.max(0, remainingQty) * custAreaPerPnl).toFixed(2)),
-            qtyReceived: Math.max(0, dto.qtyReceived - dto.qtyForwarded - (dto.qtyRejected || 0)),
-            qtyProcessed: Math.max(0, dto.qtyProcessed - dto.qtyForwarded - (dto.qtyRejected || 0)),
+            qty: remainingQtyAtCurrentStage,
+            prodPnlQty: remainingQtyAtCurrentStage,
+            prodPnlAreaSqm: remainingSqmAtCurrentStage,
+            custPnlAreaSqm: remainingSqmAtCurrentStage,
+            qtyReceived: Math.max(0, dto.qtyReceived - dto.qtyForwarded - effectiveRejectedQty),
+            qtyProcessed: Math.max(0, dto.qtyProcessed - dto.qtyForwarded - effectiveRejectedQty),
             qtyHold: dto.qtyHold || 0,
-            qtyRejected: subCard.qtyRejected + (dto.qtyRejected || 0),
-            status: (dto.qtyHold || 0) > 0 ? SubJobCardStatus.ON_HOLD : (remainingQty === 0 ? SubJobCardStatus.COMPLETED : SubJobCardStatus.IN_STAGE),
+            qtyRejected: subCard.qtyRejected + effectiveRejectedQty,
+            status: (dto.qtyHold || 0) > 0 ? SubJobCardStatus.ON_HOLD : (remainingQtyAtCurrentStage === 0 ? SubJobCardStatus.COMPLETED : SubJobCardStatus.IN_STAGE),
           },
         });
 
-        if (nextStep) {
-          const existingChildren = await tx.subJobCard.count({
-            where: { parentSubJobCardId: subCard.id },
-          });
-          const suffix = String.fromCharCode(97 + existingChildren);
-          const newSubCardNo = `${subCard.subJobCardNo}${suffix}`;
+        if (nextStep && netForwardedQty > 0) {
+          // Keep identical Job Card Number (No -A, -B suffix per ERP Correction.pdf Point 1)
+          const baseJobCardNo = subCard.jobCard?.jobCardNo || subCard.subJobCardNo.split('-')[0];
 
           newSubJobCard = await tx.subJobCard.create({
             data: {
-              subJobCardNo: newSubCardNo,
+              subJobCardNo: baseJobCardNo,
               jobCardId: subCard.jobCardId,
               parentSubJobCardId: subCard.id,
               currentStageId: nextStep.stageId,
-              qty: dto.qtyForwarded,
-              prodPnlQty: dto.qtyForwarded,
-              prodPnlAreaSqm: Number((dto.qtyForwarded * areaPerPnl).toFixed(2)),
-              custPnlAreaSqm: Number((dto.qtyForwarded * custAreaPerPnl).toFixed(2)),
+              qty: netForwardedQty,
+              prodPnlQty: netForwardedQty,
+              prodPnlAreaSqm: forwardedNextStageSqm,
+              custPnlAreaSqm: forwardedNextStageSqm,
               qtyReceived: 0,
               qtyProcessed: 0,
               qtyHold: 0,
               qtyRejected: 0,
               status: SubJobCardStatus.IN_STAGE,
-              qrCodeValue: `RFE-SJC-${newSubCardNo}-${Date.now().toString().slice(-4)}`,
+              qrCodeValue: `RFE-JC-${baseJobCardNo}-${nextStep.stageId.slice(0, 4)}-${Date.now().toString().slice(-4)}`,
               createdById: userId,
             },
           });
         }
-        if (remainingQty === 0 && !nextStep) {
+        if (remainingQtyAtCurrentStage === 0 && !nextStep) {
           await this.checkAndUpdateParentJobCard(tx, subCard.jobCardId);
         }
       } else {
-        const remainingQty = Math.max(0, subCard.qty - (dto.qtyRejected || 0));
+        const remainingQty = Math.max(0, subCard.qty - effectiveRejectedQty);
+        const remainingSqm = Number((remainingQty * sqmPerPcb).toFixed(2));
         await tx.subJobCard.update({
           where: { id: subCard.id },
           data: {
             qty: remainingQty,
+            prodPnlQty: remainingQty,
+            prodPnlAreaSqm: remainingSqm,
+            custPnlAreaSqm: remainingSqm,
             qtyReceived: dto.qtyReceived,
             qtyProcessed: dto.qtyProcessed,
             qtyHold: dto.qtyHold || 0,
-            qtyRejected: subCard.qtyRejected + (dto.qtyRejected || 0),
+            qtyRejected: subCard.qtyRejected + effectiveRejectedQty,
             status: (dto.qtyHold || 0) > 0 ? SubJobCardStatus.ON_HOLD : (remainingQty === 0 ? SubJobCardStatus.COMPLETED : SubJobCardStatus.IN_STAGE),
           },
         });
@@ -436,7 +459,7 @@ export class SubJobCardsService {
           : null,
         remainingAtCurrentStage: {
           subJobCardNo: subCard.subJobCardNo,
-          qty: Math.max(0, subCard.qty - dto.qtyForwarded - (dto.qtyRejected || 0)),
+          qty: Math.max(0, subCard.qty - dto.qtyForwarded - effectiveRejectedQty),
         },
       };
     });

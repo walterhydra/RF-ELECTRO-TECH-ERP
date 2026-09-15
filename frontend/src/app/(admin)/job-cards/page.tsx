@@ -739,6 +739,9 @@ export default function JobCardsPage() {
     const cardNo = targetCard?.jobCardNo || id;
     const targetId = targetCard?.id || id;
 
+    // Mark as deleted in local storage registry so sample data never resurrects it on page refresh
+    markJobCardAsDeleted(targetId, cardNo);
+
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       const headers = {
@@ -750,7 +753,7 @@ export default function JobCardsPage() {
       await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(cardNo)}`, {
         method: 'DELETE',
         headers,
-      });
+      }).catch(() => {});
       if (targetId !== cardNo) {
         await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetId)}`, {
           method: 'DELETE',
@@ -760,14 +763,15 @@ export default function JobCardsPage() {
     } catch (err: any) {
       console.warn('Backend DELETE call failed or offline mode', err);
     } finally {
-      setJobCards((prev) => prev.filter((jc) => jc.id !== targetId && jc.jobCardNo !== cardNo && jc.id !== id));
+      const updated = jobCards.filter((jc) => jc.id !== targetId && jc.jobCardNo !== cardNo && jc.id !== id);
+      setJobCards(updated);
+      saveJobCardsToStorage(updated);
       showToast('Job Card deleted successfully!', 'success');
       setDeleteConfirmCard(null);
       if (selectedMovementJob?.id === targetId || selectedMovementJob?.jobCardNo === cardNo) {
         setSelectedMovementJob(null);
       }
       setIsDeleting(false);
-      fetchBackendJobCards();
     }
   };
 

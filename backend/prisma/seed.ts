@@ -48,27 +48,28 @@ async function main() {
   }
   console.log(`✅ Seeded ${roles.length} Roles`);
 
-  // 3. Process Stages (Standard 19-Stage Multilayer Flow vocabulary for PF-01)
+  // 3. Process Stages (Standard 20-Stage Double Sided PCB Flow for PF-01)
   const stages = [
-    { name: 'SHEARING', defaultOrder: 1, description: 'Cutting and Shearing' },
-    { name: 'DRILLING', defaultOrder: 2, description: 'CNC Drilling' },
-    { name: 'DRL-QC', defaultOrder: 3, description: 'Drilling Quality Control' },
-    { name: 'PTH', defaultOrder: 4, description: 'Plating Through Hole' },
-    { name: 'PTH-QC', defaultOrder: 5, description: 'PTH Quality Control' },
-    { name: 'PHOTO PRINTING', defaultOrder: 6, description: 'Photo Printing / Imaging' },
-    { name: 'PHOTO-QC', defaultOrder: 7, description: 'Photo Quality Control' },
-    { name: 'PATTERN PLATING', defaultOrder: 8, description: 'Pattern Plating' },
-    { name: 'ETCHING', defaultOrder: 9, description: 'Etching Line' },
-    { name: 'ETCHING-QC', defaultOrder: 10, description: 'Etching Quality Control' },
-    { name: 'SOLDER MASK', defaultOrder: 11, description: 'Solder Masking' },
-    { name: 'SOLDER MASK-QC', defaultOrder: 12, description: 'Solder Mask Quality Control' },
-    { name: 'LEGEND PRINTING', defaultOrder: 13, description: 'Legend / Silkscreen Printing' },
-    { name: 'HAL / ENIG', defaultOrder: 14, description: 'Hot Air Leveling / Gold Immersion' },
-    { name: 'PUNCHING / ROUTING', defaultOrder: 15, description: 'Punching and Routing' },
-    { name: 'E-TESTING', defaultOrder: 16, description: 'Electrical Testing' },
-    { name: 'FINAL QC', defaultOrder: 17, description: 'Final Quality Control' },
-    { name: 'PACKING', defaultOrder: 18, description: 'Packing' },
-    { name: 'DISPATCH', defaultOrder: 19, description: 'Finished Goods Dispatch' },
+    { name: 'SHEARING', defaultOrder: 1, code: 'SHR', description: 'Cutting and Shearing' },
+    { name: 'DRILLING', defaultOrder: 2, code: 'DRL', description: 'CNC Drilling' },
+    { name: 'DRL-QC', defaultOrder: 3, code: 'DRL-QC', description: 'Drilling Quality Control' },
+    { name: 'DML', defaultOrder: 4, code: 'DML', description: 'Direct Metallization Line' },
+    { name: 'PIT', defaultOrder: 5, code: 'PIT', description: 'Photo Image Transfer' },
+    { name: 'PIT-QC', defaultOrder: 6, code: 'PIT-QC', description: 'Photo Image Quality Control' },
+    { name: 'PLATING', defaultOrder: 7, code: 'PLT', description: 'Pattern & Panel Plating' },
+    { name: 'ETCHING', defaultOrder: 8, code: 'ETC', description: 'Etching Line' },
+    { name: 'PREMASK-QC/AOI', defaultOrder: 9, code: 'AOI', description: 'Premask QC & Automated Optical Inspection' },
+    { name: 'PISM', defaultOrder: 10, code: 'PISM', description: 'Photo Imageable Solder Mask' },
+    { name: 'PISM-QC', defaultOrder: 11, code: 'PISM-QC', description: 'Solder Mask Quality Control' },
+    { name: 'HASL', defaultOrder: 12, code: 'HASL', description: 'Hot Air Solder Leveling' },
+    { name: 'HASL-QC', defaultOrder: 13, code: 'HASL-QC', description: 'HASL Quality Control' },
+    { name: 'LEGEND PRINT', defaultOrder: 14, code: 'LGD', description: 'Legend / Silkscreen Printing' },
+    { name: 'ROUTING', defaultOrder: 15, code: 'RTE', description: 'CNC Routing' },
+    { name: 'VG', defaultOrder: 16, code: 'VG', description: 'V-Grooving' },
+    { name: 'BBT', defaultOrder: 17, code: 'BBT', description: 'Bare Board Testing / E-Test' },
+    { name: 'FQC (AI)', defaultOrder: 18, code: 'FQC', description: 'Final Quality Control with AI' },
+    { name: 'PDI-AQL', defaultOrder: 19, code: 'PDI', description: 'Pre-Dispatch Inspection AQL' },
+    { name: 'PACKING', defaultOrder: 20, code: 'PKG', description: 'Final Packing & Outbound Dispatch Ready' },
   ];
 
   const stageMap: Record<string, string> = {};

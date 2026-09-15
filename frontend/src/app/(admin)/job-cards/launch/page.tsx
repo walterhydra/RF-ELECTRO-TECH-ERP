@@ -30,23 +30,19 @@ export default function JobCardLaunchPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // Exact PDF Example Form Defaults
+  // Exact PDF Form Defaults
   const [launchForm, setLaunchForm] = useState({
     jobCardNo: '26-27-1729',
     photoUrl: '',
     customerPartNo: 'EV-900W-WP-TO247-VORS-25082026',
     rfePartCode: 'D3625',
     customerCode: 'CUST-RF045',
+    launchedAt: new Date().toISOString().split('T')[0],
     targetDate: '2026-09-08',
     priority: 'MOST URGENT' as 'MOST URGENT' | 'HIGH' | 'NORMAL',
-    prodPnlQty: 40,
-    custPnlQty: 80,
     totalPcbQty: 160,
     prodPnlAreaSqm: 50,
-    custPnlAreaSqm: 45,
     jobFlowSelection: 'PF-01',
-    enablePreSplit: false,
-    customSplits: [{ subNo: '26-27-1729-1', qty: 20 }, { subNo: '26-27-1729-2', qty: 20 }],
   });
 
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -63,6 +59,9 @@ export default function JobCardLaunchPage() {
 
     try {
       // Post to NestJS backend if available
+      const totalPcbQty = Number(launchForm.totalPcbQty) || 160;
+      const prodPnlAreaSqm = Number(launchForm.prodPnlAreaSqm) || 45;
+
       const payload = {
         jobCardNo: launchForm.jobCardNo,
         customerPartNo: launchForm.customerPartNo,
@@ -70,14 +69,14 @@ export default function JobCardLaunchPage() {
         customerCode: launchForm.customerCode,
         targetDate: new Date(launchForm.targetDate).toISOString(),
         priority: launchForm.priority,
-        prodPnlQty: Number(launchForm.prodPnlQty),
-        custPnlQty: Number(launchForm.custPnlQty),
-        totalPcbQty: Number(launchForm.totalPcbQty),
-        prodPnlAreaSqm: Number(launchForm.prodPnlAreaSqm),
-        custPnlAreaSqm: Number(launchForm.custPnlAreaSqm),
+        prodPnlQty: Math.ceil(totalPcbQty / 4),
+        custPnlQty: totalPcbQty,
+        totalPcbQty: totalPcbQty,
+        prodPnlAreaSqm: prodPnlAreaSqm,
+        custPnlAreaSqm: prodPnlAreaSqm,
         jobFlowSelection: launchForm.jobFlowSelection,
         photoUrl: launchForm.photoUrl,
-        subJobCards: launchForm.enablePreSplit ? launchForm.customSplits : [],
+        subJobCards: [],
       };
 
       await fetch(`${getApiBaseUrl()}/job-cards`, {
@@ -256,8 +255,8 @@ export default function JobCardLaunchPage() {
                 </div>
               </div>
 
-              {/* Grid 1: Job Card No & Target Date */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Grid 1: Job Card No, Launch Date & Target Date */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block font-bold text-slate-300 mb-1">Job Card No. *</label>
                   <input
@@ -267,6 +266,17 @@ export default function JobCardLaunchPage() {
                     onChange={(e) => setLaunchForm({ ...launchForm, jobCardNo: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 font-mono font-bold text-amber-400 text-sm focus:outline-none focus:border-amber-400"
                     placeholder="26-27-1729"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-amber-300 mb-1">Job Card Launch Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={launchForm.launchedAt}
+                    onChange={(e) => setLaunchForm({ ...launchForm, launchedAt: e.target.value })}
+                    className="w-full bg-slate-950 border border-amber-500/40 rounded-xl px-3.5 py-2.5 font-bold text-amber-300 focus:outline-none focus:border-amber-400"
                   />
                 </div>
 
@@ -349,9 +359,6 @@ export default function JobCardLaunchPage() {
                       setLaunchForm({
                         ...launchForm,
                         totalPcbQty: q,
-                        prodPnlQty: pnl,
-                        custPnlQty: pnl * 2,
-                        custPnlAreaSqm: calculatedArea,
                         prodPnlAreaSqm: Number((calculatedArea * 1.1).toFixed(2)),
                       });
                     }}
@@ -366,15 +373,14 @@ export default function JobCardLaunchPage() {
                     type="number"
                     step="0.01"
                     required
-                    value={launchForm.custPnlAreaSqm || ''}
+                    value={launchForm.prodPnlAreaSqm || ''}
                     onChange={(e) => {
                       const a = Number(e.target.value) || 0;
                       const newUnitArea = launchForm.totalPcbQty > 0 ? a / launchForm.totalPcbQty : 0.28125;
                       setUnitPcbAreaSqm(newUnitArea);
                       setLaunchForm({
                         ...launchForm,
-                        custPnlAreaSqm: a,
-                        prodPnlAreaSqm: Number((a * 1.1).toFixed(2)),
+                        prodPnlAreaSqm: a,
                       });
                     }}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 font-bold text-white font-mono focus:border-amber-400 focus:outline-none"

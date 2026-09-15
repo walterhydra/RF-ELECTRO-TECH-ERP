@@ -179,6 +179,8 @@ export default function JobMovementUpdatePage() {
   const [movementTab, setMovementTab] = useState<'VIEW' | 'FULL' | 'PARTIAL'>('VIEW');
   const [remarkCategory, setRemarkCategory] = useState<string>('Clear Movement');
   const [remarksText, setRemarksText] = useState<string>('');
+  const [rejectedPcbQtyInput, setRejectedPcbQtyInput] = useState<number | string>(0);
+  const [rejectionReasonInput, setRejectionReasonInput] = useState<string>('');
   const [partialQty, setPartialQty] = useState<number | string>(35);
   const [photoLightbox, setPhotoLightbox] = useState<string | null>(null);
 
@@ -187,6 +189,7 @@ export default function JobMovementUpdatePage() {
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data)) {
+          const deleted = getDeletedJobCardIds();
           const mapped: JobCard[] = data.flatMap((j: any) => {
             const masterPcbQty = j.totalPcbQty || j.custPnlQty || (j.prodPnlQty ? j.prodPnlQty * 4 : 160);
             const masterAreaSqm = j.custPnlAreaSqm || j.prodPnlAreaSqm || 45;
@@ -246,7 +249,7 @@ export default function JobMovementUpdatePage() {
               status: j.status === 'CREATED' ? 'UNLAUNCHED' : j.status,
               createdAt: j.createdAt,
             }];
-          });
+          }).filter((j: JobCard) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
 
           setJobs(mapped);
           saveJobCardsToStorage(mapped);
@@ -281,10 +284,30 @@ export default function JobMovementUpdatePage() {
     return false;
   };
 
-  const handleAdvanceStage = async (jobId: string) => {
+  const handleAdvanceStage = async (jobId: string, customRejectionQty?: number, customRejectionReason?: string) => {
     const targetJob = jobs.find((j) => j.id === jobId);
-    if (targetJob && !canUserMoveStage(targetJob.currentStageName)) {
+    if (!targetJob) return;
+
+    if (!canUserMoveStage(targetJob.currentStageName)) {
       showToastMsg(`Permission Denied: Operator assigned to "${assignedStage}" cannot move jobs out of "${targetJob.currentStageName}".`);
+      return;
+    }
+
+    const currentPcbQty = targetJob.totalPcbQty || 160;
+    const currentSqm = targetJob.prodPnlAreaSqm || 45;
+    const sqmPerPcb = currentPcbQty > 0 ? currentSqm / currentPcbQty : 0;
+
+    const parsedRejection = customRejectionQty !== undefined
+      ? customRejectionQty
+      : (typeof rejectedPcbQtyInput === 'number' ? rejectedPcbQtyInput : parseInt(String(rejectedPcbQtyInput), 10) || 0);
+
+    const actualRejected = Math.min(Math.max(0, parsedRejection), currentPcbQty);
+    const forwardedPcbQty = Math.max(0, currentPcbQty - actualRejected);
+    const nextStageSqm = Number((forwardedPcbQty * sqmPerPcb).toFixed(2));
+    const effectiveReason = customRejectionReason || rejectionReasonInput || remarksText || 'Stage Movement';
+
+    if (actualRejected > 0 && !effectiveReason.trim()) {
+      showToastMsg('Mandatory Rejection Remark required when rejecting PCBs.');
       return;
     }
 
@@ -292,7 +315,14 @@ export default function JobMovementUpdatePage() {
       await fetch(`${getApiBaseUrl()}/job-cards/${jobId}/move-full`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ remark: `${remarkCategory}: ${remarksText}` }),
+        body: JSON.stringify({
+          qtyForwarded: forwardedPcbQty,
+          qtyRejected: actualRejected,
+          areaToMove: nextStageSqm,
+          remark: actualRejected > 0
+            ? `Rejection: ${actualRejected} PCBs rejected. Reason: ${effectiveReason}`
+            : `${remarkCategory}: ${remarksText || 'Clear Movement'}`,
+        }),
       });
     } catch (e) {
       console.warn('Backend API unavailable, using local state fallback');
@@ -305,9 +335,20 @@ export default function JobMovementUpdatePage() {
           const nextIndex = Math.min(currentIndex + 1, PF01_STAGES.length - 1);
           const nextStageName = PF01_STAGES[nextIndex];
           const isDone = nextIndex === PF01_STAGES.length - 1;
-          showToastMsg(`Full Movement: Job ${j.jobCardNo} moved to Stage ${nextStageName}`);
+
+          showToastMsg(
+            actualRejected > 0
+              ? `Job ${j.jobCardNo}: ${forwardedPcbQty} PCBs moved to ${nextStageName} (${actualRejected} Rejected, Next Area: ${nextStageSqm} Sqm).`
+              : `Full Movement: Job ${j.jobCardNo} moved to Stage ${nextStageName}`
+          );
+
           return {
             ...j,
+            totalPcbQty: forwardedPcbQty,
+            custPnlQty: forwardedPcbQty,
+            prodPnlQty: Math.ceil(forwardedPcbQty / 4),
+            prodPnlAreaSqm: nextStageSqm,
+            custPnlAreaSqm: nextStageSqm,
             currentStageIndex: nextIndex,
             currentStageName: nextStageName,
             status: isDone ? 'COMPLETED' : 'IN_PROGRESS',
@@ -316,6 +357,30 @@ export default function JobMovementUpdatePage() {
         return j;
       })
     );
+    setSelectedJob(null);
+    setRejectedPcbQtyInput(0);
+    setRejectionReasonInput('');
+  };
+
+  const handleJobDispatch = async (jobId: string) => {
+    const targetJob = jobs.find((j) => j.id === jobId);
+    if (!targetJob) return;
+
+    try {
+      await fetch(`${getApiBaseUrl()}/job-cards/${jobId}/move-full`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'COMPLETED',
+          remark: 'Direct Job Dispatch from Packing stage',
+        }),
+      });
+    } catch (e) {
+      console.warn('Backend API unavailable');
+    }
+
+    setJobs((prev) => prev.filter((j) => j.id !== jobId));
+    showToastMsg(`🚚 Job ${targetJob.jobCardNo} successfully Dispatched & Marked Completed!`);
     setSelectedJob(null);
   };
 
@@ -329,7 +394,7 @@ export default function JobMovementUpdatePage() {
       return;
     }
 
-    const maxPcbQty = selectedJob.totalPcbQty || (selectedJob.custPnlQty || (selectedJob.prodPnlQty * 4)) || 160;
+    const maxPcbQty = selectedJob.totalPcbQty || 160;
     const parsedMoveQty = typeof partialQty === 'number' ? partialQty : (parseInt(String(partialQty), 10) || 0);
 
     if (parsedMoveQty <= 0 || parsedMoveQty >= maxPcbQty) {
@@ -337,8 +402,9 @@ export default function JobMovementUpdatePage() {
       return;
     }
 
-    const totalArea = selectedJob.custPnlAreaSqm || selectedJob.prodPnlAreaSqm || 45;
-    const sqmMoved = Number(((parsedMoveQty * totalArea) / maxPcbQty).toFixed(2));
+    const totalArea = selectedJob.prodPnlAreaSqm || 45;
+    const sqmPerPcb = maxPcbQty > 0 ? totalArea / maxPcbQty : 0;
+    const sqmMoved = Number((parsedMoveQty * sqmPerPcb).toFixed(2));
     const remPcb = Math.max(0, maxPcbQty - parsedMoveQty);
     const remArea = Number(Math.max(0, totalArea - sqmMoved).toFixed(2));
     const effectiveReason = pendingWorkReason === 'Other / Custom Pending Reason' ? (customPendingReason || 'Pending PCB Work') : pendingWorkReason;
@@ -367,51 +433,14 @@ export default function JobMovementUpdatePage() {
     const nextIndex = Math.min(currentIndex + 1, PF01_STAGES.length - 1);
     const nextStageName = PF01_STAGES[nextIndex];
 
-    const rawNo = selectedJob.jobCardNo;
-    const parts = rawNo.split('-');
-    const baseMasterNo = parts.length >= 3 ? parts.slice(0, 3).join('-') : rawNo;
-
-    const usedLetters = new Set<string>();
-    jobs.forEach((j) => {
-      if (j.jobCardNo.startsWith(`${baseMasterNo}-`)) {
-        const rem = j.jobCardNo.slice(baseMasterNo.length + 1);
-        const match = rem.match(/^([A-Z]+)/);
-        if (match) usedLetters.add(match[1]);
-      }
-    });
-
-    let nextMovedLetter = 'A';
-    for (let i = 0; i < 26; i++) {
-      const l = String.fromCharCode(65 + i);
-      if (!usedLetters.has(l)) {
-        nextMovedLetter = l;
-        break;
-      }
-    }
-
-    let movedSubNo = `${baseMasterNo}-${nextMovedLetter}`;
-    let remainingSubNo = rawNo;
-
-    const lastSegment = parts[parts.length - 1];
-    const isLetterSuffix = /^[A-Z]+$/.test(lastSegment);
-
-    if (!isLetterSuffix) {
-      usedLetters.add(nextMovedLetter);
-      let remLetter = 'B';
-      for (let i = 0; i < 26; i++) {
-        const l = String.fromCharCode(65 + i);
-        if (!usedLetters.has(l)) {
-          remLetter = l;
-          break;
-        }
-      }
-      remainingSubNo = `${baseMasterNo}-${remLetter}`;
-    }
+    // NOTE: Per ERP PDF Spec 14-09-2026, DO NOT append any letter suffix (e.g. -A, -B).
+    // Both moved batch and remaining balance batch keep the exact identical base Job Card No.
+    const sameJobCardNo = selectedJob.jobCardNo;
 
     const movedBatch: JobCard = {
       ...selectedJob,
-      id: `jc-part-${Date.now()}-A`,
-      jobCardNo: movedSubNo,
+      id: `jc-part-${Date.now()}-1`,
+      jobCardNo: sameJobCardNo,
       prodPnlQty: Math.ceil(parsedMoveQty / 4),
       custPnlQty: parsedMoveQty,
       totalPcbQty: parsedMoveQty,
@@ -423,7 +452,7 @@ export default function JobMovementUpdatePage() {
 
     const remainingBatch: JobCard = {
       ...selectedJob,
-      jobCardNo: remainingSubNo,
+      jobCardNo: sameJobCardNo,
       prodPnlQty: Math.ceil(remPcb / 4),
       custPnlQty: remPcb,
       totalPcbQty: remPcb,
@@ -433,7 +462,7 @@ export default function JobMovementUpdatePage() {
 
     setJobs((prev) => [movedBatch, ...prev.map((j) => (j.id === selectedJob.id ? remainingBatch : j))]);
     setSelectedJob(null);
-    showToastMsg(`Partial Movement: Moved ${parsedMoveQty} PCBs of ${selectedJob.jobCardNo} to ${nextStageName}. ${remPcb} PCBs remain at ${selectedJob.currentStageName}.`);
+    showToastMsg(`Partial Movement: Moved ${parsedMoveQty} PCBs of Job Card ${sameJobCardNo} to ${nextStageName} (${sqmMoved} Sqm). ${remPcb} PCBs remain at ${selectedJob.currentStageName} (${remArea} Sqm).`);
   };
 
   const filteredJobs = jobs.filter((j) => {
@@ -684,13 +713,22 @@ export default function JobMovementUpdatePage() {
                     <span>View & Move Stage</span>
                   </button>
 
-                  <button
-                    onClick={() => handleAdvanceStage(j.id)}
-                    className="py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1 shadow-md transition-all cursor-pointer shrink-0"
-                  >
-                    <span>Next Stage</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
+                  {j.currentStageName.includes('PACKING') || stageIndex === PF01_STAGES.length - 1 ? (
+                    <button
+                      onClick={() => handleJobDispatch(j.id)}
+                      className="py-2.5 px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-lg transition-all cursor-pointer shrink-0 animate-pulse"
+                    >
+                      <span>🚚 Job Dispatch</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleAdvanceStage(j.id)}
+                      className="py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1 shadow-md transition-all cursor-pointer shrink-0"
+                    >
+                      <span>Next Stage</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
 
               </div>
@@ -815,53 +853,120 @@ export default function JobMovementUpdatePage() {
               )}
 
               {/* TAB B: FULL MOVEMENT */}
-              {movementTab === 'FULL' && (
-                <div className="space-y-4 text-xs font-sans">
-                  <div className="bg-blue-950/70 border border-blue-800/80 p-4 rounded-2xl text-blue-200 space-y-2">
-                    <p className="font-bold text-white text-xs">Full Job Movement Confirmation</p>
-                    <p className="text-xs leading-relaxed text-blue-100">
-                      Are you sure you want to move Job Card No. <strong className="text-amber-300 font-mono">{selectedJob.jobCardNo}</strong> ({selectedJob.totalPcbQty || (selectedJob.prodPnlQty * 2)} PCBs) to the next process?
-                    </p>
-                    <div className="mt-2 text-xs font-extrabold text-blue-300 bg-slate-950 px-3 py-1.5 rounded-xl border border-blue-800 inline-block font-mono">
-                      Next Stage: {PF01_STAGES[selectedJob.currentStageIndex + 1] || '19. PACKING (COMPLETED)'}
+              {movementTab === 'FULL' && (() => {
+                const currentPcbQty = selectedJob.totalPcbQty || 160;
+                const currentArea = selectedJob.prodPnlAreaSqm || 45;
+                const sqmPerPcb = currentPcbQty > 0 ? currentArea / currentPcbQty : 0;
+
+                const parsedRejection = typeof rejectedPcbQtyInput === 'number'
+                  ? rejectedPcbQtyInput
+                  : (parseInt(String(rejectedPcbQtyInput), 10) || 0);
+
+                const actualRejected = Math.min(Math.max(0, parsedRejection), currentPcbQty);
+                const forwardedPcbQty = Math.max(0, currentPcbQty - actualRejected);
+                const nextStageSqm = Number((forwardedPcbQty * sqmPerPcb).toFixed(2));
+                const isPackingStage = selectedJob.currentStageName.includes('PACKING') || selectedJob.currentStageIndex === PF01_STAGES.length - 1;
+
+                return (
+                  <div className="space-y-4 text-xs font-sans">
+                    <div className="bg-blue-950/70 border border-blue-800/80 p-4 rounded-2xl text-blue-200 space-y-2">
+                      <p className="font-bold text-white text-xs">Full Job Movement Confirmation</p>
+                      <p className="text-xs leading-relaxed text-blue-100">
+                        Move Job Card No. <strong className="text-amber-300 font-mono">{selectedJob.jobCardNo}</strong> to the next process.
+                      </p>
+                      <div className="mt-2 text-xs font-extrabold text-blue-300 bg-slate-950 px-3 py-1.5 rounded-xl border border-blue-800 inline-block font-mono">
+                        Current Stage: {selectedJob.currentStageName} ➔ Next Stage: {PF01_STAGES[selectedJob.currentStageIndex + 1] || '20. PACKING (COMPLETED)'}
+                      </div>
                     </div>
-                  </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">Movement Remarks Category *</label>
-                    <select
-                      value={remarkCategory}
-                      onChange={(e) => setRemarkCategory(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-amber-400"
-                    >
-                      <option value="Clear Movement">Clear Movement (No issues)</option>
-                      <option value="Rejection">Rejection</option>
-                      <option value="Rework">Rework</option>
-                      <option value="Process issue">Process issue</option>
-                      <option value="Other relevant movement remarks">Other relevant movement remarks</option>
-                    </select>
-                  </div>
+                    <div className="grid grid-cols-2 gap-3 bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
+                      <div>
+                        <label className="block text-xs font-bold text-rose-400 mb-1">Rejection PCB Quantity (if any):</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={currentPcbQty}
+                          value={rejectedPcbQtyInput}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            if (raw === '') {
+                              setRejectedPcbQtyInput('');
+                            } else {
+                              const val = parseInt(raw, 10);
+                              setRejectedPcbQtyInput(isNaN(val) ? 0 : Math.min(Math.max(0, val), currentPcbQty));
+                            }
+                          }}
+                          className="w-full bg-slate-900 border border-rose-600/50 rounded-xl px-3 py-2 text-xs font-bold text-rose-300 font-mono focus:outline-none focus:border-rose-400"
+                          placeholder="0"
+                        />
+                      </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 mb-1">Remarks Details (Optional)</label>
-                    <textarea
-                      rows={2}
-                      value={remarksText}
-                      onChange={(e) => setRemarksText(e.target.value)}
-                      placeholder="Enter optional stage movement remarks..."
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-amber-400"
-                    />
-                  </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-300 mb-1">Movement Category *</label>
+                        <select
+                          value={remarkCategory}
+                          onChange={(e) => setRemarkCategory(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-amber-400"
+                        >
+                          <option value="Clear Movement">Clear Movement (No issues)</option>
+                          <option value="Rejection">Rejection</option>
+                          <option value="Rework">Rework</option>
+                          <option value="Process issue">Process issue</option>
+                          <option value="Other relevant movement remarks">Other relevant movement remarks</option>
+                        </select>
+                      </div>
 
-                  <button
-                    onClick={() => handleAdvanceStage(selectedJob.id)}
-                    className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
-                    <span>CONFIRM FULL MOVEMENT ({selectedJob.totalPcbQty || (selectedJob.prodPnlQty * 2)} PCBs ➔ Next Stage)</span>
-                  </button>
-                </div>
-              )}
+                      <div className="col-span-2">
+                        <label className="block text-xs font-bold text-slate-300 mb-1">
+                          {actualRejected > 0 ? 'Mandatory Rejection Remark *' : 'Remarks Details (Optional)'}
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={rejectionReasonInput}
+                          onChange={(e) => setRejectionReasonInput(e.target.value)}
+                          placeholder={actualRejected > 0 ? 'Specify rejection defect, cause, or operator notes...' : 'Enter optional stage movement remarks...'}
+                          className={`w-full bg-slate-900 border rounded-xl p-2.5 text-xs text-white focus:outline-none ${
+                            actualRejected > 0 ? 'border-rose-500 focus:border-rose-400' : 'border-slate-700 focus:border-amber-400'
+                          }`}
+                        />
+                      </div>
+
+                      {/* Live Calculation Preview */}
+                      <div className="col-span-2 bg-slate-900/90 border border-slate-800 p-3 rounded-xl flex items-center justify-between text-[11px] font-mono">
+                        <div>
+                          <span className="text-slate-400 block">Forwarded to Next Stage:</span>
+                          <span className="text-emerald-400 font-black text-sm">{forwardedPcbQty} PCBs</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block">Next Stage Area:</span>
+                          <span className="text-emerald-300 font-black text-sm">{nextStageSqm} Sqm</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block">Deducted Rejections:</span>
+                          <span className={`${actualRejected > 0 ? 'text-rose-400 font-black' : 'text-slate-500'} text-sm`}>{actualRejected} PCBs</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {isPackingStage ? (
+                      <button
+                        onClick={() => handleJobDispatch(selectedJob.id)}
+                        className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <span>🚚 CONFIRM JOB DISPATCH & COMPLETE ({forwardedPcbQty} PCBs)</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleAdvanceStage(selectedJob.id, actualRejected, rejectionReasonInput)}
+                        className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                        <span>CONFIRM FULL MOVEMENT ({forwardedPcbQty} PCBs ➔ Next Stage)</span>
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* TAB C: UNCOMPLETED / SPLIT MOVEMENT */}
               {movementTab === 'PARTIAL' && (() => {
