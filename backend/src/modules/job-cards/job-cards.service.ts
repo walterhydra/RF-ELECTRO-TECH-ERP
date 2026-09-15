@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { JobCardStatus, SubJobCardStatus, POStatus } from '@prisma/client';
+import { JobCardStatus, SubJobCardStatus, POStatus, RoleCode } from '@prisma/client';
 import * as qrcode from 'qrcode';
 
 @Injectable()
@@ -373,12 +373,17 @@ export class JobCardsService {
 
   private async ensureDependencies() {
     let superAdminRole = await this.prisma.role.findFirst({
-      where: { name: 'SUPER_ADMIN' },
-    });
+      where: { name: RoleCode.SUPER_ADMIN },
+    }).catch(() => null);
+
+    if (!superAdminRole) {
+      superAdminRole = await this.prisma.role.findFirst().catch(() => null);
+    }
+
     if (!superAdminRole) {
       superAdminRole = await this.prisma.role.create({
-        data: { name: 'SUPER_ADMIN', description: 'Super Administrator' },
-      });
+        data: { name: RoleCode.SUPER_ADMIN, description: 'Super Administrator' },
+      }).catch(() => null);
     }
 
     let defaultUser = await this.prisma.user.findFirst();
