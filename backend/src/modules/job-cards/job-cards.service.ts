@@ -239,44 +239,53 @@ export class JobCardsService {
   }
 
   async seedCloudDb() {
-    const deps = await this.ensureDependencies();
-    const seeded: string[] = [];
+    try {
+      const deps = await this.ensureDependencies();
+      const seeded: string[] = [];
 
-    const defaultCards = [
-      { jobCardNo: 'JC001', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'NORMAL', prodPnlQty: 40, custPnlQty: 160, totalPcbQty: 160, prodPnlAreaSqm: 50, custPnlAreaSqm: 45, autoLaunch: true },
-      { jobCardNo: 'JC002', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'HIGH', prodPnlQty: 80, custPnlQty: 320, totalPcbQty: 320, prodPnlAreaSqm: 100, custPnlAreaSqm: 90, autoLaunch: true },
-      { jobCardNo: 'JC003', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'URGENT', prodPnlQty: 20, custPnlQty: 80, totalPcbQty: 80, prodPnlAreaSqm: 25, custPnlAreaSqm: 22.5, autoLaunch: true },
-      { jobCardNo: 'JC004', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'NORMAL', prodPnlQty: 50, custPnlQty: 200, totalPcbQty: 200, prodPnlAreaSqm: 62.5, custPnlAreaSqm: 56.25, autoLaunch: true },
-      { jobCardNo: 'JC005', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'HIGH', prodPnlQty: 30, custPnlQty: 120, totalPcbQty: 120, prodPnlAreaSqm: 37.5, custPnlAreaSqm: 33.75, autoLaunch: true },
-      { jobCardNo: 'JC006', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'NORMAL', prodPnlQty: 60, custPnlQty: 240, totalPcbQty: 240, prodPnlAreaSqm: 75, custPnlAreaSqm: 67.5, autoLaunch: true },
-      { jobCardNo: 'JC007', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'NORMAL', prodPnlQty: 45, custPnlQty: 180, totalPcbQty: 180, prodPnlAreaSqm: 56.25, custPnlAreaSqm: 50.62, autoLaunch: true },
-      { jobCardNo: 'JC008', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'HIGH', prodPnlQty: 70, custPnlQty: 280, totalPcbQty: 280, prodPnlAreaSqm: 87.5, custPnlAreaSqm: 78.75, autoLaunch: true },
-      { jobCardNo: 'JC009', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'URGENT', prodPnlQty: 25, custPnlQty: 100, totalPcbQty: 100, prodPnlAreaSqm: 31.25, custPnlAreaSqm: 28.12, autoLaunch: true },
-      { jobCardNo: '26-27-0010', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'NORMAL', prodPnlQty: 100, custPnlQty: 400, totalPcbQty: 400, prodPnlAreaSqm: 125, custPnlAreaSqm: 112.5, autoLaunch: true },
-      { jobCardNo: '26-27-0011', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'NORMAL', prodPnlQty: 40, custPnlQty: 160, totalPcbQty: 160, prodPnlAreaSqm: 50, custPnlAreaSqm: 45, autoLaunch: false },
-      { jobCardNo: '26-27-0012', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'NORMAL', prodPnlQty: 60, custPnlQty: 240, totalPcbQty: 240, prodPnlAreaSqm: 75, custPnlAreaSqm: 67.5, autoLaunch: false },
-    ];
+      const defaultCards = [
+        { jobCardNo: 'JC001', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'NORMAL', prodPnlQty: 40, custPnlQty: 160, totalPcbQty: 160, prodPnlAreaSqm: 50, custPnlAreaSqm: 45, autoLaunch: true },
+        { jobCardNo: 'JC002', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'HIGH', prodPnlQty: 80, custPnlQty: 320, totalPcbQty: 320, prodPnlAreaSqm: 100, custPnlAreaSqm: 90, autoLaunch: true },
+        { jobCardNo: 'JC003', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'URGENT', prodPnlQty: 20, custPnlQty: 80, totalPcbQty: 80, prodPnlAreaSqm: 25, custPnlAreaSqm: 22.5, autoLaunch: true },
+        { jobCardNo: 'JC004', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'NORMAL', prodPnlQty: 50, custPnlQty: 200, totalPcbQty: 200, prodPnlAreaSqm: 62.5, custPnlAreaSqm: 56.25, autoLaunch: true },
+        { jobCardNo: 'JC005', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'HIGH', prodPnlQty: 30, custPnlQty: 120, totalPcbQty: 120, prodPnlAreaSqm: 37.5, custPnlAreaSqm: 33.75, autoLaunch: true },
+        { jobCardNo: 'JC006', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'NORMAL', prodPnlQty: 60, custPnlQty: 240, totalPcbQty: 240, prodPnlAreaSqm: 75, custPnlAreaSqm: 67.5, autoLaunch: true },
+        { jobCardNo: 'JC007', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'NORMAL', prodPnlQty: 45, custPnlQty: 180, totalPcbQty: 180, prodPnlAreaSqm: 56.25, custPnlAreaSqm: 50.62, autoLaunch: true },
+        { jobCardNo: 'JC008', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'HIGH', prodPnlQty: 70, custPnlQty: 280, totalPcbQty: 280, prodPnlAreaSqm: 87.5, custPnlAreaSqm: 78.75, autoLaunch: true },
+        { jobCardNo: 'JC009', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'URGENT', prodPnlQty: 25, custPnlQty: 100, totalPcbQty: 100, prodPnlAreaSqm: 31.25, custPnlAreaSqm: 28.12, autoLaunch: true },
+        { jobCardNo: '26-27-0010', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'NORMAL', prodPnlQty: 100, custPnlQty: 400, totalPcbQty: 400, prodPnlAreaSqm: 125, custPnlAreaSqm: 112.5, autoLaunch: true },
+        { jobCardNo: '26-27-0011', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'NORMAL', prodPnlQty: 40, custPnlQty: 160, totalPcbQty: 160, prodPnlAreaSqm: 50, custPnlAreaSqm: 45, autoLaunch: false },
+        { jobCardNo: '26-27-0012', customerCode: 'CUST-RF045', rfePartCode: 'D3625', customerPartNo: 'EV-900W-WP-TO247', priority: 'NORMAL', prodPnlQty: 60, custPnlQty: 240, totalPcbQty: 240, prodPnlAreaSqm: 75, custPnlAreaSqm: 67.5, autoLaunch: false },
+      ];
 
-    for (const cardData of defaultCards) {
-      try {
-        await this.createJobCard(cardData, deps.defaultUser.id);
-        seeded.push(cardData.jobCardNo);
-      } catch (err: any) {
-        console.error(`Seed card ${cardData.jobCardNo} failed:`, err?.message);
+      for (const cardData of defaultCards) {
+        try {
+          await this.createJobCard(cardData, deps.defaultUser.id);
+          seeded.push(cardData.jobCardNo);
+        } catch (err: any) {
+          console.error(`Seed card ${cardData.jobCardNo} failed:`, err?.message);
+        }
       }
+
+      const allCards = await this.prisma.jobCard.findMany({
+        include: {
+          customerPO: { include: { customer: true } },
+          product: true,
+          processFlowMaster: true,
+          subJobCards: { include: { currentStage: true }, orderBy: { subJobCardNo: 'asc' } },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      return allCards;
+    } catch (error: any) {
+      console.error('seedCloudDb error:', error);
+      return {
+        success: false,
+        error: error?.message || String(error),
+        stack: error?.stack,
+      };
     }
-
-    const allCards = await this.prisma.jobCard.findMany({
-      include: {
-        customerPO: { include: { customer: true } },
-        product: true,
-        processFlowMaster: true,
-        subJobCards: { include: { currentStage: true }, orderBy: { subJobCardNo: 'asc' } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    return allCards;
   }
 
   async splitJobCard(id: string, splitsInput: any, createdById: string) {
