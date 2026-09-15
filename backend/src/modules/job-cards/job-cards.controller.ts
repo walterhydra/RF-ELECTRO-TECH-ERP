@@ -25,6 +25,7 @@ export class JobCardsController {
   @Public()
   @ApiOperation({ summary: 'Get single Job Card details with full hierarchy and stages' })
   async findOne(@Param('id') id: string) {
+    console.log('--- ROUTE HIT: GET /job-cards/:id ---', id);
     return this.jobCardsService.findOne(id);
   }
 
@@ -33,6 +34,7 @@ export class JobCardsController {
   @Public()
   @ApiOperation({ summary: 'Update an existing Job Card' })
   async updateJobCard(@Param('id') id: string, @Body() body: any) {
+    console.log('--- ROUTE HIT: PUT/PATCH /job-cards/:id ---', id);
     return this.jobCardsService.updateJobCard(id, body);
   }
 
@@ -41,6 +43,7 @@ export class JobCardsController {
   @ApiOperation({ summary: 'Generate Job Card from Customer Purchase Order' })
   @ApiResponse({ status: 201, description: 'Job Card generated successfully' })
   async generateFromPo(@Body() body: { customerPoId: string }, @Req() req: any) {
+    console.log('--- ROUTE HIT: POST /job-cards/generate ---');
     const createdById = req.user?.sub || req.user?.id || req.user?.userId;
     return this.jobCardsService.generateFromPo(body.customerPoId, createdById);
   }
@@ -50,7 +53,7 @@ export class JobCardsController {
   @ApiOperation({ summary: 'Create a new Job Card with full 13 PDF metadata fields & pre-launch split options' })
   @ApiResponse({ status: 201, description: 'Job Card created successfully' })
   async createJobCard(@Body() body: any, @Req() req: any) {
-    console.log('--- ENTERED createJobCard controller ---', body?.jobCardNo);
+    console.log('--- ROUTE HIT: POST /job-cards/create ---', body?.jobCardNo);
     const createdById = req.user?.sub || req.user?.id || req.user?.userId;
     return this.jobCardsService.createJobCard(body, createdById);
   }
