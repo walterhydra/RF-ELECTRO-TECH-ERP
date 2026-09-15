@@ -176,8 +176,9 @@ export class JobCardsService {
     return jobCards;
   }
 
-  async findOne(id: string) {
-    const jobCard = await this.prisma.jobCard.findUnique({
+  async findOne(id: string, client: any = this.prisma) {
+    const db = client || this.prisma;
+    const jobCard = await db.jobCard.findUnique({
       where: { id },
       include: {
         customerPO: {
@@ -283,7 +284,7 @@ export class JobCardsService {
         createdSubCards.push(subCard);
       }
 
-      return this.findOne(id);
+      return this.findOne(id, tx);
     });
   }
 
@@ -515,7 +516,7 @@ export class JobCardsService {
         });
       }
 
-      return this.findOne(jobCard.id);
+      return this.findOne(jobCard.id, tx);
     });
   }
 
