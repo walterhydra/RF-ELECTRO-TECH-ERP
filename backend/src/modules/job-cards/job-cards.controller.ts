@@ -48,6 +48,14 @@ export class JobCardsController {
     return this.jobCardsService.generateFromPo(body.customerPoId, createdById);
   }
 
+  @Get('seed-cloud-db')
+  @Public()
+  @ApiOperation({ summary: 'Explicitly seed cloud database with default production Job Cards' })
+  async seedCloudDb() {
+    console.log('--- ROUTE HIT: GET /job-cards/seed-cloud-db ---');
+    return this.jobCardsService.seedCloudDb();
+  }
+
   @Get(':id')
   @Public()
   @ApiOperation({ summary: 'Get single Job Card details with full hierarchy and stages' })
