@@ -1,5 +1,7 @@
 'use client';
 
+export const dynamic = 'force-dynamic';
+
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { 
@@ -687,23 +689,17 @@ export default function JobCardsPage() {
   const [incompleteCustomReason, setIncompleteCustomReason] = useState<string>('');
   const [incompleteRemarks, setIncompleteRemarks] = useState<string>('');
 
-  // Load stored job cards from localStorage after client mounts to avoid hydration mismatch
+  // Set client mount state
   useEffect(() => {
     setIsMounted(true);
-    const stored = getStoredJobCards();
-    if (stored !== null && stored.length > 0) {
-      setJobCards(stored);
-    } else {
-      setJobCards([]);
-    }
   }, []);
 
-  // Save jobCards to localStorage whenever state updates (only after mount)
+  // Save jobCards to localStorage as offline cache only when server is connected
   useEffect(() => {
-    if (isMounted) {
+    if (isMounted && serverConnectionState.status === 'CONNECTED' && jobCards.length > 0) {
       saveJobCardsToStorage(jobCards);
     }
-  }, [jobCards, isMounted]);
+  }, [jobCards, isMounted, serverConnectionState.status]);
 
   // Sync userRole from localStorage if set
   useEffect(() => {
@@ -1002,6 +998,15 @@ export default function JobCardsPage() {
       }
     }
   }, []);
+
+  const handleSaveApiHost = (newHost: string) => {
+    const cleaned = newHost.trim();
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('erp_backend_api_url', cleaned);
+      localStorage.setItem('erp_qr_server_host', cleaned);
+      window.location.reload();
+    }
+  };
 
   useEffect(() => {
     fetchBackendJobCards();
@@ -1885,7 +1890,7 @@ export default function JobCardsPage() {
           <button
             onClick={() => {
               const custom = prompt('Enter your Backend API URL (e.g. https://rf-electro-erp.loca.lt or http://192.168.1.50:3001):', serverConnectionState.url);
-              if (custom) handleSaveHost(custom);
+              if (custom) handleSaveApiHost(custom);
             }}
             className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-black rounded-xl text-xs whitespace-nowrap cursor-pointer shadow-xs active:scale-95 shrink-0"
           >
@@ -1925,7 +1930,7 @@ export default function JobCardsPage() {
             <button
               onClick={() => {
                 const custom = prompt('Enter your Backend API URL (e.g. https://rf-electro-erp.loca.lt or http://192.168.103.206:3001):', serverConnectionState.url);
-                if (custom) handleSaveHost(custom);
+                if (custom) handleSaveApiHost(custom);
               }}
               className="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs whitespace-nowrap cursor-pointer shadow-xs active:scale-95"
             >
