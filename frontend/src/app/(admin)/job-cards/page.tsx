@@ -462,7 +462,7 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
                   className="w-full px-2 py-1 bg-emerald-600 text-white rounded text-[10px] font-bold text-left cursor-pointer flex items-center justify-between"
                 >
                   <span>🌐 Public World URL (5G/4G Anywhere)</span>
-                  <span className="font-mono text-[9px] opacity-80">loca.lt</span>
+                  <span className="font-mono text-[9px] opacity-80">onrender.com</span>
                 </button>
                 <button
                   type="button"
@@ -673,7 +673,7 @@ export default function JobCardsPage() {
   const [showQrModal, setShowQrModal] = useState<JobCard | null>(null);
   const [deleteConfirmCard, setDeleteConfirmCard] = useState<JobCard | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [serverHost, setServerHost] = useState<string>('rf-electro-erp.loca.lt');
+  const [serverHost, setServerHost] = useState<string>('rf-electro-tech-erp.onrender.com');
   const [photoLightbox, setPhotoLightbox] = useState<string | null>(null);
   const [unitPcbAreaSqm, setUnitPcbAreaSqm] = useState<number>(0.28125);
 
