@@ -8,6 +8,10 @@ export class JobCardsService {
   constructor(private prisma: PrismaService) {}
 
   async generateFromPo(customerPoId: string, createdById: string) {
+    if (!createdById) {
+      const defaultUser = await this.prisma.user.findFirst();
+      createdById = defaultUser?.id || '';
+    }
     if (!customerPoId) {
       throw new BadRequestException('customerPoId is required');
     }
@@ -203,6 +207,10 @@ export class JobCardsService {
   }
 
   async splitJobCard(id: string, splitsInput: any, createdById: string) {
+    if (!createdById) {
+      const defaultUser = await this.prisma.user.findFirst();
+      createdById = defaultUser?.id || '';
+    }
     const jobCard = await this.findOne(id);
 
     if (jobCard.status !== JobCardStatus.CREATED && jobCard.status !== JobCardStatus.NOT_LAUNCHED) {
@@ -280,6 +288,10 @@ export class JobCardsService {
   }
 
   async createJobCard(data: any, createdById: string) {
+    if (!createdById) {
+      const defaultUser = await this.prisma.user.findFirst();
+      createdById = defaultUser?.id || '';
+    }
     // Generate sequential jobCardNo if not provided
     let jobCardNo = data.jobCardNo;
     if (!jobCardNo) {

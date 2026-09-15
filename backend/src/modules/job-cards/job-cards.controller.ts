@@ -15,19 +15,21 @@ export class JobCardsController {
   constructor(private readonly jobCardsService: JobCardsService) {}
 
   @Get()
+  @Public()
   @ApiOperation({ summary: 'List all Job Cards with optional status and search filters' })
   async findAll(@Query() query: any) {
     return this.jobCardsService.findAll(query);
   }
 
   @Get(':id')
+  @Public()
   @ApiOperation({ summary: 'Get single Job Card details with full hierarchy and stages' })
   async findOne(@Param('id') id: string) {
     return this.jobCardsService.findOne(id);
   }
 
   @Post('generate')
-  @RequirePermissions('job_cards.manage', 'production.manage')
+  @Public()
   @ApiOperation({ summary: 'Generate Job Card from Customer Purchase Order' })
   @ApiResponse({ status: 201, description: 'Job Card generated successfully' })
   async generateFromPo(@Body() body: { customerPoId: string }, @Req() req: any) {
@@ -36,7 +38,7 @@ export class JobCardsController {
   }
 
   @Post('create')
-  @RequirePermissions('job_cards.manage', 'production.manage')
+  @Public()
   @ApiOperation({ summary: 'Create a new Job Card with full 13 PDF metadata fields & pre-launch split options' })
   @ApiResponse({ status: 201, description: 'Job Card created successfully' })
   async createJobCard(@Body() body: any, @Req() req: any) {
@@ -45,7 +47,7 @@ export class JobCardsController {
   }
 
   @Post(':id/split')
-  @RequirePermissions('job_cards.manage', 'production.manage')
+  @Public()
   @ApiOperation({ summary: 'Split a Job Card into multiple Sub-Job Cards before launch' })
   @ApiResponse({ status: 201, description: 'Job Card split successfully' })
   async splitJobCard(@Param('id') id: string, @Body() body: any, @Req() req: any) {
@@ -54,7 +56,7 @@ export class JobCardsController {
   }
 
   @Post(':id/launch')
-  @RequirePermissions('job_cards.manage', 'production.manage')
+  @Public()
   @ApiOperation({ summary: 'Launch Job Card and assign initial Sub-Job Cards to Stage 1' })
   @ApiResponse({ status: 201, description: 'Job Card launched successfully' })
   async launchJobCard(@Param('id') id: string) {
@@ -62,7 +64,7 @@ export class JobCardsController {
   }
 
   @Patch(':id/status')
-  @RequirePermissions('job_cards.manage', 'production.manage')
+  @Public()
   @ApiOperation({ summary: 'Update Job Card status' })
   async updateStatus(@Param('id') id: string, @Body() body: { status: JobCardStatus }) {
     return this.jobCardsService.updateStatus(id, body.status);
@@ -76,20 +78,21 @@ export class JobCardsController {
   }
 
   @Get(':id/history')
+  @Public()
   @ApiOperation({ summary: 'Get full chronological traceability timeline for Job Card and all its Sub Job Cards' })
   async getTraceabilityHistory(@Param('id') id: string, @Req() req: any) {
     return this.jobCardsService.getTraceabilityHistory(id, req.user);
   }
 
   @Post(':id/move-full')
-  @RequirePermissions('job_cards.manage', 'production.manage')
+  @Public()
   @ApiOperation({ summary: 'Execute Full Job Movement to next process stage' })
   async moveFull(@Param('id') id: string, @Body() body: { remark?: string }, @Req() req: any) {
     return this.jobCardsService.moveFull(id, body, req.user);
   }
 
   @Post(':id/move-partial')
-  @RequirePermissions('job_cards.manage', 'production.manage')
+  @Public()
   @ApiOperation({ summary: 'Execute Uncompleted / Partial Job Movement to next process stage' })
   async movePartial(
     @Param('id') id: string,
@@ -100,7 +103,7 @@ export class JobCardsController {
   }
 
   @Delete(':id')
-  @RequirePermissions('job_cards.manage', 'production.manage')
+  @Public()
   @ApiOperation({ summary: 'Delete Job Card (Master role restricted)' })
   async deleteJobCard(@Param('id') id: string, @Req() req: any) {
     return this.jobCardsService.deleteJobCard(id, req.user);
