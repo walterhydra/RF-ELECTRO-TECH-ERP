@@ -688,10 +688,7 @@ export class JobCardsService {
   }
 
   async updateStatus(id: string, status: JobCardStatus) {
-    const jobCard = await this.prisma.jobCard.findUnique({ where: { id } });
-    if (!jobCard) {
-      throw new NotFoundException(`Job Card with ID "${id}" not found`);
-    }
+    const jobCard = await this.findOne(id);
 
     const data: any = { status };
     if (status === JobCardStatus.COMPLETED && !jobCard.completedAt) {
@@ -699,7 +696,7 @@ export class JobCardsService {
     }
 
     return this.prisma.jobCard.update({
-      where: { id },
+      where: { id: jobCard.id },
       data,
       include: {
         customerPO: { include: { customer: true } },
@@ -710,17 +707,7 @@ export class JobCardsService {
   }
 
   async getQrCodeImage(id: string) {
-    const jobCard = await this.prisma.jobCard.findUnique({
-      where: { id },
-      include: {
-        product: true,
-        customerPO: { include: { customer: true } },
-      },
-    });
-
-    if (!jobCard) {
-      throw new NotFoundException(`Job Card with ID "${id}" not found`);
-    }
+    const jobCard = await this.findOne(id);
 
     const payload = {
       type: 'JOB_CARD',
@@ -750,13 +737,7 @@ export class JobCardsService {
   }
 
   async getTraceabilityHistory(id: string, user: any) {
-    const jobCard = await this.prisma.jobCard.findUnique({
-      where: { id },
-      include: { subJobCards: true },
-    });
-    if (!jobCard) {
-      throw new NotFoundException(`Job Card with ID "${id}" not found`);
-    }
+    const jobCard = await this.findOne(id);
 
     const subJobCardIds = jobCard.subJobCards.map((s) => s.id);
 
