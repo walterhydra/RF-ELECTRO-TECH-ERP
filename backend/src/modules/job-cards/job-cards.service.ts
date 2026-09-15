@@ -612,40 +612,46 @@ export class JobCardsService {
           const subJobCardNo = `${jobCardNo}-${i + 1}`;
           const ratio = (Number(data.prodPnlQty) || 40) > 0 ? subQty / (Number(data.prodPnlQty) || 40) : 1;
 
+          const existingSub = await tx.subJobCard.findFirst({ where: { subJobCardNo } });
+          if (!existingSub) {
+            await tx.subJobCard.create({
+              data: {
+                subJobCardNo,
+                jobCardId: jobCard.id,
+                qty: subQty,
+                prodPnlQty: subQty,
+                totalPcbQty: data.totalPcbQty ? Math.round(Number(data.totalPcbQty) * ratio) : null,
+                prodPnlAreaSqm: data.prodPnlAreaSqm ? Number((Number(data.prodPnlAreaSqm) * ratio).toFixed(2)) : null,
+                custPnlAreaSqm: data.custPnlAreaSqm ? Number((Number(data.custPnlAreaSqm) * ratio).toFixed(2)) : null,
+                status: data.autoLaunch ? SubJobCardStatus.IN_STAGE : SubJobCardStatus.PENDING_LAUNCH,
+                currentStageId: initialStageId,
+                qrCodeValue: `RFE-SJC-${subJobCardNo}-${Date.now().toString().slice(-4)}`,
+                createdById,
+              },
+            }).catch(() => {});
+          }
+        }
+      } else {
+        // Auto create 1 sub job card for full lot
+        const subJobCardNo = `${jobCardNo}-1`;
+        const existingSub = await tx.subJobCard.findFirst({ where: { subJobCardNo } });
+        if (!existingSub) {
           await tx.subJobCard.create({
             data: {
               subJobCardNo,
               jobCardId: jobCard.id,
-              qty: subQty,
-              prodPnlQty: subQty,
-              totalPcbQty: data.totalPcbQty ? Math.round(Number(data.totalPcbQty) * ratio) : null,
-              prodPnlAreaSqm: data.prodPnlAreaSqm ? Number((Number(data.prodPnlAreaSqm) * ratio).toFixed(2)) : null,
-              custPnlAreaSqm: data.custPnlAreaSqm ? Number((Number(data.custPnlAreaSqm) * ratio).toFixed(2)) : null,
+              qty: Number(data.prodPnlQty) || 40,
+              prodPnlQty: Number(data.prodPnlQty) || 40,
+              totalPcbQty: Number(data.totalPcbQty) || 160,
+              prodPnlAreaSqm: Number(data.prodPnlAreaSqm) || 50,
+              custPnlAreaSqm: Number(data.custPnlAreaSqm) || 45,
               status: data.autoLaunch ? SubJobCardStatus.IN_STAGE : SubJobCardStatus.PENDING_LAUNCH,
               currentStageId: initialStageId,
               qrCodeValue: `RFE-SJC-${subJobCardNo}-${Date.now().toString().slice(-4)}`,
               createdById,
             },
-          });
+          }).catch(() => {});
         }
-      } else {
-        // Auto create 1 sub job card for full lot
-        const subJobCardNo = `${jobCardNo}-1`;
-        await tx.subJobCard.create({
-          data: {
-            subJobCardNo,
-            jobCardId: jobCard.id,
-            qty: Number(data.prodPnlQty) || 40,
-            prodPnlQty: Number(data.prodPnlQty) || 40,
-            totalPcbQty: Number(data.totalPcbQty) || 160,
-            prodPnlAreaSqm: Number(data.prodPnlAreaSqm) || 50,
-            custPnlAreaSqm: Number(data.custPnlAreaSqm) || 45,
-            status: data.autoLaunch ? SubJobCardStatus.IN_STAGE : SubJobCardStatus.PENDING_LAUNCH,
-            currentStageId: initialStageId,
-            qrCodeValue: `RFE-SJC-${subJobCardNo}-${Date.now().toString().slice(-4)}`,
-            createdById,
-          },
-        });
       }
 
       return this.findOne(jobCard.id, tx);
