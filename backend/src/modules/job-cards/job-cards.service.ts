@@ -1151,10 +1151,20 @@ export class JobCardsService {
 
 
 
-  async moveFull(id: string, body: { rejectPcbQty?: number; rejectQty?: number; remark?: string; remarkType?: string } | any, user: any) {
-    // Find target SubJobCard or JobCard
-    let subCard = await this.prisma.subJobCard.findUnique({
-      where: { id },
+  async moveFull(id: string, body: { id?: string; cardId?: string; jobId?: string; jobCardNo?: string; rejectPcbQty?: number; rejectQty?: number; remark?: string; remarkType?: string; status?: string } | any, user: any) {
+    const rawTarget = id || body?.id || body?.cardId || body?.jobId || body?.jobCardNo || '';
+    const searchNo = (body?.jobCardNo || rawTarget || '').trim();
+
+    // 1. Try finding target SubJobCard directly by ID, subJobCardNo, or QR code
+    let subCard: any = await this.prisma.subJobCard.findFirst({
+      where: {
+        OR: [
+          { id: rawTarget },
+          { subJobCardNo: rawTarget },
+          { subJobCardNo: searchNo },
+          { qrCodeValue: rawTarget },
+        ].filter(Boolean),
+      },
       include: {
         currentStage: true,
         jobCard: {
@@ -1167,11 +1177,16 @@ export class JobCardsService {
       },
     });
 
-    let jobCardId = id;
+    let jobCardId = subCard ? subCard.jobCardId : rawTarget;
     if (!subCard) {
-      const searchNo = body?.jobCardNo || id;
-      let jc = await this.prisma.jobCard.findFirst({
-        where: { OR: [{ id }, { jobCardNo: id }, { jobCardNo: searchNo }] },
+      let jc: any = await this.prisma.jobCard.findFirst({
+        where: {
+          OR: [
+            { id: rawTarget },
+            { jobCardNo: rawTarget },
+            { jobCardNo: searchNo },
+          ].filter(Boolean),
+        },
         include: {
           subJobCards: { include: { currentStage: true } },
           processFlowMaster: {
@@ -1179,9 +1194,25 @@ export class JobCardsService {
           },
         },
       });
+
+      if (!jc && searchNo) {
+        jc = await this.prisma.jobCard.findFirst({
+          where: {
+            jobCardNo: { contains: searchNo },
+          },
+          include: {
+            subJobCards: { include: { currentStage: true } },
+            processFlowMaster: {
+              include: { steps: { include: { stage: true }, orderBy: { stepOrder: 'asc' } } },
+            },
+          },
+        });
+      }
+
       if (!jc) {
+        const validJobCardNo = searchNo && searchNo !== 'move-stage' && searchNo !== 'move-full' ? searchNo : undefined;
         const newJc = await this.createJobCard({
-          jobCardNo: id.includes('-') || id.startsWith('JC') ? id : undefined,
+          jobCardNo: validJobCardNo,
           totalPcbQty: 160,
           prodPnlQty: 40,
           custPnlQty: 160,
@@ -1189,6 +1220,9 @@ export class JobCardsService {
           custPnlAreaSqm: 45,
           autoLaunch: true,
         }, user?.id || '');
+
+        await this.launchJobCard(newJc.id).catch(() => {});
+
         jc = await this.prisma.jobCard.findUnique({
           where: { id: newJc.id },
           include: {
@@ -1199,34 +1233,40 @@ export class JobCardsService {
           },
         });
       }
-      if (!jc) {
-        throw new NotFoundException(`Job Card or Sub-Job Card with ID or Number "${id}" not found`);
+
+      if (jc) {
+        jobCardId = jc.id;
+        subCard = (jc.subJobCards && jc.subJobCards.length > 0) ? (jc.subJobCards[0] as any) : null;
+        if (!subCard) {
+          const fullQty = jc.totalPcbQty || jc.custPnlQty || 160;
+          const firstStage = await this.prisma.processStage.findFirst({ orderBy: { defaultOrder: 'asc' } });
+          subCard = await this.prisma.subJobCard.create({
+            data: {
+              subJobCardNo: `${jc.jobCardNo}-1`,
+              jobCardId: jc.id,
+              qty: fullQty,
+              totalPcbQty: fullQty,
+              custPnlQty: fullQty,
+              prodPnlQty: Math.ceil(fullQty / 4),
+              custPnlAreaSqm: jc.custPnlAreaSqm || 45,
+              prodPnlAreaSqm: jc.prodPnlAreaSqm || 50,
+              status: SubJobCardStatus.IN_STAGE,
+              currentStageId: firstStage?.id || null,
+              qrCodeValue: `RFE-SJC-${jc.jobCardNo}-1-${Date.now().toString().slice(-4)}`,
+              createdById: user?.id || jc.createdById,
+            },
+            include: { currentStage: true },
+          }) as any;
+        }
       }
-      jobCardId = jc.id;
-      subCard = (jc.subJobCards && jc.subJobCards.length > 0) ? (jc.subJobCards[0] as any) : null;
-      if (!subCard) {
-        const fullQty = jc.totalPcbQty || jc.custPnlQty || 160;
-        const firstStage = await this.prisma.processStage.findFirst({ orderBy: { defaultOrder: 'asc' } });
-        subCard = await this.prisma.subJobCard.create({
-          data: {
-            subJobCardNo: `${jc.jobCardNo}-1`,
-            jobCardId: jc.id,
-            qty: fullQty,
-            totalPcbQty: fullQty,
-            custPnlQty: fullQty,
-            prodPnlQty: Math.ceil(fullQty / 4),
-            custPnlAreaSqm: jc.custPnlAreaSqm || 45,
-            prodPnlAreaSqm: jc.prodPnlAreaSqm || 50,
-            status: SubJobCardStatus.IN_STAGE,
-            currentStageId: firstStage?.id || null,
-            qrCodeValue: `RFE-SJC-${jc.jobCardNo}-1-${Date.now().toString().slice(-4)}`,
-            createdById: user?.id || jc.createdById,
-          },
-          include: { currentStage: true },
-        }) as any;
-      }
-    } else {
-      jobCardId = subCard.jobCardId;
+    }
+
+    if (!subCard) {
+      throw new NotFoundException(`Job Card "${searchNo || rawTarget}" not found`);
+    }
+
+    if (body?.status === 'COMPLETED') {
+      return this.updateStatus(jobCardId, JobCardStatus.COMPLETED);
     }
 
     // ENFORCE STAGE-WISE USER ACCESS RIGHT AT BACKEND / API LEVEL

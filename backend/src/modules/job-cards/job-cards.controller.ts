@@ -112,16 +112,19 @@ export class JobCardsController {
     return this.jobCardsService.getTraceabilityHistory(id, req.user);
   }
 
-  @Post(':id/move-full')
+  @Post('move-stage')
+  @Post('move-full')
   @Post(':id/move-stage')
+  @Post(':id/move-full')
   @Public()
   @ApiOperation({ summary: 'Execute Full Job Movement to next process stage' })
   async moveFull(
-    @Param('id') id: string,
-    @Body() body: { rejectPcbQty?: number; rejectQty?: number; remark?: string; remarkType?: string },
+    @Param('id') pathId: string,
+    @Body() body: { id?: string; cardId?: string; jobId?: string; jobCardNo?: string; rejectPcbQty?: number; rejectQty?: number; remark?: string; remarkType?: string; status?: string },
     @Req() req: any,
   ) {
-    return this.jobCardsService.moveFull(id, body, req.user);
+    const targetId = pathId || body?.id || body?.cardId || body?.jobId || body?.jobCardNo || '';
+    return this.jobCardsService.moveFull(targetId, body, req.user);
   }
 
   @Post(':id/move-partial')
