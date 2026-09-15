@@ -362,19 +362,71 @@ export class JobCardsService {
       });
     }
 
+    // Ensure standard stages exist
+    let stages = await this.prisma.processStage.findMany();
+    if (stages.length === 0) {
+      const defaultStageNames = [
+        'CAM / MI Generation', 'Job Registration & Barcoding', 'Board Cutting & Edge Milling',
+        'CNC Drilling', 'Deburring & Surface Prep', 'Electroless Copper (PTH)',
+        'Outer Layer Photo Image / Lamination', 'Pattern Electroplating (Cu + Sn)',
+        'Alkaline Etching', 'Tin Stripping', 'Solder Mask Coating & Printing',
+        'UV Exposure & Developer', 'Legend / Silkscreen Printing', 'Thermal Curing',
+        'Surface Finish (HASL / ENIG)', 'CNC Routing / V-Scoring', 'Electrical Testing (E-Test)',
+        'Final Quality Inspection (FQC)', 'Vacuum Packaging & Dispatch'
+      ];
+
+      for (let i = 0; i < defaultStageNames.length; i++) {
+        const name = defaultStageNames[i];
+        const code = `STG-${String(i + 1).padStart(2, '0')}`;
+        await this.prisma.processStage.create({
+          data: {
+            code,
+            name,
+            sequenceOrder: i + 1,
+            description: `${name} Stage`,
+          },
+        }).catch(() => {});
+      }
+      stages = await this.prisma.processStage.findMany({ orderBy: { sequenceOrder: 'asc' } });
+    }
+
     let processFlow = await this.prisma.processFlowMaster.findFirst({
       where: { isActive: true },
       include: { steps: { orderBy: { stepOrder: 'asc' } } },
     });
-    if (!processFlow) {
-      processFlow = await this.prisma.processFlowMaster.create({
-        data: {
-          name: 'PF-01 Standard Flow',
-          totalSteps: 20,
-          createdById: defaultUser.id,
-        },
-        include: { steps: { orderBy: { stepOrder: 'asc' } } },
-      });
+    if (!processFlow || !processFlow.steps || processFlow.steps.length === 0) {
+      if (!processFlow) {
+        processFlow = await this.prisma.processFlowMaster.create({
+          data: {
+            name: 'PF-01 Standard Flow',
+            totalSteps: stages.length || 19,
+            createdById: defaultUser.id,
+          },
+          include: { steps: { orderBy: { stepOrder: 'asc' } } },
+        });
+      }
+      if (stages.length > 0) {
+        for (let i = 0; i < stages.length; i++) {
+          await this.prisma.processFlowStep.upsert({
+            where: {
+              processFlowMasterId_stepOrder: {
+                processFlowMasterId: processFlow.id,
+                stepOrder: i + 1,
+              },
+            },
+            update: { stageId: stages[i].id },
+            create: {
+              processFlowMasterId: processFlow.id,
+              stageId: stages[i].id,
+              stepOrder: i + 1,
+            },
+          }).catch(() => {});
+        }
+        processFlow = await this.prisma.processFlowMaster.findUnique({
+          where: { id: processFlow.id },
+          include: { steps: { orderBy: { stepOrder: 'asc' } } },
+        }) || processFlow;
+      }
     }
 
     let customer = await this.prisma.customer.findFirst();
@@ -583,6 +635,7 @@ export class JobCardsService {
     try {
       return await this.findOne(createdId);
     } catch (err) {
+      console.error('createJobCard findOne error:', err);
       const fallback = await this.prisma.jobCard.findUnique({
         where: { id: createdId },
         include: {
