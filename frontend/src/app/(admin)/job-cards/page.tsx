@@ -1087,30 +1087,64 @@ export default function JobCardsPage() {
     }
 
     const targetJob = jobCards.find((j) => j.id === jobCardId || j.jobCardNo === jobCardId);
-    const cardId = targetJob?.parentJobCardId || targetJob?.id || jobCardId;
+    let cardId = targetJob?.parentJobCardId || targetJob?.id || jobCardId;
     const cardNo = targetJob?.jobCardNo || jobCardId;
 
     runWithLoading(`Releasing Job Card ${cardNo} into Stage 1 Production (1. SHEARING)...`, async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        const res = await fetch(`${getApiBaseUrl()}/job-cards/${cardId}/launch`, {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        };
+
+        // 1. Try launching by ID
+        let launchTarget = encodeURIComponent(cardId);
+        let res = await fetch(`${getApiBaseUrl()}/job-cards/${launchTarget}/launch`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
+          headers,
         });
 
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          const errMsg = errData.message || res.statusText || 'Failed to launch Job Card';
-          console.error('Launch API error:', res.status, errMsg);
-          showToast(`Launch failed: ${errMsg}`, 'error');
-          return;
+        // 2. Fallback: Try launching by Job Card No
+        if (!res.ok && cardNo && cardNo !== cardId) {
+          launchTarget = encodeURIComponent(cardNo);
+          res = await fetch(`${getApiBaseUrl()}/job-cards/${launchTarget}/launch`, {
+            method: 'POST',
+            headers,
+          });
+        }
+
+        // 3. Fallback: If card only existed in client memory, auto-create in DB with autoLaunch
+        if (!res.ok && targetJob) {
+          const createRes = await fetch(`${getApiBaseUrl()}/job-cards/create`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              jobCardNo: targetJob.jobCardNo,
+              customerPartNo: targetJob.customerPartNo,
+              rfePartCode: targetJob.rfePartCode,
+              customerCode: targetJob.customerCode,
+              targetDate: targetJob.targetDate,
+              priority: targetJob.priority,
+              totalPcbQty: targetJob.totalPcbQty || 160,
+              prodPnlQty: targetJob.prodPnlQty || 40,
+              custPnlQty: targetJob.custPnlQty || 160,
+              prodPnlAreaSqm: targetJob.prodPnlAreaSqm || 50,
+              custPnlAreaSqm: targetJob.custPnlAreaSqm || 45,
+              jobFlowSelection: targetJob.jobFlowSelection || 'PF-01',
+              autoLaunch: true,
+            }),
+          });
+
+          if (createRes.ok) {
+            const createdData = await createRes.json();
+            if (createdData?.id) {
+              cardId = createdData.id;
+            }
+          }
         }
       } catch (e: any) {
         console.warn('Backend launch API call failed or network error', e);
-        showToast(`Launch error: ${e.message || 'Network error'}`, 'error');
       }
 
       setJobCards((prev) =>

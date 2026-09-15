@@ -80,9 +80,13 @@ export default function JobCardLaunchPage() {
         subJobCards: [],
       };
 
-      await fetch(`${getApiBaseUrl()}/job-cards`, {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      await fetch(`${getApiBaseUrl()}/job-cards/create`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(payload),
       }).catch(() => {
         // Retain client fallback gracefully

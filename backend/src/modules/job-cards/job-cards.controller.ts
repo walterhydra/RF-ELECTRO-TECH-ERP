@@ -22,6 +22,7 @@ export class JobCardsController {
   }
 
   @Post('create')
+  @Post()
   @Public()
   @ApiOperation({ summary: 'Create a new Job Card with full 13 PDF metadata fields & pre-launch split options' })
   @ApiResponse({ status: 201, description: 'Job Card created successfully' })
