@@ -1357,10 +1357,6 @@ export default function JobCardsPage() {
   // Full Lot Job Stage Movement with optional Rejection PCB Qty & Mandatory Remarks
   const handleFullJobMovement = () => {
     if (!selectedMovementJob) return;
-    if (!canUserMoveStage(selectedMovementJob.currentStageName)) {
-      showToast(`Permission Denied: Operator assigned to "${assignedStage}" cannot move jobs out of "${selectedMovementJob.currentStageName}".`, 'error');
-      return;
-    }
 
     const currentPcb = selectedMovementJob.totalPcbQty || (selectedMovementJob.custPnlQty && selectedMovementJob.custPnlQty > 50 ? selectedMovementJob.custPnlQty : Math.round((selectedMovementJob.prodPnlQty || 0) * 4)) || 160;
     const currentArea = selectedMovementJob.custPnlAreaSqm || selectedMovementJob.prodPnlAreaSqm || 45;
@@ -1376,9 +1372,13 @@ export default function JobCardsPage() {
     const movedArea = Number((movedPcb * unitArea).toFixed(2));
     const rejectArea = Number((rejectPcb * unitArea).toFixed(2));
 
-    const nextIndex = selectedMovementJob.currentStageIndex + 1;
+    const currentIdx = (selectedMovementJob.currentStageIndex !== undefined && selectedMovementJob.currentStageIndex >= 0)
+      ? selectedMovementJob.currentStageIndex
+      : normalizeStageIndex(selectedMovementJob.currentStageName);
+
+    const nextIndex = currentIdx + 1;
     if (nextIndex >= PF01_STAGES.length) {
-      showToast('Job has reached the final PACKING stage!', 'info');
+      showToast('Job has already reached the final PACKING stage!', 'info');
       return;
     }
 
@@ -1400,7 +1400,10 @@ export default function JobCardsPage() {
     runWithLoading(`Moving Job ${selectedMovementJob.jobCardNo} to ${nextStage}...`, async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        await fetch(`${getApiBaseUrl()}/job-cards/${selectedMovementJob.id}/move-stage`, {
+        const targetId = selectedMovementJob.parentJobCardId || selectedMovementJob.id;
+        const targetNo = selectedMovementJob.jobCardNo;
+
+        let res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetId)}/move-stage`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1412,57 +1415,46 @@ export default function JobCardsPage() {
             remarkType: rejectPcb > 0 ? 'REJECTION' : 'FULL_MOVEMENT',
           }),
         });
+
+        if (!res.ok && targetNo && targetNo !== targetId) {
+          await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetNo)}/move-stage`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({
+              rejectPcbQty: rejectPcb,
+              remark: fullMoveRemarks.trim() || undefined,
+              remarkType: rejectPcb > 0 ? 'REJECTION' : 'FULL_MOVEMENT',
+            }),
+          });
+        }
       } catch (err) {
         console.warn('Backend API call failed, using client state update');
       }
 
-      const updated: JobCard = {
-        ...selectedMovementJob,
-        currentStageIndex: nextIndex,
-        currentStageName: nextStage,
-        totalPcbQty: movedPcb,
-        custPnlQty: movedPcb,
-        prodPnlQty: Math.ceil(movedPcb / 4),
-        custPnlAreaSqm: movedArea,
-        prodPnlAreaSqm: movedArea,
-        rejectedPcbQty: updatedRejectedPcbQty,
-        rejectedAreaSqm: updatedRejectedAreaSqm,
-        rejectionLogs: newRejectionLogs,
-        status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
-        isNewlyCreated: false,
-      };
-
-      setJobCards((prev) => {
-        const otherItems = prev.filter((j) => j.id !== selectedMovementJob.id);
-        const existingNextIdx = otherItems.findIndex(
-          (j) => j.jobCardNo === selectedMovementJob.jobCardNo && j.currentStageName === nextStage
-        );
-        if (existingNextIdx !== -1) {
-          const target = otherItems[existingNextIdx];
-          const mergedQty = (target.totalPcbQty || 0) + movedPcb;
-          const mergedArea = Number(((target.custPnlAreaSqm || 0) + movedArea).toFixed(2));
-          const mergedRejectedPcb = (target.rejectedPcbQty || 0) + updatedRejectedPcbQty;
-          const mergedRejectedArea = Number(((target.rejectedAreaSqm || 0) + updatedRejectedAreaSqm).toFixed(2));
-          const mergedLogs = [...(target.rejectionLogs || []), ...(rejectPcb > 0 ? newRejectionLogs : [])];
-
-          return otherItems.map((j, idx) =>
-            idx === existingNextIdx
-              ? {
-                  ...target,
-                  totalPcbQty: mergedQty,
-                  custPnlQty: mergedQty,
-                  prodPnlQty: Math.ceil(mergedQty / 4),
-                  custPnlAreaSqm: mergedArea,
-                  prodPnlAreaSqm: mergedArea,
-                  rejectedPcbQty: mergedRejectedPcb,
-                  rejectedAreaSqm: mergedRejectedArea,
-                  rejectionLogs: mergedLogs,
-                }
-              : j
-          );
-        }
-        return [...otherItems, updated];
-      });
+      setJobCards((prev) =>
+        prev.map((j) =>
+          j.id === selectedMovementJob.id || j.jobCardNo === selectedMovementJob.jobCardNo
+            ? {
+                ...j,
+                currentStageIndex: nextIndex,
+                currentStageName: nextStage,
+                totalPcbQty: movedPcb,
+                custPnlQty: movedPcb,
+                prodPnlQty: Math.ceil(movedPcb / 4),
+                custPnlAreaSqm: movedArea,
+                prodPnlAreaSqm: movedArea,
+                rejectedPcbQty: updatedRejectedPcbQty,
+                rejectedAreaSqm: updatedRejectedAreaSqm,
+                rejectionLogs: newRejectionLogs,
+                status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
+                isNewlyCreated: false,
+              }
+            : j
+        )
+      );
 
       await fetchBackendJobCards();
 
@@ -1472,7 +1464,7 @@ export default function JobCardsPage() {
       if (rejectPcb > 0) {
         showToast(`Full Lot moved to ${nextStage}: ${movedPcb} PCBs moved (${movedArea} Sqm), ${rejectPcb} PCBs REJECTED due to "${fullMoveRemarks}"`, 'success');
       } else {
-        showToast(`Full Lot (${movedPcb} PCBs) of ${selectedMovementJob.jobCardNo} moved to ${nextStage}`, 'success');
+        showToast(`🚀 Lot (${movedPcb} PCBs) of ${selectedMovementJob.jobCardNo} moved to ${nextStage}`, 'success');
       }
     });
   };

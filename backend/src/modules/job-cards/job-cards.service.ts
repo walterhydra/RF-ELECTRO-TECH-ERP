@@ -1115,9 +1115,27 @@ export class JobCardsService {
         throw new NotFoundException(`Job Card or Sub-Job Card with ID or Number "${id}" not found`);
       }
       jobCardId = jc.id;
-      subCard = jc.subJobCards[0] as any;
+      subCard = (jc.subJobCards && jc.subJobCards.length > 0) ? (jc.subJobCards[0] as any) : null;
       if (!subCard) {
-        throw new BadRequestException('Job Card has no active lots/sub-job cards to move');
+        const fullQty = jc.totalPcbQty || jc.custPnlQty || 160;
+        const firstStage = await this.prisma.processStage.findFirst({ orderBy: { defaultOrder: 'asc' } });
+        subCard = await this.prisma.subJobCard.create({
+          data: {
+            subJobCardNo: `${jc.jobCardNo}-1`,
+            jobCardId: jc.id,
+            qty: fullQty,
+            totalPcbQty: fullQty,
+            custPnlQty: fullQty,
+            prodPnlQty: Math.ceil(fullQty / 4),
+            custPnlAreaSqm: jc.custPnlAreaSqm || 45,
+            prodPnlAreaSqm: jc.prodPnlAreaSqm || 50,
+            status: SubJobCardStatus.IN_STAGE,
+            currentStageId: firstStage?.id || null,
+            qrCodeValue: `RFE-SJC-${jc.jobCardNo}-1-${Date.now().toString().slice(-4)}`,
+            createdById: user?.id || jc.createdById,
+          },
+          include: { currentStage: true },
+        }) as any;
       }
     } else {
       jobCardId = subCard.jobCardId;
@@ -1126,17 +1144,17 @@ export class JobCardsService {
     // ENFORCE STAGE-WISE USER ACCESS RIGHT AT BACKEND / API LEVEL
     this.validateUserStagePermission(user, subCard.currentStage);
 
-    const steps = (subCard as any).jobCard?.processFlowMaster?.steps || [];
-    const currentStep = steps.find((s: any) => s.stageId === subCard?.currentStageId);
-    const currentStepOrder = currentStep ? currentStep.stepOrder : 1;
-    const nextStep = steps.find((s: any) => s.stepOrder > currentStepOrder);
+    // Reliable Stage Calculation using processStage defaultOrder
+    let currentStage = subCard.currentStage;
+    if (!currentStage && subCard.currentStageId) {
+      currentStage = await this.prisma.processStage.findUnique({ where: { id: subCard.currentStageId } });
+    }
 
-    let targetNextStageId: string | null = nextStep?.stageId || null;
+    let targetNextStageId: string | null = null;
     let isLastStage = false;
 
-    if (!targetNextStageId) {
-      const currentStage = subCard.currentStage || (subCard.currentStageId ? await this.prisma.processStage.findUnique({ where: { id: subCard.currentStageId } }) : null);
-      const currentOrder = currentStage?.defaultOrder || 1;
+    if (currentStage && currentStage.defaultOrder) {
+      const currentOrder = currentStage.defaultOrder;
       const nextProcessStage = await this.prisma.processStage.findFirst({
         where: { defaultOrder: { gt: currentOrder }, isActive: true },
         orderBy: { defaultOrder: 'asc' },
@@ -1145,9 +1163,20 @@ export class JobCardsService {
         targetNextStageId = nextProcessStage.id;
       } else if (currentOrder >= 20) {
         isLastStage = true;
+      }
+    }
+
+    // Fallback if processStage lookup wasn't available
+    if (!targetNextStageId && !isLastStage) {
+      const steps = (subCard as any).jobCard?.processFlowMaster?.steps || [];
+      const currentStep = steps.find((s: any) => s.stageId === subCard?.currentStageId);
+      const currentStepOrder = currentStep ? currentStep.stepOrder : 1;
+      const nextStep = steps.find((s: any) => s.stepOrder > currentStepOrder);
+      if (nextStep) {
+        targetNextStageId = nextStep.stageId;
       } else {
         const allStages = await this.prisma.processStage.findMany({ orderBy: { defaultOrder: 'asc' } });
-        const currIdx = allStages.findIndex((s) => s.id === subCard.currentStageId);
+        const currIdx = allStages.findIndex((s) => s.id === subCard?.currentStageId);
         if (currIdx !== -1 && currIdx + 1 < allStages.length) {
           targetNextStageId = allStages[currIdx + 1].id;
         } else {
@@ -1179,7 +1208,7 @@ export class JobCardsService {
       await tx.stageMovementLog.create({
         data: {
           subJobCardId: subCard.id,
-          stageId: subCard.currentStageId || steps[0]?.stageId || '',
+          stageId: subCard.currentStageId || targetNextStageId || '',
           qtyReceived: currentPcb,
           qtyProcessed: currentPcb,
           qtyForwarded: movedPcb,
@@ -1191,8 +1220,8 @@ export class JobCardsService {
       });
 
       if (targetNextStageId && !isLastStage) {
-        await tx.subJobCard.update({
-          where: { id: subCard.id },
+        await tx.subJobCard.updateMany({
+          where: { jobCardId },
           data: {
             currentStageId: targetNextStageId,
             status: SubJobCardStatus.IN_STAGE,
@@ -1204,10 +1233,19 @@ export class JobCardsService {
             prodPnlAreaSqm: movedArea,
           },
         });
+        await tx.jobCard.update({
+          where: { id: jobCardId },
+          data: {
+            status: JobCardStatus.IN_PROGRESS,
+            totalPcbQty: movedPcb,
+            custPnlQty: movedPcb,
+            prodPnlQty: Math.ceil(movedPcb / 4),
+          },
+        });
       } else {
         // Last stage reached (PACKING / DISPATCH) -> Mark completed
-        await tx.subJobCard.update({
-          where: { id: subCard.id },
+        await tx.subJobCard.updateMany({
+          where: { jobCardId },
           data: {
             currentStageId: null,
             status: SubJobCardStatus.COMPLETED,
@@ -1219,14 +1257,10 @@ export class JobCardsService {
             prodPnlAreaSqm: movedArea,
           },
         });
-        const allSubCards = await tx.subJobCard.findMany({ where: { jobCardId } });
-        const allCompleted = allSubCards.every((c) => c.status === SubJobCardStatus.COMPLETED);
-        if (allCompleted) {
-          await tx.jobCard.update({
-            where: { id: jobCardId },
-            data: { status: JobCardStatus.COMPLETED, completedAt: new Date() },
-          });
-        }
+        await tx.jobCard.update({
+          where: { id: jobCardId },
+          data: { status: JobCardStatus.COMPLETED, completedAt: new Date() },
+        });
       }
 
       return this.findOne(jobCardId);
@@ -1254,8 +1288,8 @@ export class JobCardsService {
 
     let jobCardId = id;
     if (!subCard) {
-      const jc = await this.prisma.jobCard.findUnique({
-        where: { id },
+      const jc = await this.prisma.jobCard.findFirst({
+        where: { OR: [{ id }, { jobCardNo: id }] },
         include: {
           subJobCards: { include: { currentStage: true } },
           processFlowMaster: {
@@ -1267,9 +1301,27 @@ export class JobCardsService {
         throw new NotFoundException(`Job Card or Sub-Job Card with ID "${id}" not found`);
       }
       jobCardId = jc.id;
-      subCard = jc.subJobCards[0] as any;
+      subCard = (jc.subJobCards && jc.subJobCards.length > 0) ? (jc.subJobCards[0] as any) : null;
       if (!subCard) {
-        throw new BadRequestException('Job Card has no active lots/sub-job cards to move');
+        const fullQty = jc.totalPcbQty || jc.custPnlQty || 160;
+        const firstStage = await this.prisma.processStage.findFirst({ orderBy: { defaultOrder: 'asc' } });
+        subCard = await this.prisma.subJobCard.create({
+          data: {
+            subJobCardNo: `${jc.jobCardNo}-1`,
+            jobCardId: jc.id,
+            qty: fullQty,
+            totalPcbQty: fullQty,
+            custPnlQty: fullQty,
+            prodPnlQty: Math.ceil(fullQty / 4),
+            custPnlAreaSqm: jc.custPnlAreaSqm || 45,
+            prodPnlAreaSqm: jc.prodPnlAreaSqm || 50,
+            status: SubJobCardStatus.IN_STAGE,
+            currentStageId: firstStage?.id || null,
+            qrCodeValue: `RFE-SJC-${jc.jobCardNo}-1-${Date.now().toString().slice(-4)}`,
+            createdById: user?.id || jc.createdById,
+          },
+          include: { currentStage: true },
+        }) as any;
       }
     } else {
       jobCardId = subCard.jobCardId;
@@ -1287,12 +1339,29 @@ export class JobCardsService {
       );
     }
 
-    const steps = (subCard as any).jobCard?.processFlowMaster?.steps || [];
-    const currentStep = steps.find((s: any) => s.stageId === subCard?.currentStageId);
-    const currentStepOrder = currentStep ? currentStep.stepOrder : 1;
-    const nextStep = steps.find((s: any) => s.stepOrder > currentStepOrder);
+    let currentStage = subCard.currentStage;
+    if (!currentStage && subCard.currentStageId) {
+      currentStage = await this.prisma.processStage.findUnique({ where: { id: subCard.currentStageId } });
+    }
 
-    if (!nextStep) {
+    let targetNextStageId: string | null = null;
+    if (currentStage && currentStage.defaultOrder) {
+      const nextStage = await this.prisma.processStage.findFirst({
+        where: { defaultOrder: { gt: currentStage.defaultOrder }, isActive: true },
+        orderBy: { defaultOrder: 'asc' },
+      });
+      if (nextStage) targetNextStageId = nextStage.id;
+    }
+
+    if (!targetNextStageId) {
+      const steps = (subCard as any).jobCard?.processFlowMaster?.steps || [];
+      const currentStep = steps.find((s: any) => s.stageId === subCard?.currentStageId);
+      const currentStepOrder = currentStep ? currentStep.stepOrder : 1;
+      const nextStep = steps.find((s: any) => s.stepOrder > currentStepOrder);
+      if (nextStep) targetNextStageId = nextStep.stageId;
+    }
+
+    if (!targetNextStageId) {
       throw new BadRequestException('Job is already at the final stage and cannot move further');
     }
 
@@ -1303,7 +1372,6 @@ export class JobCardsService {
         ? Number(((currentTotalArea * qtyToMove) / masterPcbQty).toFixed(2))
         : 0;
     const remainingQty = masterPcbQty - qtyToMove;
-    const remainingArea = Number(Math.max(0, currentTotalArea - areaToMove).toFixed(2));
 
     const userId = user?.id || user?.sub || user?.userId || subCard.createdById;
 
@@ -1312,7 +1380,7 @@ export class JobCardsService {
       await tx.stageMovementLog.create({
         data: {
           subJobCardId: subCard.id,
-          stageId: subCard.currentStageId || steps[0]?.stageId || '',
+          stageId: subCard.currentStageId || targetNextStageId || '',
           qtyReceived: masterPcbQty,
           qtyProcessed: masterPcbQty,
           qtyForwarded: qtyToMove,
@@ -1329,7 +1397,7 @@ export class JobCardsService {
       const existingSubAtNextStage = await tx.subJobCard.findFirst({
         where: {
           jobCardId: subCard.jobCardId,
-          currentStageId: nextStep.stageId,
+          currentStageId: targetNextStageId,
           status: SubJobCardStatus.IN_STAGE,
         },
       });
@@ -1351,34 +1419,31 @@ export class JobCardsService {
       } else {
         await tx.subJobCard.create({
           data: {
-            subJobCardNo: subCard.subJobCardNo,
+            subJobCardNo: `${(subCard as any).jobCard?.jobCardNo || subCard.subJobCardNo}-${Date.now().toString().slice(-3)}`,
             jobCardId: subCard.jobCardId,
-            parentSubJobCardId: subCard.id,
-            currentStageId: nextStep.stageId,
             qty: qtyToMove,
             totalPcbQty: qtyToMove,
             custPnlQty: qtyToMove,
             prodPnlQty: Math.ceil(qtyToMove / 4),
-            prodPnlAreaSqm: areaToMove,
             custPnlAreaSqm: areaToMove,
+            prodPnlAreaSqm: areaToMove,
             status: SubJobCardStatus.IN_STAGE,
-            qrCodeValue: `RFE-SJC-${subCard.subJobCardNo}-${Date.now().toString().slice(-4)}`,
+            currentStageId: targetNextStageId,
+            qrCodeValue: `RFE-SJC-${subCard.subJobCardNo}-MOVED-${Date.now().toString().slice(-4)}`,
             createdById: userId,
           },
         });
       }
 
-      // 3. Update remaining lot at current stage under SAME Job Card Number
       await tx.subJobCard.update({
         where: { id: subCard.id },
         data: {
-          subJobCardNo: subCard.subJobCardNo,
           qty: remainingQty,
           totalPcbQty: remainingQty,
           custPnlQty: remainingQty,
           prodPnlQty: Math.ceil(remainingQty / 4),
-          prodPnlAreaSqm: remainingArea,
-          custPnlAreaSqm: remainingArea,
+          custPnlAreaSqm: Number(Math.max(0, currentTotalArea - areaToMove).toFixed(2)),
+          prodPnlAreaSqm: Number(Math.max(0, currentTotalArea - areaToMove).toFixed(2)),
         },
       });
 
