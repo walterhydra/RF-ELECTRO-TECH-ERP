@@ -381,21 +381,33 @@ export class JobCardsService {
     }
 
     if (!superAdminRole) {
-      superAdminRole = await this.prisma.role.create({
-        data: { name: RoleCode.SUPER_ADMIN, description: 'Super Administrator' },
-      }).catch(() => null);
+      try {
+        superAdminRole = await this.prisma.role.create({
+          data: { name: RoleCode.SUPER_ADMIN, description: 'Super Administrator' },
+        });
+      } catch (e) {
+        superAdminRole = await this.prisma.role.findFirst().catch(() => null);
+      }
     }
 
-    let defaultUser = await this.prisma.user.findFirst();
+    let defaultUser = await this.prisma.user.findFirst().catch(() => null);
+    if (!defaultUser && superAdminRole) {
+      try {
+        defaultUser = await this.prisma.user.create({
+          data: {
+            name: 'System Admin',
+            email: 'admin@rfelectro.com',
+            passwordHash: 'dummy_hash',
+            roleId: superAdminRole.id,
+          },
+        });
+      } catch (e) {
+        defaultUser = await this.prisma.user.findFirst().catch(() => null);
+      }
+    }
+
     if (!defaultUser) {
-      defaultUser = await this.prisma.user.create({
-        data: {
-          name: 'System Admin',
-          email: 'admin@rfelectro.com',
-          passwordHash: 'dummy_hash',
-          roleId: superAdminRole.id,
-        },
-      });
+      throw new BadRequestException('System initialization error: Could not find or create default User account.');
     }
 
     // Ensure standard stages exist
