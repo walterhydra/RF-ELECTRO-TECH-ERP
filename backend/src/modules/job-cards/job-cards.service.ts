@@ -225,8 +225,11 @@ export class JobCardsService {
 
   async findOne(id: string, client: any = this.prisma) {
     const db = client || this.prisma;
-    const jobCard = await db.jobCard.findUnique({
-      where: { id },
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const where: any = isUuid ? { OR: [{ id }, { jobCardNo: id }] } : { jobCardNo: id };
+
+    const jobCard = await db.jobCard.findFirst({
+      where,
       include: {
         customerPO: {
           include: { customer: true },
@@ -248,7 +251,7 @@ export class JobCardsService {
     });
 
     if (!jobCard) {
-      throw new NotFoundException(`Job Card with ID "${id}" not found`);
+      throw new NotFoundException(`Job Card with ID or Number "${id}" not found`);
     }
 
     return jobCard;
