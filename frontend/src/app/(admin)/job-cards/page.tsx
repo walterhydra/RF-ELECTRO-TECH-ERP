@@ -1009,8 +1009,23 @@ export default function JobCardsPage() {
 
           const deleted = getDeletedJobCardIds();
           const filtered = mapped.filter((j: JobCard) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
-          setJobCards(filtered);
-          saveJobCardsToStorage(filtered);
+          setJobCards((prevLocalCards) => {
+            const localMap = new Map(prevLocalCards.map((c) => [c.jobCardNo, c]));
+            const merged = filtered.map((backendCard) => {
+              const local = localMap.get(backendCard.jobCardNo);
+              if (local && (local.currentStageIndex || 0) > (backendCard.currentStageIndex || 0)) {
+                return {
+                  ...backendCard,
+                  currentStageIndex: local.currentStageIndex,
+                  currentStageName: local.currentStageName,
+                  status: local.status,
+                };
+              }
+              return backendCard;
+            });
+            saveJobCardsToStorage(merged);
+            return merged;
+          });
         }
       } else {
         setServerConnectionState({
