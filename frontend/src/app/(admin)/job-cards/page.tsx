@@ -41,6 +41,7 @@ import {
   Download,
   Share2,
   Scan,
+  Settings,
   Upload
 } from 'lucide-react';
 import { Portal } from '@/components/ui/Portal';
@@ -1406,6 +1407,85 @@ export default function JobCardsPage() {
         'success'
       );
     });
+  };
+
+  // 1-Click Direct Quick Stage Advance
+  const handleQuickAdvanceStage = async (card: JobCard) => {
+    if (!canUserMoveStage(card.currentStageName)) {
+      showToast(`Permission Denied: Operator assigned to "${assignedStage}" cannot move jobs out of "${card.currentStageName}".`, 'error');
+      return;
+    }
+
+    const currentIdx = (card.currentStageIndex !== undefined && card.currentStageIndex >= 0)
+      ? card.currentStageIndex
+      : normalizeStageIndex(card.currentStageName);
+
+    const nextIndex = currentIdx + 1;
+    if (nextIndex >= PF01_STAGES.length) {
+      showToast('Job Card has already reached the final PACKING stage!', 'info');
+      return;
+    }
+
+    const nextStage = PF01_STAGES[nextIndex];
+    const cardNo = card.jobCardNo;
+    const cardId = card.parentJobCardId || card.id;
+
+    // Immediately update local UI state for instant response
+    setJobCards((prev) =>
+      prev.map((j) =>
+        j.id === card.id || j.jobCardNo === card.jobCardNo
+          ? {
+              ...j,
+              currentStageIndex: nextIndex,
+              currentStageName: nextStage,
+              status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
+              isNewlyCreated: false,
+            }
+          : j
+      )
+    );
+
+    showToast(`🚀 Job Card ${cardNo} moved to ${nextStage}`, 'success');
+
+    runWithLoading(`Moving Job ${cardNo} to ${nextStage}...`, async () => {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        const targetNo = cardNo;
+        const primaryTarget = targetNo ? encodeURIComponent(targetNo) : encodeURIComponent(cardId);
+
+        let res = await fetch(`${getApiBaseUrl()}/job-cards/${primaryTarget}/move-stage`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            jobCardNo: cardNo,
+            remark: `Quick Stage Movement to ${nextStage}`,
+            remarkType: 'FULL_MOVEMENT',
+          }),
+        });
+
+        if (!res.ok && cardId && cardId !== targetNo) {
+          await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(cardId)}/move-stage`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify({
+              jobCardNo: cardNo,
+              remark: `Quick Stage Movement to ${nextStage}`,
+              remarkType: 'FULL_MOVEMENT',
+            }),
+          });
+        }
+      } catch (err) {
+        console.warn('Backend API call failed, saved client state');
+      }
+
+      await fetchBackendJobCards();
+    }, 450);
   };
 
   // Full Lot Job Stage Movement with optional Rejection PCB Qty & Mandatory Remarks
@@ -2896,18 +2976,28 @@ export default function JobCardsPage() {
                               <span>🚀 LAUNCH JOB</span>
                             </button>
                           ) : (
-                            <button
-                              onClick={() => {
-                                setSelectedMovementJob(jc);
-                                setPartialMoveQty(Math.max(1, Math.floor((jc.totalPcbQty || 160) / 2)));
-                                setMovementTab('FULL');
-                              }}
-                              title="Open Stage Movement Confirmation & Options"
-                              className="h-7 px-3 bg-gradient-to-r from-amber-500 via-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black rounded-lg border border-amber-600/90 text-[11px] inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 whitespace-nowrap"
-                            >
-                              <RefreshCw className="w-3 h-3 stroke-[3]" />
-                              <span>Move Stage ➔</span>
-                            </button>
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                onClick={() => handleQuickAdvanceStage(jc)}
+                                title="1-Click Advance Stage to Next Stage"
+                                className="h-7 px-3 bg-gradient-to-r from-amber-500 via-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black rounded-lg border border-amber-600/90 text-[11px] inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 whitespace-nowrap"
+                              >
+                                <RefreshCw className="w-3 h-3 stroke-[3]" />
+                                <span>Move Stage ➔</span>
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setSelectedMovementJob(jc);
+                                  setPartialMoveQty(Math.max(1, Math.floor((jc.totalPcbQty || 160) / 2)));
+                                  setMovementTab('FULL');
+                                }}
+                                title="Open Full Stage Movement Options (Rejections & Splits)"
+                                className="h-7 w-7 bg-amber-100/90 hover:bg-amber-200 text-amber-950 border border-amber-300 rounded-lg inline-flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
+                              >
+                                <Settings className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           )}
 
                           <button
