@@ -524,6 +524,15 @@ export class JobCardsService {
         },
       });
 
+      let initialStageId: string | null = null;
+      if (data.autoLaunch && processFlow?.steps?.[0]?.stageId) {
+        const candidateStageId = processFlow.steps[0].stageId;
+        const validStage = await tx.processStage.findUnique({ where: { id: candidateStageId } });
+        if (validStage) {
+          initialStageId = validStage.id;
+        }
+      }
+
       // Handle pre-launch splits if provided
       const rawSplits = Array.isArray(data.splits) ? data.splits : [];
       if (rawSplits.length > 0) {
@@ -542,7 +551,7 @@ export class JobCardsService {
               prodPnlAreaSqm: data.prodPnlAreaSqm ? Number((Number(data.prodPnlAreaSqm) * ratio).toFixed(2)) : null,
               custPnlAreaSqm: data.custPnlAreaSqm ? Number((Number(data.custPnlAreaSqm) * ratio).toFixed(2)) : null,
               status: data.autoLaunch ? SubJobCardStatus.IN_STAGE : SubJobCardStatus.PENDING_LAUNCH,
-              currentStageId: data.autoLaunch ? processFlow?.steps?.[0]?.stageId || null : null,
+              currentStageId: initialStageId,
               qrCodeValue: `RFE-SJC-${subJobCardNo}-${Date.now().toString().slice(-4)}`,
               createdById,
             },
@@ -561,7 +570,7 @@ export class JobCardsService {
             prodPnlAreaSqm: Number(data.prodPnlAreaSqm) || 50,
             custPnlAreaSqm: Number(data.custPnlAreaSqm) || 45,
             status: data.autoLaunch ? SubJobCardStatus.IN_STAGE : SubJobCardStatus.PENDING_LAUNCH,
-            currentStageId: data.autoLaunch ? processFlow?.steps?.[0]?.stageId || null : null,
+            currentStageId: initialStageId,
             qrCodeValue: `RFE-SJC-${subJobCardNo}-${Date.now().toString().slice(-4)}`,
             createdById,
           },
@@ -571,7 +580,22 @@ export class JobCardsService {
       return jobCard.id;
     });
 
-    return this.findOne(createdId);
+    try {
+      return await this.findOne(createdId);
+    } catch (err) {
+      const fallback = await this.prisma.jobCard.findUnique({
+        where: { id: createdId },
+        include: {
+          subJobCards: true,
+          product: true,
+          customerPO: true,
+        },
+      });
+      if (!fallback) {
+        throw new NotFoundException(`Job Card with ID "${createdId}" creation failed`);
+      }
+      return fallback;
+    }
   }
 
   async updateJobCard(id: string, data: any) {
