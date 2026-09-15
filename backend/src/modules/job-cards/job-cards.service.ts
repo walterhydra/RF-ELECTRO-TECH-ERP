@@ -686,9 +686,14 @@ export class JobCardsService {
         }
       }
 
-      const fullCard = await this.findOne(jobCard.id, tx).catch(() => jobCard);
-      return fullCard || jobCard;
+      return jobCard;
     });
+
+    try {
+      return await this.findOne(jobCard.id);
+    } catch (err) {
+      return jobCard;
+    }
   }
 
   async updateJobCard(id: string, data: any) {
