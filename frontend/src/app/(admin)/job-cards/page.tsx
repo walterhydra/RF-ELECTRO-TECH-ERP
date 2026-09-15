@@ -938,61 +938,21 @@ export default function JobCardsPage() {
         setServerConnectionState({ status: 'CONNECTED', url: targetUrl });
         const data = await res.json();
         if (Array.isArray(data)) {
-          const mapped: JobCard[] = data.flatMap((j: any) => {
+          const mapped: JobCard[] = data.map((j: any) => {
             const masterPcbQty = j.totalPcbQty || (j.custPnlQty && j.custPnlQty > 50 ? j.custPnlQty : (j.prodPnlQty ? j.prodPnlQty * 4 : 160));
             const masterAreaSqm = j.custPnlAreaSqm || j.prodPnlAreaSqm || 45;
 
-            if (j.subJobCards && j.subJobCards.length > 0) {
-              return j.subJobCards.map((sub: any) => {
-                const subPcbQty = sub.totalPcbQty || (sub.qty && sub.qty > 50 ? sub.qty : masterPcbQty);
-                const subAreaSqm = sub.custPnlAreaSqm || sub.prodPnlAreaSqm || masterAreaSqm;
-                const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
-                const stageIdx = normalizeStageIndex(rawStage);
+            const activeSub = (j.subJobCards && j.subJobCards.length > 0)
+              ? (j.subJobCards.find((s: any) => s.status === 'IN_STAGE') || j.subJobCards[0])
+              : null;
 
-                const subStatusRaw = String(sub.status || j.status || '').toUpperCase();
-                const subStatusNorm = (subStatusRaw === 'CREATED' || subStatusRaw === 'PENDING_LAUNCH' || subStatusRaw === 'UNLAUNCHED') ? 'UNLAUNCHED' : sub.status || j.status;
-
-                return {
-                  id: sub.id,
-                  parentJobCardId: j.id,
-                  jobCardNo: j.jobCardNo || sub.subJobCardNo,
-                  photoUrl: j.photoUrl || '',
-                  customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
-                  rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
-                  customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
-                  targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
-                  priority: j.priority || 'NORMAL',
-                  prodPnlQty: Math.ceil(subPcbQty / 4),
-                  custPnlQty: subPcbQty,
-                  totalPcbQty: subPcbQty,
-                  prodPnlAreaSqm: subAreaSqm,
-                  custPnlAreaSqm: subAreaSqm,
-                  jobFlowSelection: j.processFlowMaster?.name || 'PF-01',
-                  currentStageIndex: stageIdx,
-                  currentStageName: PF01_STAGES[stageIdx],
-                  customerPoId: j.customerPoId,
-                  productId: j.productId,
-                  totalQty: subPcbQty,
-                  status: subStatusNorm,
-                  isNewlyCreated: subStatusNorm === 'UNLAUNCHED',
-                  qrCodeValue: sub.qrCodeValue || sub.subJobCardNo,
-                  launchedAt: j.launchedAt,
-                  completedAt: j.completedAt,
-                  createdAt: j.createdAt,
-                  customerPO: j.customerPO,
-                  product: j.product,
-                  subJobCards: [sub],
-                };
-              });
-            }
-
-            const rawStage = j.subJobCards?.[0]?.currentStage?.name || j.currentStageName || j.currentStage?.name || PF01_STAGES[0];
+            const rawStage = activeSub?.currentStage?.name || j.currentStageName || j.currentStage?.name || PF01_STAGES[0];
             const stageIdx = normalizeStageIndex(rawStage);
 
-            const jStatusRaw = String(j.status || '').toUpperCase();
-            const jStatusNorm = (jStatusRaw === 'CREATED' || jStatusRaw === 'PENDING_LAUNCH' || jStatusRaw === 'UNLAUNCHED') ? 'UNLAUNCHED' : j.status;
+            const jStatusRaw = String(j.status || activeSub?.status || '').toUpperCase();
+            const jStatusNorm = (jStatusRaw === 'CREATED' || jStatusRaw === 'PENDING_LAUNCH' || jStatusRaw === 'UNLAUNCHED') ? 'UNLAUNCHED' : (j.status || 'IN_PROGRESS');
 
-            return [{
+            return {
               id: j.id,
               jobCardNo: j.jobCardNo,
               photoUrl: j.photoUrl || '',
@@ -1012,7 +972,7 @@ export default function JobCardsPage() {
               customerPoId: j.customerPoId,
               productId: j.productId,
               totalQty: masterPcbQty,
-              status: jStatusNorm,
+              status: jStatusNorm as any,
               isNewlyCreated: jStatusNorm === 'UNLAUNCHED',
               qrCodeValue: j.qrCodeValue || `${j.jobCardNo}-PARENT`,
               launchedAt: j.launchedAt,
@@ -1021,7 +981,7 @@ export default function JobCardsPage() {
               customerPO: j.customerPO,
               product: j.product,
               subJobCards: j.subJobCards || [],
-            }];
+            };
           });
 
           const deleted = getDeletedJobCardIds();
