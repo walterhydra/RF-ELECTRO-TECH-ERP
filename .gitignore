@@ -1,10 +1,25 @@
+# Dependencies
 node_modules/
+
+# Build outputs
 dist/
 .next/
+*.tsbuildinfo
 coverage/
-*.log
+
+# Environment files
 .env
 !.env.example
-.DS_Store
-.prisma/
+
+# Runtime & Scratch directories
+scratch/
+uploads/
 postgres_data/
+.prisma/
+
+# Logs & Temporary files
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+

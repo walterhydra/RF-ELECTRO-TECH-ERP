@@ -2544,7 +2544,7 @@ export default function JobCardsPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            setGenerateForm({
+                            setLaunchForm({
                               jobCardNo: '',
                               customerCode: 'CUST-RF045',
                               rfePartCode: 'D3625',
@@ -2560,8 +2560,11 @@ export default function JobCardsPage() {
                               enablePreSplit: false,
                               splitCount: 1,
                               customSplits: [{ subNo: '26-27-0001-1', qty: 160 }],
+                              photoUrl: '',
+                              launchDate: '',
+                              targetDate: '',
                             });
-                            setShowGenerateModal(true);
+                            setShowLaunchModal(true);
                           }}
                           className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
                         >
