@@ -226,40 +226,48 @@ export class JobCardsService {
   async findOne(id: string, client: any = this.prisma) {
     const db = client || this.prisma;
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-    const where: any = isUuid ? { id } : { jobCardNo: id };
 
-    let jobCard = await db.jobCard.findFirst({
-      where,
-      include: {
-        customerPO: {
-          include: { customer: true },
-        },
-        product: true,
-        processFlowMaster: {
-          include: {
-            steps: {
-              include: { stage: true },
-              orderBy: { stepOrder: 'asc' },
-            },
-          },
-        },
-        subJobCards: {
-          include: { currentStage: true },
-          orderBy: { subJobCardNo: 'asc' },
-        },
-      },
-    }).catch(() => null);
-
-    if (!jobCard) {
-      jobCard = await db.jobCard.findFirst({
-        where,
+    let jobCard: any = null;
+    if (isUuid) {
+      jobCard = await db.jobCard.findUnique({
+        where: { id },
         include: {
           customerPO: { include: { customer: true } },
           product: true,
-          processFlowMaster: true,
-          subJobCards: true,
+          processFlowMaster: {
+            include: {
+              steps: { include: { stage: true }, orderBy: { stepOrder: 'asc' } },
+            },
+          },
+          subJobCards: { include: { currentStage: true }, orderBy: { subJobCardNo: 'asc' } },
         },
-      });
+      }).catch(() => null);
+
+      if (!jobCard) {
+        jobCard = await db.jobCard.findUnique({
+          where: { id },
+          include: {
+            customerPO: { include: { customer: true } },
+            product: true,
+            processFlowMaster: true,
+            subJobCards: true,
+          },
+        }).catch(() => null);
+      }
+    } else {
+      jobCard = await db.jobCard.findFirst({
+        where: { jobCardNo: id },
+        include: {
+          customerPO: { include: { customer: true } },
+          product: true,
+          processFlowMaster: {
+            include: {
+              steps: { include: { stage: true }, orderBy: { stepOrder: 'asc' } },
+            },
+          },
+          subJobCards: { include: { currentStage: true }, orderBy: { subJobCardNo: 'asc' } },
+        },
+      }).catch(() => null);
     }
 
     if (!jobCard) {
