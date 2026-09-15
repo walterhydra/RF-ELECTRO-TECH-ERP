@@ -81,23 +81,28 @@ export default function JobCardLaunchPage() {
       };
 
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      await fetch(`${getApiBaseUrl()}/job-cards/create`, {
+      const res = await fetch(`${getApiBaseUrl()}/job-cards/create`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify(payload),
-      }).catch(() => {
-        // Retain client fallback gracefully
       });
 
-      showToastMsg(`Job Card ${launchForm.jobCardNo} Created Successfully (UNLAUNCHED)! Release via "Launch Job Card" button.`, 'success');
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        showToastMsg(`Failed to create Job Card on server (${res.status}): ${errText.slice(0, 80) || res.statusText}`, 'error');
+        setIsLoading(false);
+        return;
+      }
+
+      showToastMsg(`Job Card ${launchForm.jobCardNo} Created Successfully on Server (UNLAUNCHED)! Release via "Launch Job Card" button.`, 'success');
       setTimeout(() => {
         router.push('/job-cards');
       }, 1000);
-    } catch (err) {
-      showToastMsg('Failed to launch job card', 'error');
+    } catch (err: any) {
+      showToastMsg(`Failed to launch job card: ${err?.message || 'Server unreachable'}`, 'error');
     } finally {
       setIsLoading(false);
     }

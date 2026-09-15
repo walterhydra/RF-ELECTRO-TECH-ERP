@@ -1170,7 +1170,7 @@ export default function JobCardsPage() {
 
         // 3. Fallback: If card only existed in client memory, auto-create in DB with autoLaunch
         if (!res.ok && targetJob) {
-          const createRes = await fetch(`${getApiBaseUrl()}/job-cards/create`, {
+          res = await fetch(`${getApiBaseUrl()}/job-cards/create`, {
             method: 'POST',
             headers,
             body: JSON.stringify({
@@ -1190,15 +1190,22 @@ export default function JobCardsPage() {
             }),
           });
 
-          if (createRes.ok) {
-            const createdData = await createRes.json();
+          if (res.ok) {
+            const createdData = await res.json();
             if (createdData?.id) {
               cardId = createdData.id;
             }
           }
         }
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          showToast(`Backend Launch Error (${res.status}): ${errText.slice(0, 80) || 'Server rejected launch'}`, 'error');
+          return;
+        }
       } catch (e: any) {
-        console.warn('Backend launch API call failed or network error', e);
+        showToast(`Backend launch failed: Server unreachable or network error`, 'error');
+        return;
       }
 
       setJobCards((prev) =>
@@ -1361,7 +1368,7 @@ export default function JobCardsPage() {
         isNewlyCreated: !launchForm.autoLaunch,
       };
 
-      // Try Backend POST API sync
+      // Backend POST API sync - MUST succeed before adding to state/localStorage
       try {
         const createRes = await fetch(`${getApiBaseUrl()}/job-cards/create`, {
           method: 'POST',
@@ -1389,17 +1396,19 @@ export default function JobCardsPage() {
           }),
         });
 
-        if (createRes.ok) {
-          const createdData = await createRes.json();
-          if (createdData && createdData.id) {
-            newJobCard.id = createdData.id;
-          }
-        } else {
+        if (!createRes.ok) {
           const errorMsg = await createRes.text().catch(() => '');
           showToast(`Backend Create Error (${createRes.status}): ${errorMsg.slice(0, 80) || 'Server rejected creation'}`, 'error');
+          return; // DO NOT add to local state if backend creation fails
+        }
+
+        const createdData = await createRes.json();
+        if (createdData && createdData.id) {
+          newJobCard.id = createdData.id;
         }
       } catch (err: any) {
-        showToast(`Backend unreachable: Job Card created in offline cache`, 'info');
+        showToast(`Backend unreachable. Cannot create Job Card without server connection: ${err?.message || 'Network error'}`, 'error');
+        return; // DO NOT add to local state if network fails
       }
 
       setJobCards((prev) => [newJobCard, ...prev]);
@@ -1407,10 +1416,10 @@ export default function JobCardsPage() {
       setShowGenerateModal(false);
       setShowQrModal(newJobCard);
       setEditingCardId(null);
-      fetchBackendJobCards();
+      await fetchBackendJobCards();
 
       showToast(
-        `Job Card ${newJobCard.jobCardNo} created with ${subJobCardsList.length} sub-lot(s)! ${
+        `Job Card ${newJobCard.jobCardNo} created on server with ${subJobCardsList.length} sub-lot(s)! ${
           launchForm.autoLaunch ? 'Launched into Stage 1.' : 'Status is UNLAUNCHED.'
         }`,
         'success'

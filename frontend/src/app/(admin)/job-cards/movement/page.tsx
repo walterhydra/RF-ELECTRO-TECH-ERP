@@ -324,7 +324,7 @@ export default function JobMovementUpdatePage() {
 
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      await fetch(`${getApiBaseUrl()}/job-cards/${jobId}/move-stage`, {
+      const res = await fetch(`${getApiBaseUrl()}/job-cards/${jobId}/move-stage`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -339,8 +339,15 @@ export default function JobMovementUpdatePage() {
           remarkType: actualRejected > 0 ? 'REJECTION' : 'FULL_MOVEMENT',
         }),
       });
-    } catch (e) {
-      console.warn('Backend API unavailable, using local state fallback');
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        showToastMsg(`Backend Stage Move Alert (${res.status}): ${errText.slice(0, 80) || res.statusText}`);
+        return;
+      }
+    } catch (e: any) {
+      showToastMsg(`Backend API unavailable: ${e?.message || 'Network error'}`);
+      return;
     }
 
     const currentIndex = PF01_STAGES.indexOf(selectedJob.currentStageName);
