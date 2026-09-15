@@ -980,12 +980,23 @@ export class JobCardsService {
     }
 
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-    const where: any = isUuid ? { OR: [{ id }, { jobCardNo: id }] } : { jobCardNo: id };
 
-    const jobCard = await this.prisma.jobCard.findFirst({
-      where,
+    // 1. Try finding JobCard directly
+    let jobCard = await this.prisma.jobCard.findFirst({
+      where: isUuid ? { OR: [{ id }, { jobCardNo: id }] } : { jobCardNo: id },
       include: { subJobCards: true },
     });
+
+    // 2. If not found directly, check if subJobCard matches ID or subJobCardNo
+    if (!jobCard) {
+      const subCard = await this.prisma.subJobCard.findFirst({
+        where: isUuid ? { OR: [{ id }, { subJobCardNo: id }] } : { subJobCardNo: id },
+        include: { jobCard: { include: { subJobCards: true } } },
+      });
+      if (subCard && subCard.jobCard) {
+        jobCard = subCard.jobCard;
+      }
+    }
 
     if (!jobCard) {
       return {
@@ -1011,7 +1022,7 @@ export class JobCardsService {
 
     return {
       success: true,
-      message: `Job Card ${jobCard.jobCardNo} deleted successfully by Super Admin.`,
+      message: `Job Card ${jobCard.jobCardNo} deleted permanently from database.`,
     };
   }
 

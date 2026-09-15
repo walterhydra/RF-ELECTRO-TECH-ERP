@@ -689,9 +689,14 @@ export default function JobCardsPage() {
   const [incompleteCustomReason, setIncompleteCustomReason] = useState<string>('');
   const [incompleteRemarks, setIncompleteRemarks] = useState<string>('');
 
-  // Set client mount state
+  // Set client mount state & load initial stored cards
   useEffect(() => {
     setIsMounted(true);
+    const deleted = getDeletedJobCardIds();
+    const stored = getStoredJobCards();
+    if (stored !== null) {
+      setJobCards(stored.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo)));
+    }
   }, []);
 
   // Save jobCards to localStorage as offline cache only when server is connected
@@ -976,8 +981,10 @@ export default function JobCardsPage() {
             }];
           });
 
-          setJobCards(mapped);
-          saveJobCardsToStorage(mapped);
+          const deleted = getDeletedJobCardIds();
+          const filtered = mapped.filter((j: JobCard) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
+          setJobCards(filtered);
+          saveJobCardsToStorage(filtered);
         }
       } else {
         setServerConnectionState({
