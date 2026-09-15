@@ -682,10 +682,9 @@ export default function JobCardsPage() {
   // Load stored job cards from localStorage after client mounts to avoid hydration mismatch
   useEffect(() => {
     setIsMounted(true);
-    const deleted = getDeletedJobCardIds();
     const stored = getStoredJobCards();
     if (stored !== null && stored.length > 0) {
-      setJobCards(stored.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo)));
+      setJobCards(stored);
     } else {
       setJobCards([]);
     }
@@ -732,30 +731,39 @@ export default function JobCardsPage() {
   const handleDeleteJobCard = async (id: string) => {
     if (!id) return;
     setIsDeleting(true);
-    const targetCard = jobCards.find((j) => j.id === id);
-    const cardNo = targetCard?.jobCardNo;
-
-    markJobCardAsDeleted(id, cardNo);
+    const targetCard = jobCards.find((j) => j.id === id || j.jobCardNo === id);
+    const cardNo = targetCard?.jobCardNo || id;
+    const targetId = targetCard?.id || id;
 
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      await fetch(`${getApiBaseUrl()}/job-cards/${id}`, {
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
+      // Send DELETE to backend database using cardNo and targetId
+      await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(cardNo)}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers,
       });
+      if (targetId !== cardNo) {
+        await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetId)}`, {
+          method: 'DELETE',
+          headers,
+        }).catch(() => {});
+      }
     } catch (err: any) {
       console.warn('Backend DELETE call failed or offline mode', err);
     } finally {
-      setJobCards((prev) => prev.filter((jc) => jc.id !== id && jc.jobCardNo !== cardNo));
+      setJobCards((prev) => prev.filter((jc) => jc.id !== targetId && jc.jobCardNo !== cardNo && jc.id !== id));
       showToast('Job Card deleted successfully!', 'success');
       setDeleteConfirmCard(null);
-      if (selectedMovementJob?.id === id || selectedMovementJob?.jobCardNo === cardNo) {
+      if (selectedMovementJob?.id === targetId || selectedMovementJob?.jobCardNo === cardNo) {
         setSelectedMovementJob(null);
       }
       setIsDeleting(false);
+      fetchBackendJobCards();
     }
   };
 
@@ -863,8 +871,7 @@ export default function JobCardsPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          const deletedIds = getDeletedJobCardIds();
+        if (Array.isArray(data)) {
           const mapped: JobCard[] = data.flatMap((j: any) => {
             const masterPcbQty = j.totalPcbQty || j.custPnlQty || (j.prodPnlQty ? j.prodPnlQty * 4 : 160);
             const masterAreaSqm = j.custPnlAreaSqm || j.prodPnlAreaSqm || 45;
@@ -944,7 +951,7 @@ export default function JobCardsPage() {
               product: j.product,
               subJobCards: j.subJobCards || [],
             }];
-          }).filter((j) => !deletedIds.includes(j.id) && !deletedIds.includes(j.jobCardNo));
+          });
 
           setJobCards(mapped);
           saveJobCardsToStorage(mapped);
@@ -1175,7 +1182,7 @@ export default function JobCardsPage() {
 
       // Try Backend POST API sync
       try {
-        await fetch(`${getApiBaseUrl()}/job-cards/create`, {
+        const createRes = await fetch(`${getApiBaseUrl()}/job-cards/create`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1200,6 +1207,13 @@ export default function JobCardsPage() {
             splits: apiSplits,
           }),
         });
+
+        if (createRes.ok) {
+          const createdData = await createRes.json();
+          if (createdData && createdData.id) {
+            newJobCard.id = createdData.id;
+          }
+        }
       } catch (err) {
         // Fallback to client state
       }
@@ -1209,6 +1223,7 @@ export default function JobCardsPage() {
       setShowGenerateModal(false);
       setShowQrModal(newJobCard);
       setEditingCardId(null);
+      fetchBackendJobCards();
 
       showToast(
         `Job Card ${newJobCard.jobCardNo} created with ${subJobCardsList.length} sub-lot(s)! ${

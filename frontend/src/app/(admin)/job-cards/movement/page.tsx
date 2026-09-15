@@ -187,7 +187,6 @@ export default function JobMovementUpdatePage() {
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data)) {
-          const deletedIds = getDeletedJobCardIds();
           const mapped: JobCard[] = data.flatMap((j: any) => {
             const masterPcbQty = j.totalPcbQty || j.custPnlQty || (j.prodPnlQty ? j.prodPnlQty * 4 : 160);
             const masterAreaSqm = j.custPnlAreaSqm || j.prodPnlAreaSqm || 45;
@@ -247,7 +246,7 @@ export default function JobMovementUpdatePage() {
               status: j.status === 'CREATED' ? 'UNLAUNCHED' : j.status,
               createdAt: j.createdAt,
             }];
-          }).filter((j) => !deletedIds.includes(j.id) && !deletedIds.includes(j.jobCardNo));
+          });
 
           setJobs(mapped);
           saveJobCardsToStorage(mapped);
