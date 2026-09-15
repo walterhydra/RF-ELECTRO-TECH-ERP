@@ -284,6 +284,7 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
     setServerHost(cleaned);
     if (typeof window !== 'undefined') {
       localStorage.setItem('erp_qr_server_host', cleaned);
+      localStorage.setItem('erp_backend_api_url', cleaned);
     }
   };
 
