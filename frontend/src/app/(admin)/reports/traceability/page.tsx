@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Search, Download, RefreshCw, ArrowLeft, ShieldCheck } from 'lucide-react';
+import { getApiBaseUrl } from '@/lib/utils';
 
 export default function TraceabilityReportPage() {
   const [data, setData] = useState<any[]>([]);
@@ -13,7 +14,7 @@ export default function TraceabilityReportPage() {
     try {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
-      const res = await fetch('http://localhost:3001/api/v1/reports/traceability', { headers });
+      const res = await fetch(`${getApiBaseUrl()}/reports/traceability`, { headers });
       if (res.ok) {
         const json = await res.json();
         if (Array.isArray(json)) setData(json);

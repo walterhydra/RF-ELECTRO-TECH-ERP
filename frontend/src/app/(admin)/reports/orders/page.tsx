@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Download, RefreshCw, ShoppingCart, Calendar, Building2, Cpu, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
+import { getApiBaseUrl } from '@/lib/utils';
 
 export default function OrdersReportPage() {
   const [data, setData] = useState<any[]>([]);
@@ -13,7 +14,7 @@ export default function OrdersReportPage() {
     try {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
-      const res = await fetch('http://localhost:3001/api/v1/reports/orders', { headers });
+      const res = await fetch(`${getApiBaseUrl()}/reports/orders`, { headers });
       
       if (res.ok) {
         const json = await res.json();
@@ -26,7 +27,7 @@ export default function OrdersReportPage() {
         }
       } else {
         // Fallback or mock data if backend report endpoint returns empty/not ready
-        const posRes = await fetch('http://localhost:3001/api/v1/customer-pos', { headers });
+        const posRes = await fetch(`${getApiBaseUrl()}/customer-pos`, { headers });
         if (posRes.ok) {
           const posJson = await posRes.json();
           setData(Array.isArray(posJson) ? posJson : []);

@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { TraceLineTracker, TraceStage } from '@/components/ui/TraceLineTracker';
 import { QuantityStepper } from '@/components/ui/QuantityStepper';
+import { getApiBaseUrl } from '@/lib/utils';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -20,7 +21,7 @@ import {
   ChevronUp,
 } from 'lucide-react';
 
-const API = 'http://localhost:3001/api/v1';
+const API = getApiBaseUrl();
 
 function getAuthHeaders(): HeadersInit {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;

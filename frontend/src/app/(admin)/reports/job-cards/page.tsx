@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Cpu, Download, RefreshCw, ArrowLeft } from 'lucide-react';
+import { getApiBaseUrl } from '@/lib/utils';
 
 export default function JobCardsReportPage() {
   const [data, setData] = useState<any[]>([]);
@@ -12,7 +13,7 @@ export default function JobCardsReportPage() {
     try {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
-      const res = await fetch('http://localhost:3001/api/v1/reports/job-cards', { headers });
+      const res = await fetch(`${getApiBaseUrl()}/reports/job-cards`, { headers });
       if (res.ok) {
         const json = await res.json();
         if (Array.isArray(json)) setData(json);

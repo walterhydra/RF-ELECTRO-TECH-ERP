@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Package } from 'lucide-react';
+import { getApiBaseUrl } from '@/lib/utils';
 
 export default function CustomerProducts() {
   const [products, setProducts] = useState<any[]>([]);
@@ -12,7 +13,7 @@ export default function CustomerProducts() {
       try {
         setIsLoading(true);
         const token = localStorage.getItem('token');
-        const res = await fetch('http://localhost:3001/api/v1/portal/products', {
+        const res = await fetch(`${getApiBaseUrl()}/portal/products`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

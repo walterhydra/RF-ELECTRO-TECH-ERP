@@ -21,8 +21,9 @@ import {
   Download,
   ExternalLink,
 } from 'lucide-react';
+import { getApiBaseUrl } from '@/lib/utils';
 
-const API = 'http://localhost:3001/api/v1';
+const API = getApiBaseUrl();
 
 function getAuthHeaders(): HeadersInit {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { TraceLine } from '@/components/layout/TraceLine';
 import { Package, Clock, CheckCircle2, AlertCircle, Cpu, Paperclip, ExternalLink, RefreshCw } from 'lucide-react';
+import { getApiBaseUrl } from '@/lib/utils';
 
 interface PortalOrder {
   id: string;
@@ -79,7 +80,7 @@ export default function PortalOrdersPage() {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const res = await fetch('http://localhost:3001/api/v1/portal/orders', { headers });
+      const res = await fetch(`${getApiBaseUrl()}/portal/orders`, { headers });
       if (!res.ok) {
         throw new Error('Could not connect to backend API');
       }

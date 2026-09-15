@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Activity, Calendar } from 'lucide-react';
+import { getApiBaseUrl } from '@/lib/utils';
 
 export default function CustomerJobCards() {
   const [jobCards, setJobCards] = useState<any[]>([]);
@@ -12,7 +13,7 @@ export default function CustomerJobCards() {
       try {
         setIsLoading(true);
         const token = localStorage.getItem('token');
-        const res = await fetch('http://localhost:3001/api/v1/portal/job-cards', {
+        const res = await fetch(`${getApiBaseUrl()}/portal/job-cards`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

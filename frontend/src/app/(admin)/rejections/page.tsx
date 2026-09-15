@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { getApiBaseUrl } from "@/lib/utils";
 import {
   Activity,
   Search,
@@ -115,7 +116,7 @@ export default function RejectionsPage() {
 
   const fetchRejections = async () => {
     try {
-      const res = await fetch("http://localhost:3001/api/v1/rejections/pending");
+      const res = await fetch(`${getApiBaseUrl()}/rejections/pending`);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) setRejections(data);
@@ -125,7 +126,7 @@ export default function RejectionsPage() {
 
   const fetchStages = async () => {
     try {
-      const res = await fetch("http://localhost:3001/api/v1/process-stages");
+      const res = await fetch(`${getApiBaseUrl()}/process-stages`);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) setStages(data);
@@ -153,7 +154,7 @@ export default function RejectionsPage() {
 
     try {
       const res = await fetch(
-        `http://localhost:3001/api/v1/rejections/${selectedMovement.id}/disposition`,
+        `${getApiBaseUrl()}/rejections/${selectedMovement.id}/disposition`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

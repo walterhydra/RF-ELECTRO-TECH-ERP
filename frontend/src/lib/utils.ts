@@ -6,6 +6,16 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function getApiBaseUrl(): string {
+  // Check env var first (works both SSR and CSR)
+  const envUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL;
+  if (envUrl && envUrl.trim() !== '' && !envUrl.includes('localhost')) {
+    let cleaned = envUrl.trim();
+    if (!cleaned.startsWith('http://') && !cleaned.startsWith('https://')) {
+      cleaned = `https://${cleaned}`;
+    }
+    return cleaned.endsWith('/api/v1') ? cleaned : (cleaned.endsWith('/') ? `${cleaned}api/v1` : `${cleaned}/api/v1`);
+  }
+
   if (typeof window !== 'undefined') {
     // Purge legacy localtunnel overrides if present in browser storage
     const savedApiHost = localStorage.getItem('erp_backend_api_url') || localStorage.getItem('erp_qr_server_host');
@@ -14,13 +24,7 @@ export function getApiBaseUrl(): string {
       localStorage.removeItem('erp_qr_server_host');
     }
 
-    // 1. Handle Vercel deployment (e.g. rf-electrotech.vercel.app)
-    const hostname = window.location.hostname || 'localhost';
-    if (hostname.includes('vercel.app')) {
-      return 'https://rf-electro-tech-erp.onrender.com/api/v1';
-    }
-
-    // 2. Check explicit localStorage override (user custom server IP or custom cloud URL)
+    // Check explicit localStorage override (user custom server IP or custom cloud URL)
     const validSavedHost = localStorage.getItem('erp_backend_api_url');
     if (validSavedHost && validSavedHost.trim() !== '') {
       let cleaned = validSavedHost.trim();
@@ -30,30 +34,18 @@ export function getApiBaseUrl(): string {
       return cleaned.endsWith('/api/v1') ? cleaned : `${cleaned}/api/v1`;
     }
 
-    // 3. Check environment variable NEXT_PUBLIC_API_URL
-    const envUrl = process.env.NEXT_PUBLIC_API_URL;
-    if (envUrl && envUrl.trim() !== '') {
-      let cleaned = envUrl.trim();
-      if (!cleaned.startsWith('http://') && !cleaned.startsWith('https://')) {
-        cleaned = `https://${cleaned}`;
-      }
-      return cleaned.endsWith('/api/v1') ? cleaned : `${cleaned}/api/v1`;
+    // Handle Vercel deployment hostname fallback if env var wasn't set
+    const hostname = window.location.hostname || 'localhost';
+    if (hostname.includes('vercel.app')) {
+      return 'https://rf-electro-backend.onrender.com/api/v1';
     }
 
-    // 4. Default LAN / Localhost resolution
+    // Default LAN / Localhost resolution
     const protocol = window.location.protocol || 'http:';
     return `${protocol}//${hostname}:3001/api/v1`;
   }
 
-  const envUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (envUrl && envUrl.trim() !== '') {
-    let cleaned = envUrl.trim();
-    if (!cleaned.startsWith('http://') && !cleaned.startsWith('https://')) {
-      cleaned = `https://${cleaned}`;
-    }
-    return cleaned.endsWith('/api/v1') ? cleaned : `${cleaned}/api/v1`;
-  }
-  return 'https://rf-electro-tech-erp.onrender.com/api/v1';
+  return envUrl || 'https://rf-electro-backend.onrender.com/api/v1';
 }
 
 export async function fetchApi(urlOrPath: string, options: RequestInit = {}): Promise<Response> {

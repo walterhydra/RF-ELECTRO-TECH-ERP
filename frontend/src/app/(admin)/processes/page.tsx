@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { getApiBaseUrl } from "@/lib/utils";
 import {
   Layers,
   Plus,
@@ -253,14 +254,14 @@ export default function ProcessesPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch("http://localhost:3001/api/v1/process-stages")
+    fetch(`${getApiBaseUrl()}/process-stages`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) setStages(data);
       })
       .catch(() => {});
 
-    fetch("http://localhost:3001/api/v1/process-stages/flows")
+    fetch(`${getApiBaseUrl()}/process-stages/flows`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) setFlows(data);
@@ -314,8 +315,8 @@ export default function ProcessesPage() {
     try {
       const method = editingStage ? "PATCH" : "POST";
       const url = editingStage
-        ? `http://localhost:3001/api/v1/process-stages/${editingStage.id}`
-        : "http://localhost:3001/api/v1/process-stages";
+        ? `${getApiBaseUrl()}/process-stages/${editingStage.id}`
+        : `${getApiBaseUrl()}/process-stages`;
 
       const res = await fetch(url, {
         method,
@@ -389,7 +390,7 @@ export default function ProcessesPage() {
       };
 
       const res = await fetch(
-        "http://localhost:3001/api/v1/process-stages/flows",
+        `${getApiBaseUrl()}/process-stages/flows`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -441,7 +442,7 @@ export default function ProcessesPage() {
 
   const toggleStatus = async (id: string) => {
     try {
-      await fetch(`http://localhost:3001/api/v1/process-stages/${id}/status`, {
+      await fetch(`${getApiBaseUrl()}/process-stages/${id}/status`, {
         method: "PATCH",
       });
     } catch {}

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { getApiBaseUrl } from '@/lib/utils';
 import { 
   Users, 
   ShieldCheck, 
@@ -165,7 +166,7 @@ export default function UsersPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetch('http://localhost:3001/api/v1/users')
+    fetch(`${getApiBaseUrl()}/users`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
@@ -264,8 +265,8 @@ export default function UsersPage() {
     try {
       const method = editingUser ? 'PATCH' : 'POST';
       const url = editingUser
-        ? `http://localhost:3001/api/v1/users/${editingUser.id}`
-        : 'http://localhost:3001/api/v1/users';
+        ? `${getApiBaseUrl()}/users/${editingUser.id}`
+        : `${getApiBaseUrl()}/users`;
 
       const res = await fetch(url, {
         method,
@@ -304,7 +305,7 @@ export default function UsersPage() {
 
   const toggleStatus = async (id: string) => {
     try {
-      await fetch(`http://localhost:3001/api/v1/users/${id}/status`, { method: 'PATCH' });
+      await fetch(`${getApiBaseUrl()}/users/${id}/status`, { method: 'PATCH' });
     } catch {}
     setUsers(users.map((u) => (u.id === id ? { ...u, isActive: !u.isActive } : u)));
   };

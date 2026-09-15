@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { TraceLineTracker } from '@/components/ui/TraceLineTracker';
+import { getApiBaseUrl } from '@/lib/utils';
 import { 
   Package, 
   AlertTriangle, 
@@ -110,7 +111,7 @@ export default function DashboardPage() {
       setIsLoading(true);
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch('http://localhost:3001/api/v1/reports/dashboard-summary', {
+        const res = await fetch(`${getApiBaseUrl()}/reports/dashboard-summary`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

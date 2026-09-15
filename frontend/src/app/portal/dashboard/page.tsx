@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { FileText, Activity, Package } from 'lucide-react';
+import { getApiBaseUrl } from '@/lib/utils';
 
 export default function CustomerDashboard() {
   const [metrics, setMetrics] = useState({
@@ -16,7 +17,7 @@ export default function CustomerDashboard() {
       try {
         setIsLoading(true);
         const token = localStorage.getItem('token');
-        const res = await fetch('http://localhost:3001/api/v1/portal/dashboard', {
+        const res = await fetch(`${getApiBaseUrl()}/portal/dashboard`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

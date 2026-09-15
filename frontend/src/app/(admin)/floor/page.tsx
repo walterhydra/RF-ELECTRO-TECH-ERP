@@ -24,8 +24,9 @@ import {
   Sliders,
   Box
 } from "lucide-react";
+import { getApiBaseUrl } from "@/lib/utils";
 
-const API = "http://localhost:3001/api/v1";
+const API = getApiBaseUrl();
 
 interface ProcessStage {
   id: string;

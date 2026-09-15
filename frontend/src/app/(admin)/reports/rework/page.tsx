@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Activity, Download, RefreshCw, ArrowLeft } from 'lucide-react';
+import { getApiBaseUrl } from '@/lib/utils';
 
 export default function ReworkReportPage() {
   const [data, setData] = useState<any[]>([]);
@@ -12,7 +13,7 @@ export default function ReworkReportPage() {
     try {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
-      const res = await fetch('http://localhost:3001/api/v1/reports/rework', { headers });
+      const res = await fetch(`${getApiBaseUrl()}/reports/rework`, { headers });
       if (res.ok) {
         const json = await res.json();
         if (Array.isArray(json)) setData(json);

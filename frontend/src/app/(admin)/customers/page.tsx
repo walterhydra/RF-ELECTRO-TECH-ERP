@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { getApiBaseUrl } from '@/lib/utils';
 import { 
   Building2, 
   Plus, 
@@ -84,7 +85,7 @@ export default function CustomersPage() {
 
   // Fetch from backend API if available
   useEffect(() => {
-    fetch('http://localhost:3001/api/v1/customers')
+    fetch(`${getApiBaseUrl()}/customers`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) setCustomers(data);
@@ -134,8 +135,8 @@ export default function CustomersPage() {
     try {
       const method = editingCustomer ? 'PATCH' : 'POST';
       const url = editingCustomer
-        ? `http://localhost:3001/api/v1/customers/${editingCustomer.id}`
-        : 'http://localhost:3001/api/v1/customers';
+        ? `${getApiBaseUrl()}/customers/${editingCustomer.id}`
+        : `${getApiBaseUrl()}/customers`;
 
       const res = await fetch(url, {
         method,
@@ -187,7 +188,7 @@ export default function CustomersPage() {
 
   const toggleStatus = async (id: string) => {
     try {
-      await fetch(`http://localhost:3001/api/v1/customers/${id}/status`, {
+      await fetch(`${getApiBaseUrl()}/customers/${id}/status`, {
         method: 'PATCH',
       });
     } catch {}

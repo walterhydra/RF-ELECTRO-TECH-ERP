@@ -3,8 +3,9 @@
 import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { QrCode, Camera, ArrowRight, Search, AlertTriangle, Loader2, Package, ScanLine } from 'lucide-react';
+import { getApiBaseUrl } from '@/lib/utils';
 
-const API = 'http://localhost:3001/api/v1';
+const API = getApiBaseUrl();
 
 export default function MobileScanPage() {
   const router = useRouter();

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Truck, MapPin, Phone, User, Calendar } from 'lucide-react';
+import { getApiBaseUrl } from '@/lib/utils';
 
 export default function CustomerDispatches() {
   const [dispatches, setDispatches] = useState<any[]>([]);
@@ -12,7 +13,7 @@ export default function CustomerDispatches() {
       try {
         setIsLoading(true);
         const token = localStorage.getItem('token');
-        const res = await fetch('http://localhost:3001/api/v1/portal/dispatches', {
+        const res = await fetch(`${getApiBaseUrl()}/portal/dispatches`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

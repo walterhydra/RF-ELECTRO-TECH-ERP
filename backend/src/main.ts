@@ -11,10 +11,33 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1', { exclude: ['/', 'health'] });
 
   // Enable CORS for frontend and mobile PWA across network
+  const corsOriginsEnv = process.env.CORS_ORIGINS;
+  const allowedOrigins = corsOriginsEnv
+    ? corsOriginsEnv.split(',').map((o) => o.trim())
+    : [
+        'https://rf-electrotech.vercel.app',
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://localhost:3002',
+      ];
+
   app.enableCors({
-    origin: true,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, Postman, health checks)
+      if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+        callback(null, true);
+      } else {
+        // Also allow any vercel.app preview URL for RF Electro
+        if (origin.endsWith('.vercel.app')) {
+          callback(null, true);
+        } else {
+          callback(null, true); // Permissive CORS for seamless mobile PWA / cross-origin API access
+        }
+      }
+    },
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type, Accept, Authorization, Bypass-Tunnel-Reminder, bypass-tunnel-reminder',
   });
 
   // Global validation pipes with DTO transform

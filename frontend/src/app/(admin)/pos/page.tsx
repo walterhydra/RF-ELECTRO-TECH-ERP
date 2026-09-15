@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { getApiBaseUrl } from '@/lib/utils';
 import { 
   ShoppingCart, 
   Plus, 
@@ -171,21 +172,21 @@ export default function POsPage() {
 
   // Fetch API
   useEffect(() => {
-    fetch('http://localhost:3001/api/v1/customer-pos')
+    fetch(`${getApiBaseUrl()}/customer-pos`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) setPos(data);
       })
       .catch(() => {});
 
-    fetch('http://localhost:3001/api/v1/customers')
+    fetch(`${getApiBaseUrl()}/customers`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) setCustomers(data);
       })
       .catch(() => {});
 
-    fetch('http://localhost:3001/api/v1/products')
+    fetch(`${getApiBaseUrl()}/products`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) setProducts(data);
@@ -237,8 +238,8 @@ export default function POsPage() {
     try {
       const method = editingPo ? 'PATCH' : 'POST';
       const url = editingPo
-        ? `http://localhost:3001/api/v1/customer-pos/${editingPo.id}`
-        : 'http://localhost:3001/api/v1/customer-pos';
+        ? `${getApiBaseUrl()}/customer-pos/${editingPo.id}`
+        : `${getApiBaseUrl()}/customer-pos`;
 
       const res = await fetch(url, {
         method,
@@ -332,7 +333,7 @@ export default function POsPage() {
 
   const handleStatusChange = async (poId: string, newStatus: string) => {
     try {
-      await fetch(`http://localhost:3001/api/v1/customer-pos/${poId}/status`, {
+      await fetch(`${getApiBaseUrl()}/customer-pos/${poId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),

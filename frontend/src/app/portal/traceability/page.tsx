@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Search, MapPin, Package, Calendar } from 'lucide-react';
+import { getApiBaseUrl } from '@/lib/utils';
 
 export default function CustomerTraceability() {
   const [jobCardNo, setJobCardNo] = useState('');
@@ -18,7 +19,7 @@ export default function CustomerTraceability() {
       setError('');
       setTraceData(null);
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:3001/api/v1/portal/traceability/${encodeURIComponent(jobCardNo.trim())}`, {
+      const res = await fetch(`${getApiBaseUrl()}/portal/traceability/${encodeURIComponent(jobCardNo.trim())}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { getApiBaseUrl } from "@/lib/utils";
 import {
   Cpu,
   Plus,
@@ -286,7 +287,7 @@ export default function ProductsPage() {
 
   useEffect(() => {
     // Fetch Products
-    fetch("http://localhost:3001/api/v1/products")
+    fetch(`${getApiBaseUrl()}/products`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
@@ -306,7 +307,7 @@ export default function ProductsPage() {
       .catch(() => {});
 
     // Fetch Process Flows
-    fetch("http://localhost:3001/api/v1/processes/flows")
+    fetch(`${getApiBaseUrl()}/processes/flows`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
@@ -368,7 +369,7 @@ export default function ProductsPage() {
     setSelectedProductForHistory(product);
     try {
       const res = await fetch(
-        `http://localhost:3001/api/v1/products/${product.id}/revisions`,
+        `${getApiBaseUrl()}/products/${product.id}/revisions`,
       );
       if (res.ok) {
         const data = await res.json();
@@ -434,8 +435,8 @@ export default function ProductsPage() {
     try {
       const method = editingProduct ? "PATCH" : "POST";
       const url = editingProduct
-        ? `http://localhost:3001/api/v1/products/${editingProduct.id}`
-        : "http://localhost:3001/api/v1/products";
+        ? `${getApiBaseUrl()}/products/${editingProduct.id}`
+        : `${getApiBaseUrl()}/products`;
 
       const res = await fetch(url, {
         method,
@@ -524,7 +525,7 @@ export default function ProductsPage() {
 
     try {
       const res = await fetch(
-        `http://localhost:3001/api/v1/products/${editingProduct.id}/revisions`,
+        `${getApiBaseUrl()}/products/${editingProduct.id}/revisions`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -609,7 +610,7 @@ export default function ProductsPage() {
 
   const toggleStatus = async (id: string) => {
     try {
-      await fetch(`http://localhost:3001/api/v1/products/${id}/status`, {
+      await fetch(`${getApiBaseUrl()}/products/${id}/status`, {
         method: "PATCH",
       });
     } catch {}

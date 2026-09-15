@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { getApiBaseUrl } from "@/lib/utils";
 import {
   Truck,
   Search,
@@ -121,8 +122,8 @@ export default function DispatchesPage() {
       };
 
       const [dispRes, jobRes] = await Promise.all([
-        fetch("http://localhost:3001/api/v1/dispatches", { headers }),
-        fetch("http://localhost:3001/api/v1/job-cards", { headers }),
+        fetch(`${getApiBaseUrl()}/dispatches`, { headers }),
+        fetch(`${getApiBaseUrl()}/job-cards`, { headers }),
       ]);
 
       if (dispRes.ok) {
@@ -150,7 +151,7 @@ export default function DispatchesPage() {
     e.preventDefault();
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:3001/api/v1/dispatches", {
+      const res = await fetch(`${getApiBaseUrl()}/dispatches`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -177,7 +178,7 @@ export default function DispatchesPage() {
     try {
       const token = localStorage.getItem("token");
       await fetch(
-        `http://localhost:3001/api/v1/dispatches/${selectedDispatch.id}/delivery`,
+        `${getApiBaseUrl()}/dispatches/${selectedDispatch.id}/delivery`,
         {
           method: "PATCH",
           headers: {
