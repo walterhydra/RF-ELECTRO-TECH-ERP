@@ -629,26 +629,8 @@ export class JobCardsService {
         });
       }
 
-      return jobCard.id;
+      return this.findOne(jobCard.id, tx);
     });
-
-    try {
-      return await this.findOne(createdId);
-    } catch (err) {
-      console.error('createJobCard findOne error:', err);
-      const fallback = await this.prisma.jobCard.findUnique({
-        where: { id: createdId },
-        include: {
-          subJobCards: true,
-          product: true,
-          customerPO: true,
-        },
-      });
-      if (!fallback) {
-        throw new NotFoundException(`Job Card with ID "${createdId}" creation failed`);
-      }
-      return fallback;
-    }
   }
 
   async updateJobCard(id: string, data: any) {
