@@ -684,10 +684,10 @@ export default function JobCardsPage() {
     setIsMounted(true);
     const deleted = getDeletedJobCardIds();
     const stored = getStoredJobCards();
-    if (stored !== null) {
+    if (stored !== null && stored.length > 0) {
       setJobCards(stored.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo)));
     } else {
-      setJobCards(INITIAL_JOB_CARDS.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo)));
+      setJobCards([]);
     }
   }, []);
 
@@ -946,15 +946,8 @@ export default function JobCardsPage() {
             }];
           }).filter((j) => !deletedIds.includes(j.id) && !deletedIds.includes(j.jobCardNo));
 
-          if (mapped.length > 0) {
-            setJobCards((prev) => {
-              const backendKeySet = new Set(mapped.flatMap((m) => [m.id, m.jobCardNo]));
-              const clientOnly = prev.filter((p) => !backendKeySet.has(p.id) && !backendKeySet.has(p.jobCardNo) && !deletedIds.includes(p.id) && !deletedIds.includes(p.jobCardNo));
-              const merged = [...mapped, ...clientOnly];
-              saveJobCardsToStorage(merged);
-              return merged;
-            });
-          }
+          setJobCards(mapped);
+          saveJobCardsToStorage(mapped);
         }
       }
     } catch (err) {

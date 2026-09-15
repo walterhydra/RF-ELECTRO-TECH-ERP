@@ -182,12 +182,11 @@ export default function JobMovementUpdatePage() {
   const [partialQty, setPartialQty] = useState<number | string>(35);
   const [photoLightbox, setPhotoLightbox] = useState<string | null>(null);
 
-  // Sync from NestJS Backend if available
-  useEffect(() => {
+  const fetchMovementJobs = React.useCallback(() => {
     fetch(`${getApiBaseUrl()}/job-cards`)
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           const deletedIds = getDeletedJobCardIds();
           const mapped: JobCard[] = data.flatMap((j: any) => {
             const masterPcbQty = j.totalPcbQty || j.custPnlQty || (j.prodPnlQty ? j.prodPnlQty * 4 : 160);
@@ -250,19 +249,18 @@ export default function JobMovementUpdatePage() {
             }];
           }).filter((j) => !deletedIds.includes(j.id) && !deletedIds.includes(j.jobCardNo));
 
-          if (mapped.length > 0) {
-            setJobs((prev) => {
-              const backendKeySet = new Set(mapped.flatMap((m) => [m.id, m.jobCardNo]));
-              const clientOnly = prev.filter((p) => !backendKeySet.has(p.id) && !backendKeySet.has(p.jobCardNo) && !deletedIds.includes(p.id) && !deletedIds.includes(p.jobCardNo));
-              const merged = [...mapped, ...clientOnly];
-              saveJobCardsToStorage(merged);
-              return merged;
-            });
-          }
+          setJobs(mapped);
+          saveJobCardsToStorage(mapped);
         }
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetchMovementJobs();
+    const interval = setInterval(fetchMovementJobs, 5000);
+    return () => clearInterval(interval);
+  }, [fetchMovementJobs]);
 
   const showToastMsg = (msg: string) => {
     setToast(msg);
