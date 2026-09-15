@@ -937,6 +937,7 @@ export default function JobCardsPage() {
                   productId: j.productId,
                   totalQty: subPcbQty,
                   status: subStatusNorm,
+                  isNewlyCreated: subStatusNorm === 'UNLAUNCHED',
                   qrCodeValue: sub.qrCodeValue || sub.subJobCardNo,
                   launchedAt: j.launchedAt,
                   completedAt: j.completedAt,
@@ -977,6 +978,7 @@ export default function JobCardsPage() {
               productId: j.productId,
               totalQty: masterPcbQty,
               status: jStatusNorm,
+              isNewlyCreated: jStatusNorm === 'UNLAUNCHED',
               qrCodeValue: j.qrCodeValue || `${j.jobCardNo}-PARENT`,
               launchedAt: j.launchedAt,
               completedAt: j.completedAt,
@@ -2629,11 +2631,11 @@ export default function JobCardsPage() {
                 </tr>
               ) : (
                 filteredCards.map((jc, idx) => {
-                  const isUnlaunched = jc.status === 'UNLAUNCHED' || jc.status === 'CREATED';
+                  const isUnlaunched = jc.status === 'UNLAUNCHED' || jc.status === 'CREATED' || (jc.status as string) === 'PENDING_LAUNCH';
                   const isCompleted = jc.status === 'COMPLETED';
                   const stageIndex = PF01_STAGES.indexOf(jc.currentStageName || PF01_STAGES[0]);
                   const progressPct = isUnlaunched ? 0 : isCompleted ? 100 : Math.round(((stageIndex + 1) / PF01_STAGES.length) * 100);
-                  const isNewTagVisible = isUnlaunched || Boolean(jc.isNewlyCreated) || (!jc.launchedAt && !isCompleted);
+                  const isNewTagVisible = isUnlaunched;
 
                   return (
                     <tr
@@ -2779,18 +2781,29 @@ export default function JobCardsPage() {
                       {/* Stage Movement Action Button & Super Admin Delete Option */}
                       <td className="py-2 px-3 text-center whitespace-nowrap">
                         <div className="inline-flex items-center gap-1.5">
-                          <button
-                            onClick={() => {
-                              setSelectedMovementJob(jc);
-                              setPartialMoveQty(Math.max(1, Math.floor((jc.totalPcbQty || 160) / 2)));
-                              setMovementTab('VIEW');
-                            }}
-                            title="Open Stage Movement Confirmation & Options"
-                            className="h-7 px-3 bg-gradient-to-r from-amber-500 via-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black rounded-lg border border-amber-600/90 text-[11px] inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 whitespace-nowrap"
-                          >
-                            <RefreshCw className="w-3 h-3 stroke-[3]" />
-                            <span>Move Stage ➔</span>
-                          </button>
+                          {isUnlaunched ? (
+                            <button
+                              onClick={() => handleLaunchExistingJobCard(jc.id)}
+                              title="Launch Job Card into Stage 1 Production"
+                              className="h-7 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-lg text-[11px] inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 whitespace-nowrap"
+                            >
+                              <Play className="w-3 h-3 fill-current" />
+                              <span>🚀 LAUNCH JOB</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setSelectedMovementJob(jc);
+                                setPartialMoveQty(Math.max(1, Math.floor((jc.totalPcbQty || 160) / 2)));
+                                setMovementTab('VIEW');
+                              }}
+                              title="Open Stage Movement Confirmation & Options"
+                              className="h-7 px-3 bg-gradient-to-r from-amber-500 via-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black rounded-lg border border-amber-600/90 text-[11px] inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 whitespace-nowrap"
+                            >
+                              <RefreshCw className="w-3 h-3 stroke-[3]" />
+                              <span>Move Stage ➔</span>
+                            </button>
+                          )}
 
                           <button
                             onClick={() => handleOpenEditModal(jc)}

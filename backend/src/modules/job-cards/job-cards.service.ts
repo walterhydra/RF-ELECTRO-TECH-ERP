@@ -763,12 +763,26 @@ export class JobCardsService {
   }
 
   async launchJobCard(id: string) {
-    const jobCard = await this.findOne(id);
-
-    if (jobCard.status !== JobCardStatus.CREATED && jobCard.status !== JobCardStatus.NOT_LAUNCHED) {
-      throw new BadRequestException(`Job Card "${jobCard.jobCardNo}" is already in status "${jobCard.status}"`);
+    let jobCard: any = null;
+    try {
+      jobCard = await this.findOne(id);
+    } catch (e) {
+      const existing = await this.prisma.jobCard.findFirst({
+        where: { OR: [{ id }, { jobCardNo: id }] },
+        include: {
+          customerPO: { include: { customer: true } },
+          product: true,
+          processFlowMaster: { include: { steps: { include: { stage: true }, orderBy: { stepOrder: 'asc' } } } },
+          subJobCards: { include: { currentStage: true } },
+        },
+      });
+      if (!existing) {
+        throw new NotFoundException(`Job Card with ID or Number "${id}" not found`);
+      }
+      jobCard = existing;
     }
 
+    const realJobCardId = jobCard.id;
     const firstStep = jobCard.processFlowMaster?.steps?.[0];
     const firstStageId = firstStep?.stageId || null;
 
@@ -786,7 +800,7 @@ export class JobCardsService {
         await tx.subJobCard.create({
           data: {
             subJobCardNo,
-            jobCardId: id,
+            jobCardId: realJobCardId,
             qty: fullPcbQty,
             totalPcbQty: fullPcbQty,
             custPnlQty: fullPcbQty,
@@ -800,7 +814,7 @@ export class JobCardsService {
       } else {
         // Move all pending sub job cards to IN_STAGE at stage 1
         await tx.subJobCard.updateMany({
-          where: { jobCardId: id },
+          where: { jobCardId: realJobCardId },
           data: {
             status: SubJobCardStatus.IN_STAGE,
             currentStageId: firstStageId,
@@ -809,7 +823,7 @@ export class JobCardsService {
       }
 
       const updated = await tx.jobCard.update({
-        where: { id },
+        where: { id: realJobCardId },
         data: {
           status: JobCardStatus.IN_PROGRESS,
           launchedAt: new Date(),
