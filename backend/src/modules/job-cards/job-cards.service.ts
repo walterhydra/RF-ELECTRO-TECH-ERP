@@ -563,6 +563,13 @@ export class JobCardsService {
       const fallbackProduct = product || deps.product;
       const fallbackFlow = processFlow || deps.processFlow;
 
+      const existingJc = await tx.jobCard.findFirst({
+        where: { jobCardNo },
+      });
+      if (existingJc) {
+        return this.findOne(existingJc.id, tx);
+      }
+
       const jobCard = await tx.jobCard.create({
         data: {
           jobCardNo,
