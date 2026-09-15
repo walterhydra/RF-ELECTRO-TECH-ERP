@@ -226,7 +226,7 @@ export class JobCardsService {
   async findOne(id: string, client: any = this.prisma) {
     const db = client || this.prisma;
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-    const where: any = isUuid ? { OR: [{ id }, { jobCardNo: id }] } : { jobCardNo: id };
+    const where: any = isUuid ? { id } : { jobCardNo: id };
 
     const jobCard = await db.jobCard.findFirst({
       where,
