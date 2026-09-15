@@ -226,72 +226,49 @@ export class JobCardsService {
   async findOne(id: string, client: any = this.prisma) {
     const db = client || this.prisma;
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const searchWhere: any = isUuid
+      ? { OR: [{ id }, { jobCardNo: id }] }
+      : { jobCardNo: id };
 
-    let jobCard: any = null;
-    if (isUuid) {
-      jobCard = await db.jobCard.findUnique({
-        where: { id },
-        include: {
-          customerPO: { include: { customer: true } },
-          product: true,
-          processFlowMaster: {
-            include: {
-              steps: { include: { stage: true }, orderBy: { stepOrder: 'asc' } },
-            },
-          },
-          subJobCards: { include: { currentStage: true }, orderBy: { subJobCardNo: 'asc' } },
-        },
-      }).catch((err) => {
-        console.error('findOne full include error:', err);
-        return null;
-      });
-
-      if (!jobCard) {
-        jobCard = await db.jobCard.findUnique({
-          where: { id },
+    let jobCard: any = await db.jobCard.findFirst({
+      where: searchWhere,
+      include: {
+        customerPO: { include: { customer: true } },
+        product: true,
+        processFlowMaster: {
           include: {
-            customerPO: { include: { customer: true } },
-            product: true,
-            processFlowMaster: true,
-            subJobCards: true,
+            steps: { include: { stage: true }, orderBy: { stepOrder: 'asc' } },
           },
-        }).catch((err) => {
-          console.error('findOne simple include error:', err);
-          return null;
-        });
-      }
+        },
+        subJobCards: { include: { currentStage: true }, orderBy: { subJobCardNo: 'asc' } },
+      },
+    }).catch((err) => {
+      console.error('findOne full include error:', err);
+      return null;
+    });
 
-      if (!jobCard) {
-        jobCard = await db.jobCard.findUnique({
-          where: { id },
-        }).catch((err) => {
-          console.error('findOne plain error:', err);
-          return null;
-        });
-      }
-    } else {
+    if (!jobCard) {
       jobCard = await db.jobCard.findFirst({
-        where: { jobCardNo: id },
+        where: searchWhere,
         include: {
           customerPO: { include: { customer: true } },
           product: true,
-          processFlowMaster: {
-            include: {
-              steps: { include: { stage: true }, orderBy: { stepOrder: 'asc' } },
-            },
-          },
-          subJobCards: { include: { currentStage: true }, orderBy: { subJobCardNo: 'asc' } },
+          processFlowMaster: true,
+          subJobCards: true,
         },
       }).catch((err) => {
-        console.error('findOne jobCardNo search error:', err);
+        console.error('findOne simple include error:', err);
         return null;
       });
+    }
 
-      if (!jobCard) {
-        jobCard = await db.jobCard.findFirst({
-          where: { jobCardNo: id },
-        }).catch(() => null);
-      }
+    if (!jobCard) {
+      jobCard = await db.jobCard.findFirst({
+        where: searchWhere,
+      }).catch((err) => {
+        console.error('findOne plain error:', err);
+        return null;
+      });
     }
 
     if (!jobCard) {
