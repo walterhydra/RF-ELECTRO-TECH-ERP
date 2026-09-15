@@ -228,7 +228,7 @@ export class JobCardsService {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     const where: any = isUuid ? { id } : { jobCardNo: id };
 
-    const jobCard = await db.jobCard.findFirst({
+    let jobCard = await db.jobCard.findFirst({
       where,
       include: {
         customerPO: {
@@ -248,10 +248,22 @@ export class JobCardsService {
           orderBy: { subJobCardNo: 'asc' },
         },
       },
-    });
+    }).catch(() => null);
 
     if (!jobCard) {
-      throw new NotFoundException(`Job Card with ID or Number "${id}" not found`);
+      jobCard = await db.jobCard.findFirst({
+        where,
+        include: {
+          customerPO: { include: { customer: true } },
+          product: true,
+          processFlowMaster: true,
+          subJobCards: true,
+        },
+      });
+    }
+
+    if (!jobCard) {
+      throw new NotFoundException(`Job Card with ID "${id}" not found`);
     }
 
     return jobCard;
