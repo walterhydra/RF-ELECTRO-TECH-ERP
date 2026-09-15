@@ -519,6 +519,36 @@ export class JobCardsService {
     });
   }
 
+  async updateJobCard(id: string, data: any) {
+    const existing = await this.prisma.jobCard.findFirst({
+      where: {
+        OR: [{ id }, { jobCardNo: id }],
+      },
+    });
+
+    if (!existing) {
+      return this.createJobCard(data, '');
+    }
+
+    await this.prisma.jobCard.update({
+      where: { id: existing.id },
+      data: {
+        customerPartNo: data.customerPartNo ?? existing.customerPartNo,
+        rfePartCode: data.rfePartCode ?? existing.rfePartCode,
+        customerCode: data.customerCode ?? existing.customerCode,
+        priority: data.priority ?? existing.priority,
+        totalPcbQty: Number(data.totalPcbQty) || existing.totalPcbQty,
+        prodPnlQty: Number(data.prodPnlQty) || existing.prodPnlQty,
+        custPnlQty: Number(data.custPnlQty) || existing.custPnlQty,
+        prodPnlAreaSqm: Number(data.prodPnlAreaSqm) || existing.prodPnlAreaSqm,
+        custPnlAreaSqm: Number(data.custPnlAreaSqm) || existing.custPnlAreaSqm,
+        status: data.status ? (data.status === 'UNLAUNCHED' ? JobCardStatus.CREATED : data.status) : existing.status,
+      },
+    });
+
+    return this.findOne(existing.id);
+  }
+
   async launchJobCard(id: string) {
     const jobCard = await this.findOne(id);
 

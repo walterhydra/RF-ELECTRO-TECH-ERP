@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, Query, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Param, Body, Query, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { JobCardsService } from './job-cards.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -26,6 +26,14 @@ export class JobCardsController {
   @ApiOperation({ summary: 'Get single Job Card details with full hierarchy and stages' })
   async findOne(@Param('id') id: string) {
     return this.jobCardsService.findOne(id);
+  }
+
+  @Put(':id')
+  @Patch(':id')
+  @Public()
+  @ApiOperation({ summary: 'Update an existing Job Card' })
+  async updateJobCard(@Param('id') id: string, @Body() body: any) {
+    return this.jobCardsService.updateJobCard(id, body);
   }
 
   @Post('generate')
