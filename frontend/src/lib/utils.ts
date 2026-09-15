@@ -1,3 +1,4 @@
+
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -34,9 +35,9 @@ export function getApiBaseUrl(): string {
       return cleaned.endsWith('/api/v1') ? cleaned : `${cleaned}/api/v1`;
     }
 
-    // Handle Vercel deployment hostname fallback if env var wasn't set or HTTPS external access
+    // Handle Vercel deployment hostname fallback if env var wasn't set
     const hostname = window.location.hostname || 'localhost';
-    if (hostname.includes('vercel.app') || (window.location.protocol === 'https:' && !hostname.includes('localhost') && !hostname.includes('127.0.0.1'))) {
+    if (hostname.includes('vercel.app')) {
       return 'https://rf-electro-tech-erp.onrender.com/api/v1';
     }
 

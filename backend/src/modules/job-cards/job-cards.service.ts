@@ -1169,9 +1169,9 @@ export class JobCardsService {
 
     let jobCardId = id;
     if (!subCard) {
-      // Find first active subJobCard for jobCard id or jobCardNo
+      const searchNo = body?.jobCardNo || id;
       let jc = await this.prisma.jobCard.findFirst({
-        where: { OR: [{ id }, { jobCardNo: id }] },
+        where: { OR: [{ id }, { jobCardNo: id }, { jobCardNo: searchNo }] },
         include: {
           subJobCards: { include: { currentStage: true } },
           processFlowMaster: {
