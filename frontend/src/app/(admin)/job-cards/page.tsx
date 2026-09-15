@@ -675,6 +675,13 @@ export default function JobCardsPage() {
   const [photoLightbox, setPhotoLightbox] = useState<string | null>(null);
   const [unitPcbAreaSqm, setUnitPcbAreaSqm] = useState<number>(0.28125);
 
+  // Server Connection Diagnostic State
+  const [serverConnectionState, setServerConnectionState] = useState<{
+    status: 'CONNECTED' | 'DISCONNECTED' | 'MIXED_CONTENT_BLOCKED' | 'CHECKING';
+    url: string;
+    message?: string;
+  }>({ status: 'CHECKING', url: '' });
+
   // Partial Split Pending Reason Options
   const [incompletePendingReason, setIncompletePendingReason] = useState<string>('Drilling & Hole Check Pending');
   const [incompleteCustomReason, setIncompleteCustomReason] = useState<string>('');
@@ -863,14 +870,27 @@ export default function JobCardsPage() {
 
   // Sync state from backend API if available
   const fetchBackendJobCards = useCallback(async () => {
+    const targetUrl = getApiBaseUrl();
+    setServerConnectionState((prev) => ({ ...prev, url: targetUrl }));
+
+    if (typeof window !== 'undefined' && window.location.protocol === 'https:' && targetUrl.startsWith('http:')) {
+      setServerConnectionState({
+        status: 'MIXED_CONTENT_BLOCKED',
+        url: targetUrl,
+        message: 'Browser blocked insecure HTTP API request on HTTPS Vercel. Use LAN link (http://<SERVER_IP>:3000) or an HTTPS backend URL!',
+      });
+      return;
+    }
+
     try {
-      const res = await fetch(`${getApiBaseUrl()}/job-cards`, {
+      const res = await fetch(`${targetUrl}/job-cards`, {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
         },
       });
       if (res.ok) {
+        setServerConnectionState({ status: 'CONNECTED', url: targetUrl });
         const data = await res.json();
         if (Array.isArray(data)) {
           const mapped: JobCard[] = data.flatMap((j: any) => {
@@ -957,9 +977,27 @@ export default function JobCardsPage() {
           setJobCards(mapped);
           saveJobCardsToStorage(mapped);
         }
+      } else {
+        setServerConnectionState({
+          status: 'DISCONNECTED',
+          url: targetUrl,
+          message: 'Backend server returned non-OK status.',
+        });
       }
     } catch (err) {
-      // Retain client-side fallback state smoothly
+      if (typeof window !== 'undefined' && window.location.protocol === 'https:' && targetUrl.startsWith('http:')) {
+        setServerConnectionState({
+          status: 'MIXED_CONTENT_BLOCKED',
+          url: targetUrl,
+          message: 'Browser blocked insecure HTTP API request on HTTPS Vercel.',
+        });
+      } else {
+        setServerConnectionState({
+          status: 'DISCONNECTED',
+          url: targetUrl,
+          message: 'Cannot reach backend server.',
+        });
+      }
     }
   }, []);
 
@@ -1828,6 +1866,55 @@ export default function JobCardsPage() {
     <div className="space-y-5 p-3 sm:p-5 w-full max-w-[1600px] mx-auto pb-16 bg-slate-50/50 min-h-screen text-slate-900 font-sans">
       
       {/* 1. TOP HEADER BANNER CARD (Clean & Perfectly Aligned Layout) */}
+      {serverConnectionState.status === 'MIXED_CONTENT_BLOCKED' && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-900 text-xs shadow-xs">
+          <div className="flex items-start gap-2.5">
+            <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-extrabold text-sm block text-amber-950">HTTPS Security Warning (Mixed Content Blocked)</span>
+              <p className="mt-0.5 text-amber-800">
+                You opened ERP over HTTPS (<code className="font-mono bg-amber-100 px-1 py-0.5 rounded text-amber-900 font-bold">{typeof window !== 'undefined' ? window.location.origin : ''}</code>), but backend target is HTTP (<code className="font-mono bg-amber-100 px-1 py-0.5 rounded text-amber-900 font-bold">{serverConnectionState.url}</code>). Browsers block HTTP API calls on HTTPS pages.
+              </p>
+              <p className="mt-1 font-semibold text-amber-950">
+                👉 Solution: Open ERP on LAN: <code className="font-mono bg-amber-200 text-amber-950 px-1.5 py-0.5 rounded font-bold">http://&lt;SERVER_IP&gt;:3000/job-cards</code> or click button to set an HTTPS Server URL.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              const custom = prompt('Enter your Backend API URL (e.g. https://rf-electro-erp.loca.lt or http://192.168.1.50:3001):', serverConnectionState.url);
+              if (custom) handleSaveHost(custom);
+            }}
+            className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-black rounded-xl text-xs whitespace-nowrap cursor-pointer shadow-xs active:scale-95 shrink-0"
+          >
+            Set Backend Server URL
+          </button>
+        </div>
+      )}
+
+      {serverConnectionState.status === 'DISCONNECTED' && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-red-900 text-xs shadow-xs">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-extrabold text-sm block text-red-950">Backend Server Offline or Unreachable</span>
+              <p className="mt-0.5 text-red-800">
+                Target Backend URL: <code className="font-mono bg-red-100 px-1 py-0.5 rounded text-red-900 font-bold">{serverConnectionState.url}</code> is currently not responding.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              const custom = prompt('Enter your Backend API URL (e.g. http://192.168.1.50:3001 or https://rf-electro-erp.loca.lt):', serverConnectionState.url);
+              if (custom) handleSaveHost(custom);
+            }}
+            className="px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white font-black rounded-xl text-xs whitespace-nowrap cursor-pointer shadow-xs active:scale-95 shrink-0"
+          >
+            Change Server URL
+          </button>
+        </div>
+      )}
+
       <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div className="flex items-start sm:items-center gap-3.5">
           <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center font-bold shrink-0 shadow-2xs">
