@@ -284,27 +284,31 @@ export default function JobMovementUpdatePage() {
     return false;
   };
 
-  const handleAdvanceStage = async (jobId: string, customRejectionQty?: number, customRejectionReason?: string) => {
+  const handleAdvanceStage = (jobId: string) => {
     const targetJob = jobs.find((j) => j.id === jobId);
-    if (!targetJob) return;
+    if (targetJob) {
+      setSelectedJob(targetJob);
+    }
+  };
 
-    if (!canUserMoveStage(targetJob.currentStageName)) {
-      showToastMsg(`Permission Denied: Operator assigned to "${assignedStage}" cannot move jobs out of "${targetJob.currentStageName}".`);
+  const handleFullJobMovement = async () => {
+    if (!selectedJob) return;
+    const jobId = selectedJob.id;
+    if (!canUserMoveStage(selectedJob.currentStageName)) {
+      showToastMsg(`Permission Denied: Operator assigned to "${assignedStage}" cannot move jobs out of "${selectedJob.currentStageName}".`);
       return;
     }
 
-    const currentPcbQty = targetJob.totalPcbQty || 160;
-    const currentSqm = targetJob.prodPnlAreaSqm || 45;
-    const sqmPerPcb = currentPcbQty > 0 ? currentSqm / currentPcbQty : 0;
+    const currentPcbQty = selectedJob.totalPcbQty || 160;
+    const currentSqmArea = selectedJob.prodPnlAreaSqm || 45;
+    const sqmPerPcb = currentPcbQty > 0 ? currentSqmArea / currentPcbQty : 0;
 
-    const parsedRejection = customRejectionQty !== undefined
-      ? customRejectionQty
-      : (typeof rejectedPcbQtyInput === 'number' ? rejectedPcbQtyInput : parseInt(String(rejectedPcbQtyInput), 10) || 0);
+    const parsedRejection = typeof rejectedPcbQtyInput === 'number' ? rejectedPcbQtyInput : parseInt(String(rejectedPcbQtyInput), 10) || 0;
 
     const actualRejected = Math.min(Math.max(0, parsedRejection), currentPcbQty);
     const forwardedPcbQty = Math.max(0, currentPcbQty - actualRejected);
     const nextStageSqm = Number((forwardedPcbQty * sqmPerPcb).toFixed(2));
-    const effectiveReason = customRejectionReason || rejectionReasonInput || remarksText || 'Stage Movement';
+    const effectiveReason = rejectionReasonInput || remarksText || 'Stage Movement';
 
     if (actualRejected > 0 && !effectiveReason.trim()) {
       showToastMsg('Mandatory Rejection Remark required when rejecting PCBs.');
@@ -312,54 +316,40 @@ export default function JobMovementUpdatePage() {
     }
 
     try {
-      await fetch(`${getApiBaseUrl()}/job-cards/${jobId}/move-full`, {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      await fetch(`${getApiBaseUrl()}/job-cards/${jobId}/move-stage`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
-          qtyForwarded: forwardedPcbQty,
-          qtyRejected: actualRejected,
-          areaToMove: nextStageSqm,
+          rejectPcbQty: actualRejected,
           remark: actualRejected > 0
             ? `Rejection: ${actualRejected} PCBs rejected. Reason: ${effectiveReason}`
             : `${remarkCategory}: ${remarksText || 'Clear Movement'}`,
+          remarkType: actualRejected > 0 ? 'REJECTION' : 'FULL_MOVEMENT',
         }),
       });
     } catch (e) {
       console.warn('Backend API unavailable, using local state fallback');
     }
 
-    setJobs((prev) =>
-      prev.map((j) => {
-        if (j.id === jobId) {
-          const currentIndex = PF01_STAGES.indexOf(j.currentStageName);
-          const nextIndex = Math.min(currentIndex + 1, PF01_STAGES.length - 1);
-          const nextStageName = PF01_STAGES[nextIndex];
-          const isDone = nextIndex === PF01_STAGES.length - 1;
+    const currentIndex = PF01_STAGES.indexOf(selectedJob.currentStageName);
+    const nextIndex = Math.min(currentIndex + 1, PF01_STAGES.length - 1);
+    const nextStageName = PF01_STAGES[nextIndex];
 
-          showToastMsg(
-            actualRejected > 0
-              ? `Job ${j.jobCardNo}: ${forwardedPcbQty} PCBs moved to ${nextStageName} (${actualRejected} Rejected, Next Area: ${nextStageSqm} Sqm).`
-              : `Full Movement: Job ${j.jobCardNo} moved to Stage ${nextStageName}`
-          );
-
-          return {
-            ...j,
-            totalPcbQty: forwardedPcbQty,
-            custPnlQty: forwardedPcbQty,
-            prodPnlQty: Math.ceil(forwardedPcbQty / 4),
-            prodPnlAreaSqm: nextStageSqm,
-            custPnlAreaSqm: nextStageSqm,
-            currentStageIndex: nextIndex,
-            currentStageName: nextStageName,
-            status: isDone ? 'COMPLETED' : 'IN_PROGRESS',
-          };
-        }
-        return j;
-      })
+    showToastMsg(
+      actualRejected > 0
+        ? `Job ${selectedJob.jobCardNo}: ${forwardedPcbQty} PCBs moved to ${nextStageName} (${actualRejected} Rejected, Next Area: ${nextStageSqm} Sqm).`
+        : `Full Movement: Job ${selectedJob.jobCardNo} moved to Stage ${nextStageName}`
     );
+
+    await fetchMovementJobs();
     setSelectedJob(null);
     setRejectedPcbQtyInput(0);
     setRejectionReasonInput('');
+    setRemarksText('');
   };
 
   const handleJobDispatch = async (jobId: string) => {
@@ -367,9 +357,13 @@ export default function JobMovementUpdatePage() {
     if (!targetJob) return;
 
     try {
-      await fetch(`${getApiBaseUrl()}/job-cards/${jobId}/move-full`, {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      await fetch(`${getApiBaseUrl()}/job-cards/${jobId}/move-stage`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           status: 'COMPLETED',
           remark: 'Direct Job Dispatch from Packing stage',
@@ -379,7 +373,7 @@ export default function JobMovementUpdatePage() {
       console.warn('Backend API unavailable');
     }
 
-    setJobs((prev) => prev.filter((j) => j.id !== jobId));
+    await fetchMovementJobs();
     showToastMsg(`🚚 Job ${targetJob.jobCardNo} successfully Dispatched & Marked Completed!`);
     setSelectedJob(null);
   };
@@ -433,36 +427,14 @@ export default function JobMovementUpdatePage() {
     const nextIndex = Math.min(currentIndex + 1, PF01_STAGES.length - 1);
     const nextStageName = PF01_STAGES[nextIndex];
 
-    // NOTE: Per ERP PDF Spec 14-09-2026, DO NOT append any letter suffix (e.g. -A, -B).
-    // Both moved batch and remaining balance batch keep the exact identical base Job Card No.
-    const sameJobCardNo = selectedJob.jobCardNo;
+    showToastMsg(
+      `Partial Movement: Moved ${parsedMoveQty} PCBs of Job Card ${selectedJob.jobCardNo} to ${nextStageName} (${sqmMoved} Sqm). ${remPcb} PCBs remain at ${selectedJob.currentStageName} (${remArea} Sqm).`
+    );
 
-    const movedBatch: JobCard = {
-      ...selectedJob,
-      id: `jc-part-${Date.now()}-1`,
-      jobCardNo: sameJobCardNo,
-      prodPnlQty: Math.ceil(parsedMoveQty / 4),
-      custPnlQty: parsedMoveQty,
-      totalPcbQty: parsedMoveQty,
-      prodPnlAreaSqm: sqmMoved,
-      custPnlAreaSqm: sqmMoved,
-      currentStageIndex: nextIndex,
-      currentStageName: nextStageName,
-    };
-
-    const remainingBatch: JobCard = {
-      ...selectedJob,
-      jobCardNo: sameJobCardNo,
-      prodPnlQty: Math.ceil(remPcb / 4),
-      custPnlQty: remPcb,
-      totalPcbQty: remPcb,
-      prodPnlAreaSqm: remArea,
-      custPnlAreaSqm: remArea,
-    };
-
-    setJobs((prev) => [movedBatch, ...prev.map((j) => (j.id === selectedJob.id ? remainingBatch : j))]);
+    await fetchMovementJobs();
     setSelectedJob(null);
-    showToastMsg(`Partial Movement: Moved ${parsedMoveQty} PCBs of Job Card ${sameJobCardNo} to ${nextStageName} (${sqmMoved} Sqm). ${remPcb} PCBs remain at ${selectedJob.currentStageName} (${remArea} Sqm).`);
+    setPartialQty(0);
+    setRemarksText('');
   };
 
   const filteredJobs = jobs.filter((j) => {
@@ -957,7 +929,7 @@ export default function JobMovementUpdatePage() {
                       </button>
                     ) : (
                       <button
-                        onClick={() => handleAdvanceStage(selectedJob.id, actualRejected, rejectionReasonInput)}
+                        onClick={handleFullJobMovement}
                         className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 cursor-pointer"
                       >
                         <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />

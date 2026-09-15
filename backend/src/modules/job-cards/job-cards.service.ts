@@ -1032,7 +1032,7 @@ export class JobCardsService {
     };
   }
 
-  async moveFull(id: string, body: { remark?: string; remarkType?: string }, user: any) {
+  async moveFull(id: string, body: { rejectPcbQty?: number; rejectQty?: number; remark?: string; remarkType?: string } | any, user: any) {
     // Find target SubJobCard or JobCard
     let subCard = await this.prisma.subJobCard.findUnique({
       where: { id },
@@ -1081,8 +1081,22 @@ export class JobCardsService {
     const nextStep = steps.find((s: any) => s.stepOrder > currentStepOrder);
 
     const userId = user?.id || user?.sub || user?.userId || subCard.createdById;
-    const rType = body.remarkType || (body.remark?.toLowerCase().includes('rejection') ? 'REJECTION' : body.remark?.toLowerCase().includes('rework') ? 'REWORK' : body.remark?.toLowerCase().includes('process issue') ? 'PROCESS_ISSUE' : 'NONE');
-    const formattedRemarks = body.remark ? `[${rType}] ${body.remark}` : `[${rType}] Full Job Movement to next stage`;
+    const rejectPcb = Math.max(0, Number(body.rejectPcbQty || body.rejectQty) || 0);
+    const currentPcb = subCard.totalPcbQty || subCard.qty || 160;
+    const currentArea = subCard.custPnlAreaSqm || subCard.prodPnlAreaSqm || 0;
+
+    if (rejectPcb > currentPcb) {
+      throw new BadRequestException(`Rejection PCB Qty (${rejectPcb}) cannot exceed current lot quantity (${currentPcb})`);
+    }
+
+    const movedPcb = currentPcb - rejectPcb;
+    const unitArea = currentPcb > 0 ? currentArea / currentPcb : 0;
+    const movedArea = Number((movedPcb * unitArea).toFixed(2));
+
+    const rType = body.remarkType || (rejectPcb > 0 ? 'REJECTION' : (body.remark?.toLowerCase().includes('rework') ? 'REWORK' : body.remark?.toLowerCase().includes('process issue') ? 'PROCESS_ISSUE' : 'NONE'));
+    const formattedRemarks = body.remark
+      ? `[${rType}] ${body.remark}${rejectPcb > 0 ? ` (${rejectPcb} PCBs Rejected)` : ''}`
+      : `[${rType}] Full Job Movement to next stage${rejectPcb > 0 ? ` (${rejectPcb} PCBs Rejected)` : ''}`;
 
     return this.prisma.$transaction(async (tx) => {
       // Create movement log
@@ -1090,10 +1104,10 @@ export class JobCardsService {
         data: {
           subJobCardId: subCard.id,
           stageId: subCard.currentStageId || steps[0]?.stageId || '',
-          qtyReceived: subCard.qty,
-          qtyProcessed: subCard.qty,
-          qtyForwarded: subCard.qty,
-          qtyRejected: rType === 'REJECTION' ? 1 : 0,
+          qtyReceived: currentPcb,
+          qtyProcessed: currentPcb,
+          qtyForwarded: movedPcb,
+          qtyRejected: rejectPcb,
           qtyHold: 0,
           remarks: formattedRemarks,
           createdById: userId,
@@ -1106,6 +1120,12 @@ export class JobCardsService {
           data: {
             currentStageId: nextStep.stageId,
             status: SubJobCardStatus.IN_STAGE,
+            qty: movedPcb,
+            totalPcbQty: movedPcb,
+            custPnlQty: movedPcb,
+            prodPnlQty: Math.ceil(movedPcb / 4),
+            custPnlAreaSqm: movedArea,
+            prodPnlAreaSqm: movedArea,
           },
         });
       } else {
@@ -1115,6 +1135,12 @@ export class JobCardsService {
           data: {
             currentStageId: null,
             status: SubJobCardStatus.COMPLETED,
+            qty: movedPcb,
+            totalPcbQty: movedPcb,
+            custPnlQty: movedPcb,
+            prodPnlQty: Math.ceil(movedPcb / 4),
+            custPnlAreaSqm: movedArea,
+            prodPnlAreaSqm: movedArea,
           },
         });
         const allSubCards = await tx.subJobCard.findMany({ where: { jobCardId } });
@@ -1223,81 +1249,60 @@ export class JobCardsService {
         },
       });
 
-      // 2. Determine clean subJobCard numbers relative to master Job Card No
-      const masterJobCardNo = (subCard as any).jobCard?.jobCardNo || 'JC';
-
-      const existingSubCards = await tx.subJobCard.findMany({
-        where: { jobCardId: subCard.jobCardId },
-        select: { id: true, subJobCardNo: true },
+      // 2. Keep SAME Job Card Number (NO -A, -B suffix as per PDF spec)
+      const existingSubAtNextStage = await tx.subJobCard.findFirst({
+        where: {
+          jobCardId: subCard.jobCardId,
+          currentStageId: nextStep.stageId,
+          status: SubJobCardStatus.IN_STAGE,
+        },
       });
 
-      const usedLetters = new Set<string>();
-      existingSubCards.forEach((s) => {
-        if (s.subJobCardNo.startsWith(`${masterJobCardNo}-`)) {
-          const rem = s.subJobCardNo.slice(masterJobCardNo.length + 1);
-          const match = rem.match(/^([A-Z]+)/);
-          if (match) usedLetters.add(match[1]);
-        }
-      });
-
-      let nextMovedLetter = 'A';
-      for (let i = 0; i < 26; i++) {
-        const l = String.fromCharCode(65 + i);
-        if (!usedLetters.has(l)) {
-          nextMovedLetter = l;
-          break;
-        }
+      if (existingSubAtNextStage) {
+        const mergedQty = (existingSubAtNextStage.totalPcbQty || existingSubAtNextStage.qty || 0) + qtyToMove;
+        const mergedArea = Number(((existingSubAtNextStage.custPnlAreaSqm || 0) + areaToMove).toFixed(2));
+        await tx.subJobCard.update({
+          where: { id: existingSubAtNextStage.id },
+          data: {
+            qty: mergedQty,
+            totalPcbQty: mergedQty,
+            custPnlQty: mergedQty,
+            prodPnlQty: Math.ceil(mergedQty / 4),
+            custPnlAreaSqm: mergedArea,
+            prodPnlAreaSqm: mergedArea,
+          },
+        });
+      } else {
+        await tx.subJobCard.create({
+          data: {
+            subJobCardNo: subCard.subJobCardNo,
+            jobCardId: subCard.jobCardId,
+            parentSubJobCardId: subCard.id,
+            currentStageId: nextStep.stageId,
+            qty: qtyToMove,
+            totalPcbQty: qtyToMove,
+            custPnlQty: qtyToMove,
+            prodPnlQty: Math.ceil(qtyToMove / 4),
+            prodPnlAreaSqm: areaToMove,
+            custPnlAreaSqm: areaToMove,
+            status: SubJobCardStatus.IN_STAGE,
+            qrCodeValue: `RFE-SJC-${subCard.subJobCardNo}-${Date.now().toString().slice(-4)}`,
+            createdById: userId,
+          },
+        });
       }
 
-      let newSubCardNo = `${masterJobCardNo}-${nextMovedLetter}`;
-      let updatedRemainingNo = subCard.subJobCardNo;
-
-      const lastSegment = subCard.subJobCardNo.split('-').pop() || '';
-      const isLetterSuffix = /^[A-Z]+$/.test(lastSegment);
-
-      if (!isLetterSuffix) {
-        usedLetters.add(nextMovedLetter);
-        let remLetter = 'B';
-        for (let i = 0; i < 26; i++) {
-          const l = String.fromCharCode(65 + i);
-          if (!usedLetters.has(l)) {
-            remLetter = l;
-            break;
-          }
-        }
-        updatedRemainingNo = `${masterJobCardNo}-${remLetter}`;
-      }
-
-      // Update remaining lot at current stage
+      // 3. Update remaining lot at current stage under SAME Job Card Number
       await tx.subJobCard.update({
         where: { id: subCard.id },
         data: {
-          subJobCardNo: updatedRemainingNo,
+          subJobCardNo: subCard.subJobCardNo,
           qty: remainingQty,
           totalPcbQty: remainingQty,
           custPnlQty: remainingQty,
           prodPnlQty: Math.ceil(remainingQty / 4),
           prodPnlAreaSqm: remainingArea,
           custPnlAreaSqm: remainingArea,
-        },
-      });
-
-      // 3. Create moved portion at next stage
-      await tx.subJobCard.create({
-        data: {
-          subJobCardNo: newSubCardNo,
-          jobCardId: subCard.jobCardId,
-          parentSubJobCardId: subCard.id,
-          currentStageId: nextStep.stageId,
-          qty: qtyToMove,
-          totalPcbQty: qtyToMove,
-          custPnlQty: qtyToMove,
-          prodPnlQty: Math.ceil(qtyToMove / 4),
-          prodPnlAreaSqm: areaToMove,
-          custPnlAreaSqm: areaToMove,
-          status: SubJobCardStatus.IN_STAGE,
-          qrCodeValue: `RFE-SJC-${newSubCardNo}-${Date.now().toString().slice(-4)}`,
-          createdById: userId,
         },
       });
 

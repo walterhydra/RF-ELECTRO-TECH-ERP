@@ -112,9 +112,14 @@ export class JobCardsController {
   }
 
   @Post(':id/move-full')
+  @Post(':id/move-stage')
   @Public()
   @ApiOperation({ summary: 'Execute Full Job Movement to next process stage' })
-  async moveFull(@Param('id') id: string, @Body() body: { remark?: string }, @Req() req: any) {
+  async moveFull(
+    @Param('id') id: string,
+    @Body() body: { rejectPcbQty?: number; rejectQty?: number; remark?: string; remarkType?: string },
+    @Req() req: any,
+  ) {
     return this.jobCardsService.moveFull(id, body, req.user);
   }
 

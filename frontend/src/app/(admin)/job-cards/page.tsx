@@ -1356,7 +1356,25 @@ export default function JobCardsPage() {
       }
     ] : (selectedMovementJob.rejectionLogs || []);
 
-    runWithLoading(`Moving Job ${selectedMovementJob.jobCardNo} to ${nextStage}...`, () => {
+    runWithLoading(`Moving Job ${selectedMovementJob.jobCardNo} to ${nextStage}...`, async () => {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        await fetch(`${getApiBaseUrl()}/job-cards/${selectedMovementJob.id}/move-stage`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            rejectPcbQty: rejectPcb,
+            remark: fullMoveRemarks.trim() || undefined,
+            remarkType: rejectPcb > 0 ? 'REJECTION' : 'FULL_MOVEMENT',
+          }),
+        });
+      } catch (err) {
+        console.warn('Backend API call failed, using client state update');
+      }
+
       const updated: JobCard = {
         ...selectedMovementJob,
         currentStageIndex: nextIndex,
@@ -1404,6 +1422,8 @@ export default function JobCardsPage() {
         }
         return [...otherItems, updated];
       });
+
+      await fetchBackendJobCards();
 
       setSelectedMovementJob(null);
       setFullMoveRemarks('');
