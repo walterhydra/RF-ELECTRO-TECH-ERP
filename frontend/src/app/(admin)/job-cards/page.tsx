@@ -1024,13 +1024,14 @@ export default function JobCardsPage() {
                   ? (local.rejectionLogs || [])
                   : (backendCard.rejectionLogs && backendCard.rejectionLogs.length > 0 ? backendCard.rejectionLogs : (local.rejectionLogs || []));
 
-                const higherStageIdx = Math.max(local.currentStageIndex || 0, backendCard.currentStageIndex || 0);
+                // Always prefer backend server DB stage & status for multi-device sync
+                const activeStageIdx = backendCard.currentStageIndex !== undefined ? backendCard.currentStageIndex : (local.currentStageIndex || 0);
 
                 return {
                   ...backendCard,
-                  currentStageIndex: higherStageIdx,
-                  currentStageName: (local.currentStageIndex || 0) > (backendCard.currentStageIndex || 0) ? local.currentStageName : backendCard.currentStageName,
-                  status: local.status || backendCard.status,
+                  currentStageIndex: activeStageIdx,
+                  currentStageName: PF01_STAGES[activeStageIdx] || backendCard.currentStageName || local.currentStageName,
+                  status: backendCard.status || local.status,
                   rejectedPcbQty: maxRejectedQty,
                   rejectedAreaSqm: Math.max(local.rejectedAreaSqm || 0, backendCard.rejectedAreaSqm || 0),
                   rejectionLogs: logs,

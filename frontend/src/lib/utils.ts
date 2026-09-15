@@ -34,9 +34,9 @@ export function getApiBaseUrl(): string {
       return cleaned.endsWith('/api/v1') ? cleaned : `${cleaned}/api/v1`;
     }
 
-    // Handle Vercel deployment hostname fallback if env var wasn't set
+    // Handle Vercel deployment hostname fallback if env var wasn't set or HTTPS external access
     const hostname = window.location.hostname || 'localhost';
-    if (hostname.includes('vercel.app')) {
+    if (hostname.includes('vercel.app') || (window.location.protocol === 'https:' && !hostname.includes('localhost') && !hostname.includes('127.0.0.1'))) {
       return 'https://rf-electro-tech-erp.onrender.com/api/v1';
     }
 
