@@ -599,7 +599,7 @@ export class JobCardsService {
         where: { jobCardNo },
       });
       if (existingJc) {
-        return this.findOne(existingJc.id, tx);
+        return existingJc;
       }
 
       const jobCard = await tx.jobCard.create({

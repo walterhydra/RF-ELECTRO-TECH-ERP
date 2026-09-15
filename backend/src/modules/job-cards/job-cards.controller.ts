@@ -50,6 +50,7 @@ export class JobCardsController {
   @ApiOperation({ summary: 'Create a new Job Card with full 13 PDF metadata fields & pre-launch split options' })
   @ApiResponse({ status: 201, description: 'Job Card created successfully' })
   async createJobCard(@Body() body: any, @Req() req: any) {
+    console.log('--- ENTERED createJobCard controller ---', body?.jobCardNo);
     const createdById = req.user?.sub || req.user?.id || req.user?.userId;
     return this.jobCardsService.createJobCard(body, createdById);
   }
