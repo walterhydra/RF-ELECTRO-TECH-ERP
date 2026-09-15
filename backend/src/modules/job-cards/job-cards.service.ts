@@ -625,6 +625,12 @@ export class JobCardsService {
           qrCodeValue,
           createdById,
         },
+        include: {
+          customerPO: { include: { customer: true } },
+          product: true,
+          processFlowMaster: true,
+          subJobCards: true,
+        },
       });
 
       let initialStageId: string | null = null;
@@ -689,11 +695,7 @@ export class JobCardsService {
       return jobCard;
     });
 
-    try {
-      return await this.findOne(jobCard.id);
-    } catch (err) {
-      return jobCard;
-    }
+    return jobCard;
   }
 
   async updateJobCard(id: string, data: any) {
