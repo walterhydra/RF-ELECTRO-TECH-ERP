@@ -25,8 +25,9 @@ import {
   Send,
   Trash2,
 } from 'lucide-react';
+import { getApiBaseUrl } from '@/lib/utils';
 
-const API = 'http://localhost:3001/api/v1';
+const getApi = () => getApiBaseUrl();
 
 function getAuthHeaders(): HeadersInit {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -137,7 +138,7 @@ export default function JobCardDetailPage() {
     } catch (e) {}
 
     try {
-      await fetch(`${API}/job-cards/${id}`, {
+      await fetch(`${getApi()}/job-cards/${id}`, {
         method: 'DELETE',
         headers: getAuthHeaders(),
       });
@@ -154,13 +155,13 @@ export default function JobCardDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API}/job-cards/${id}`, { headers: getAuthHeaders() }).catch(() => null);
+      const res = await fetch(`${getApi()}/job-cards/${id}`, { headers: getAuthHeaders() }).catch(() => null);
       if (res && res.ok) {
         const data = await res.json();
         setJobCard(data);
 
         // Fetch traceability history
-        const histRes = await fetch(`${API}/job-cards/${id}/history`, { headers: getAuthHeaders() }).catch(() => null);
+        const histRes = await fetch(`${getApi()}/job-cards/${id}/history`, { headers: getAuthHeaders() }).catch(() => null);
         if (histRes && histRes.ok) {
           setHistory(await histRes.json());
         }
@@ -220,7 +221,7 @@ export default function JobCardDetailPage() {
 
     setLaunching(true);
     try {
-      const res = await fetch(`${API}/job-cards/${id}/launch`, {
+      const res = await fetch(`${getApi()}/job-cards/${id}/launch`, {
         method: 'POST',
         headers: getAuthHeaders(),
       });
@@ -239,7 +240,7 @@ export default function JobCardDetailPage() {
   const handleFetchQr = async () => {
     if (!jobCard) return;
     try {
-      const res = await fetch(`${API}/job-cards/${id}/qr`, { headers: getAuthHeaders() });
+      const res = await fetch(`${getApi()}/job-cards/${id}/qr`, { headers: getAuthHeaders() });
       let dataUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(jobCard.qrCodeValue || jobCard.jobCardNo)}`;
       let qrVal = jobCard.qrCodeValue || jobCard.jobCardNo;
 

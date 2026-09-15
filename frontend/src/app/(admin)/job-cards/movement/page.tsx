@@ -25,6 +25,7 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { Portal } from '@/components/ui/Portal';
+import { getApiBaseUrl } from '@/lib/utils';
 
 // Process Flow PF-01 20 Predefined Stages (PDF Spec 14-09-2026)
 const PF01_STAGES = [
@@ -183,7 +184,7 @@ export default function JobMovementUpdatePage() {
 
   // Sync from NestJS Backend if available
   useEffect(() => {
-    fetch('http://localhost:3001/api/v1/job-cards')
+    fetch(`${getApiBaseUrl()}/job-cards`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
@@ -291,7 +292,7 @@ export default function JobMovementUpdatePage() {
     }
 
     try {
-      await fetch(`http://localhost:3001/api/v1/job-cards/${jobId}/move-full`, {
+      await fetch(`${getApiBaseUrl()}/job-cards/${jobId}/move-full`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ remark: `${remarkCategory}: ${remarksText}` }),
@@ -347,7 +348,7 @@ export default function JobMovementUpdatePage() {
 
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      await fetch(`http://localhost:3001/api/v1/job-cards/${selectedJob.id}/move-partial`, {
+      await fetch(`${getApiBaseUrl()}/job-cards/${selectedJob.id}/move-partial`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

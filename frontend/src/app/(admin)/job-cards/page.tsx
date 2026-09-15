@@ -42,6 +42,7 @@ import {
   Upload
 } from 'lucide-react';
 import { Portal } from '@/components/ui/Portal';
+import { getApiBaseUrl } from '@/lib/utils';
 
 
 // Process Flow PF-01 20 Predefined Stages (PDF Spec 14-09-2026)
@@ -738,7 +739,7 @@ export default function JobCardsPage() {
 
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      await fetch(`http://localhost:3001/api/v1/job-cards/${id}`, {
+      await fetch(`${getApiBaseUrl()}/job-cards/${id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -854,7 +855,7 @@ export default function JobCardsPage() {
   // Sync state from backend API if available
   const fetchBackendJobCards = useCallback(async () => {
     try {
-      const res = await fetch('http://localhost:3001/api/v1/job-cards', {
+      const res = await fetch(`${getApiBaseUrl()}/job-cards`, {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
@@ -963,6 +964,10 @@ export default function JobCardsPage() {
 
   useEffect(() => {
     fetchBackendJobCards();
+    const interval = setInterval(() => {
+      fetchBackendJobCards();
+    }, 5000);
+    return () => clearInterval(interval);
   }, [fetchBackendJobCards]);
 
   // Movement Form & Rejection PCB State
@@ -1115,7 +1120,7 @@ export default function JobCardsPage() {
 
       runWithLoading(`Updating Job Card ${jcNo}...`, async () => {
         try {
-          await fetch(`http://localhost:3001/api/v1/job-cards/${existing.id}`, {
+          await fetch(`${getApiBaseUrl()}/job-cards/${existing.id}`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
@@ -1177,7 +1182,7 @@ export default function JobCardsPage() {
 
       // Try Backend POST API sync
       try {
-        await fetch('http://localhost:3001/api/v1/job-cards/create', {
+        await fetch(`${getApiBaseUrl()}/job-cards/create`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1380,7 +1385,7 @@ export default function JobCardsPage() {
     runWithLoading(`Splitting ${parsedMoveQty} PCBs & Moving to ${nextStage}...`, async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        await fetch(`http://localhost:3001/api/v1/job-cards/${selectedMovementJob.id}/move-partial`, {
+        await fetch(`${getApiBaseUrl()}/job-cards/${selectedMovementJob.id}/move-partial`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

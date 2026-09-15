@@ -22,6 +22,8 @@ import {
   X
 } from 'lucide-react';
 
+import { getApiBaseUrl } from '@/lib/utils';
+
 export default function JobCardLaunchPage() {
   const router = useRouter();
   const [showFormModal, setShowFormModal] = useState(true);
@@ -78,7 +80,7 @@ export default function JobCardLaunchPage() {
         subJobCards: launchForm.enablePreSplit ? launchForm.customSplits : [],
       };
 
-      await fetch('http://localhost:3001/api/v1/job-cards', {
+      await fetch(`${getApiBaseUrl()}/job-cards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
