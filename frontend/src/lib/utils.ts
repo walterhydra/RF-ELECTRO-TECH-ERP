@@ -37,7 +37,7 @@ export function getApiBaseUrl(): string {
     // Handle Vercel deployment hostname fallback if env var wasn't set
     const hostname = window.location.hostname || 'localhost';
     if (hostname.includes('vercel.app')) {
-      return 'https://rf-electro-backend.onrender.com/api/v1';
+      return 'https://rf-electro-tech-erp.onrender.com/api/v1';
     }
 
     // Default LAN / Localhost resolution
@@ -45,7 +45,7 @@ export function getApiBaseUrl(): string {
     return `${protocol}//${hostname}:3001/api/v1`;
   }
 
-  return envUrl || 'https://rf-electro-backend.onrender.com/api/v1';
+  return envUrl || 'https://rf-electro-tech-erp.onrender.com/api/v1';
 }
 
 export async function fetchApi(urlOrPath: string, options: RequestInit = {}): Promise<Response> {
