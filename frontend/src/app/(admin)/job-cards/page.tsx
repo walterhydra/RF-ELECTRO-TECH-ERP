@@ -85,20 +85,26 @@ const normalizeStageIndex = (stageName?: string | null): number => {
   if (s.includes('drl-qc') || s.includes('drill-qc')) return 2;
   if (s.includes('drill')) return 1;
   if (s.includes('dml')) return 3;
-  if (s.includes('pit-qc')) return 5;
-  if (s.includes('pit')) return 4;
+  if (s.includes('pth-qc')) return 4;
+  if (s.includes('pth')) return 3;
+  if (s.includes('photo-qc')) return 6;
+  if (s.includes('photo printing') || s.includes('photo')) return 5;
+  if (s.includes('pattern plating')) return 7;
   if (s.includes('plating')) return 6;
-  if (s.includes('etching')) return 7;
+  if (s.includes('etching-qc')) return 9;
+  if (s.includes('etching') || s.includes('etch')) return 8;
   if (s.includes('premask') || s.includes('aoi')) return 8;
+  if (s.includes('solder mask-qc')) return 11;
+  if (s.includes('solder mask') || s.includes('solder')) return 10;
   if (s.includes('pism-qc')) return 10;
   if (s.includes('pism')) return 9;
   if (s.includes('hasl-qc')) return 12;
-  if (s.includes('hasl')) return 11;
-  if (s.includes('legend') || s.includes('silk')) return 13;
-  if (s.includes('rout') || s.includes('cnc')) return 14;
+  if (s.includes('hasl') || s.includes('hal') || s.includes('enig')) return 13;
+  if (s.includes('legend printing') || s.includes('legend') || s.includes('silk')) return 12;
+  if (s.includes('punching') || s.includes('routing') || s.includes('rout') || s.includes('cnc')) return 14;
   if (s.includes('vg') || s.includes('v-cut') || s.includes('vcut')) return 15;
-  if (s.includes('bbt') || s.includes('bare board')) return 16;
-  if (s.includes('fqc')) return 17;
+  if (s.includes('e-testing') || s.includes('bbt') || s.includes('bare board') || s.includes('testing')) return 15;
+  if (s.includes('final qc') || s.includes('fqc')) return 17;
   if (s.includes('pdi') || s.includes('aql')) return 18;
   if (s.includes('pack') || s.includes('dispatch')) return 19;
 
@@ -107,6 +113,7 @@ const normalizeStageIndex = (stageName?: string | null): number => {
   );
   return foundIdx >= 0 ? foundIdx : 0;
 };
+
 
 interface SubJobCard {
   id: string;
@@ -942,15 +949,28 @@ export default function JobCardsPage() {
             const masterPcbQty = j.totalPcbQty || (j.custPnlQty && j.custPnlQty > 50 ? j.custPnlQty : (j.prodPnlQty ? j.prodPnlQty * 4 : 160));
             const masterAreaSqm = j.custPnlAreaSqm || j.prodPnlAreaSqm || 45;
 
-            const activeSub = (j.subJobCards && j.subJobCards.length > 0)
-              ? (j.subJobCards.find((s: any) => s.status === 'IN_STAGE') || j.subJobCards[0])
-              : null;
+            const subLots = Array.isArray(j.subJobCards) ? j.subJobCards : [];
+            const sortedSubs = [...subLots].sort((a: any, b: any) => {
+              const orderA = a.currentStage?.defaultOrder || (normalizeStageIndex(a.currentStage?.name) + 1);
+              const orderB = b.currentStage?.defaultOrder || (normalizeStageIndex(b.currentStage?.name) + 1);
+              return orderB - orderA;
+            });
 
-            const rawStage = activeSub?.currentStage?.name || j.currentStageName || j.currentStage?.name || PF01_STAGES[0];
-            const stageIdx = normalizeStageIndex(rawStage);
+            const activeSub = sortedSubs[0] || null;
+
+            const rawStage = activeSub?.currentStage?.name || j.currentStageName || j.currentStage?.name || (j.status === 'COMPLETED' ? '20. PACKING' : PF01_STAGES[0]);
+
+            let stageIdx = activeSub?.currentStage?.defaultOrder
+              ? Math.min(Math.max(0, activeSub.currentStage.defaultOrder - 1), 19)
+              : normalizeStageIndex(rawStage);
 
             const jStatusRaw = String(j.status || activeSub?.status || '').toUpperCase();
-            const jStatusNorm = (jStatusRaw === 'CREATED' || jStatusRaw === 'PENDING_LAUNCH' || jStatusRaw === 'UNLAUNCHED') ? 'UNLAUNCHED' : (j.status || 'IN_PROGRESS');
+            let jStatusNorm = (jStatusRaw === 'CREATED' || jStatusRaw === 'PENDING_LAUNCH' || jStatusRaw === 'UNLAUNCHED') ? 'UNLAUNCHED' : (j.status || 'IN_PROGRESS');
+
+            if (jStatusNorm === 'COMPLETED' || stageIdx >= 19) {
+              stageIdx = 19;
+              jStatusNorm = 'COMPLETED';
+            }
 
             return {
               id: j.id,
@@ -983,6 +1003,7 @@ export default function JobCardsPage() {
               subJobCards: j.subJobCards || [],
             };
           });
+
 
           const deleted = getDeletedJobCardIds();
           const filtered = mapped.filter((j: JobCard) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
@@ -1471,10 +1492,24 @@ export default function JobCardsPage() {
 
   // Mark Job Card as Completed
   const handleMarkAsCompleted = (jobCardId: string) => {
-    runWithLoading('Completing Job Card & Releasing for Final Dispatch...', () => {
+    runWithLoading('Completing Job Card & Releasing for Final Dispatch...', async () => {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(jobCardId)}/status`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ status: 'COMPLETED' }),
+        });
+      } catch (err) {
+        console.warn('Failed to call backend status API, using client state update');
+      }
+
       setJobCards((prev) =>
         prev.map((j) => {
-          if (j.id === jobCardId) {
+          if (j.id === jobCardId || j.jobCardNo === jobCardId) {
             return {
               ...j,
               status: 'COMPLETED',
@@ -1488,11 +1523,14 @@ export default function JobCardsPage() {
         })
       );
 
-      const targetJob = jobCards.find((j) => j.id === jobCardId);
+      await fetchBackendJobCards();
+
+      const targetJob = jobCards.find((j) => j.id === jobCardId || j.jobCardNo === jobCardId);
       setSelectedMovementJob(null);
       showToast(`Job Card ${targetJob?.jobCardNo || ''} marked as COMPLETED!`, 'success');
     });
   };
+
 
   // Partial / Uncompleted Movement (Split)
   const handlePartialJobMovement = () => {

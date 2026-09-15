@@ -880,21 +880,41 @@ export class JobCardsService {
   async updateStatus(id: string, status: JobCardStatus) {
     const jobCard = await this.findOne(id);
 
-    const data: any = { status };
-    if (status === JobCardStatus.COMPLETED && !jobCard.completedAt) {
-      data.completedAt = new Date();
-    }
-
-    return this.prisma.jobCard.update({
-      where: { id: jobCard.id },
-      data,
-      include: {
-        customerPO: { include: { customer: true } },
-        product: true,
-        subJobCards: { include: { currentStage: true }, orderBy: { subJobCardNo: 'asc' } },
-      },
+    return this.prisma.$transaction(async (tx) => {
+      if (status === JobCardStatus.COMPLETED) {
+        await tx.subJobCard.updateMany({
+          where: { jobCardId: jobCard.id },
+          data: {
+            status: SubJobCardStatus.COMPLETED,
+            currentStageId: null,
+          },
+        });
+        return tx.jobCard.update({
+          where: { id: jobCard.id },
+          data: {
+            status: JobCardStatus.COMPLETED,
+            completedAt: new Date(),
+          },
+          include: {
+            customerPO: { include: { customer: true } },
+            product: true,
+            subJobCards: { include: { currentStage: true }, orderBy: { subJobCardNo: 'asc' } },
+          },
+        });
+      } else {
+        return tx.jobCard.update({
+          where: { id: jobCard.id },
+          data: { status },
+          include: {
+            customerPO: { include: { customer: true } },
+            product: true,
+            subJobCards: { include: { currentStage: true }, orderBy: { subJobCardNo: 'asc' } },
+          },
+        });
+      }
     });
   }
+
 
   async getQrCodeImage(id: string) {
     const jobCard = await this.findOne(id);
@@ -1082,6 +1102,8 @@ export class JobCardsService {
       message: `Job Card ${jobCard.jobCardNo} deleted permanently from database.`,
     };
   }
+
+
 
   async moveFull(id: string, body: { rejectPcbQty?: number; rejectQty?: number; remark?: string; remarkType?: string } | any, user: any) {
     // Find target SubJobCard or JobCard
