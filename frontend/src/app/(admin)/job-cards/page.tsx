@@ -270,7 +270,7 @@ const DEFAULT_OPEN_POS: OpenPO[] = [
 
 // Printable Horizontal Industrial Job Card QR Tag Component
 const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint?: () => void; onClose?: () => void }) => {
-  const [serverHost, setServerHost] = useState<string>('https://rf-electro-erp.loca.lt');
+  const [serverHost, setServerHost] = useState<string>('https://rf-electro-tech-erp.onrender.com');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -458,7 +458,7 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
               <div className="mt-2 space-y-1.5">
                 <button
                   type="button"
-                  onClick={() => handleSaveHost('https://rf-electro-erp.loca.lt')}
+                  onClick={() => handleSaveHost('https://rf-electro-tech-erp.onrender.com')}
                   className="w-full px-2 py-1 bg-emerald-600 text-white rounded text-[10px] font-bold text-left cursor-pointer flex items-center justify-between"
                 >
                   <span>🌐 Public World URL (5G/4G Anywhere)</span>
@@ -1889,7 +1889,7 @@ export default function JobCardsPage() {
           </div>
           <button
             onClick={() => {
-              const custom = prompt('Enter your Backend API URL (e.g. https://rf-electro-erp.loca.lt or http://192.168.1.50:3001):', serverConnectionState.url);
+              const custom = prompt('Enter your Backend API URL (e.g. https://rf-electro-tech-erp.onrender.com or http://192.168.1.50:3001):', serverConnectionState.url);
               if (custom) handleSaveApiHost(custom);
             }}
             className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-black rounded-xl text-xs whitespace-nowrap cursor-pointer shadow-xs active:scale-95 shrink-0"
@@ -1929,7 +1929,7 @@ export default function JobCardsPage() {
             )}
             <button
               onClick={() => {
-                const custom = prompt('Enter your Backend API URL (e.g. https://rf-electro-erp.loca.lt or http://192.168.103.206:3001):', serverConnectionState.url);
+                const custom = prompt('Enter your Backend API URL (e.g. https://rf-electro-tech-erp.onrender.com or http://192.168.103.206:3001):', serverConnectionState.url);
                 if (custom) handleSaveApiHost(custom);
               }}
               className="px-3 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs whitespace-nowrap cursor-pointer shadow-xs active:scale-95"
