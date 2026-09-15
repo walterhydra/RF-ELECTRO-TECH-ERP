@@ -71,6 +71,43 @@ const PF01_STAGES = [
   '20. PACKING',
 ];
 
+const normalizeStageIndex = (stageName?: string | null): number => {
+  if (!stageName) return 0;
+  const s = stageName.trim().toLowerCase();
+
+  const numMatch = s.match(/^(\d+)\./);
+  if (numMatch) {
+    const num = parseInt(numMatch[1], 10);
+    if (num >= 1 && num <= 20) return num - 1;
+  }
+
+  if (s.includes('shear') || s.includes('cutting')) return 0;
+  if (s.includes('drl-qc') || s.includes('drill-qc')) return 2;
+  if (s.includes('drill')) return 1;
+  if (s.includes('dml')) return 3;
+  if (s.includes('pit-qc')) return 5;
+  if (s.includes('pit')) return 4;
+  if (s.includes('plating')) return 6;
+  if (s.includes('etching')) return 7;
+  if (s.includes('premask') || s.includes('aoi')) return 8;
+  if (s.includes('pism-qc')) return 10;
+  if (s.includes('pism')) return 9;
+  if (s.includes('hasl-qc')) return 12;
+  if (s.includes('hasl')) return 11;
+  if (s.includes('legend') || s.includes('silk')) return 13;
+  if (s.includes('rout') || s.includes('cnc')) return 14;
+  if (s.includes('vg') || s.includes('v-cut') || s.includes('vcut')) return 15;
+  if (s.includes('bbt') || s.includes('bare board')) return 16;
+  if (s.includes('fqc')) return 17;
+  if (s.includes('pdi') || s.includes('aql')) return 18;
+  if (s.includes('pack') || s.includes('dispatch')) return 19;
+
+  const foundIdx = PF01_STAGES.findIndex(
+    (stg) => stg.toLowerCase() === s || stg.toLowerCase().includes(s) || s.includes(stg.toLowerCase())
+  );
+  return foundIdx >= 0 ? foundIdx : 0;
+};
+
 interface SubJobCard {
   id: string;
   subJobCardNo: string;
@@ -910,9 +947,7 @@ export default function JobCardsPage() {
                 const subPcbQty = sub.totalPcbQty || (sub.qty && sub.qty > 50 ? sub.qty : masterPcbQty);
                 const subAreaSqm = sub.custPnlAreaSqm || sub.prodPnlAreaSqm || masterAreaSqm;
                 const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
-                const stageIdx = PF01_STAGES.findIndex(
-                  (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
-                );
+                const stageIdx = normalizeStageIndex(rawStage);
 
                 const subStatusRaw = String(sub.status || j.status || '').toUpperCase();
                 const subStatusNorm = (subStatusRaw === 'CREATED' || subStatusRaw === 'PENDING_LAUNCH' || subStatusRaw === 'UNLAUNCHED') ? 'UNLAUNCHED' : sub.status || j.status;
@@ -933,8 +968,8 @@ export default function JobCardsPage() {
                   prodPnlAreaSqm: subAreaSqm,
                   custPnlAreaSqm: subAreaSqm,
                   jobFlowSelection: j.processFlowMaster?.name || 'PF-01',
-                  currentStageIndex: stageIdx >= 0 ? stageIdx : 0,
-                  currentStageName: stageIdx >= 0 ? PF01_STAGES[stageIdx] : rawStage,
+                  currentStageIndex: stageIdx,
+                  currentStageName: PF01_STAGES[stageIdx],
                   customerPoId: j.customerPoId,
                   productId: j.productId,
                   totalQty: subPcbQty,
@@ -952,9 +987,7 @@ export default function JobCardsPage() {
             }
 
             const rawStage = j.subJobCards?.[0]?.currentStage?.name || j.currentStageName || j.currentStage?.name || PF01_STAGES[0];
-            const stageIdx = PF01_STAGES.findIndex(
-              (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
-            );
+            const stageIdx = normalizeStageIndex(rawStage);
 
             const jStatusRaw = String(j.status || '').toUpperCase();
             const jStatusNorm = (jStatusRaw === 'CREATED' || jStatusRaw === 'PENDING_LAUNCH' || jStatusRaw === 'UNLAUNCHED') ? 'UNLAUNCHED' : j.status;
@@ -974,8 +1007,8 @@ export default function JobCardsPage() {
               prodPnlAreaSqm: masterAreaSqm,
               custPnlAreaSqm: masterAreaSqm,
               jobFlowSelection: j.processFlowMaster?.name || 'PF-01',
-              currentStageIndex: stageIdx >= 0 ? stageIdx : 0,
-              currentStageName: stageIdx >= 0 ? PF01_STAGES[stageIdx] : rawStage,
+              currentStageIndex: stageIdx,
+              currentStageName: PF01_STAGES[stageIdx],
               customerPoId: j.customerPoId,
               productId: j.productId,
               totalQty: masterPcbQty,
@@ -2679,7 +2712,7 @@ export default function JobCardsPage() {
                 filteredCards.map((jc, idx) => {
                   const isUnlaunched = jc.status === 'UNLAUNCHED' || jc.status === 'CREATED' || (jc.status as string) === 'PENDING_LAUNCH';
                   const isCompleted = jc.status === 'COMPLETED';
-                  const stageIndex = PF01_STAGES.indexOf(jc.currentStageName || PF01_STAGES[0]);
+                  const stageIndex = jc.currentStageIndex !== undefined && jc.currentStageIndex >= 0 ? jc.currentStageIndex : normalizeStageIndex(jc.currentStageName);
                   const progressPct = isUnlaunched ? 0 : isCompleted ? 100 : Math.round(((stageIndex + 1) / PF01_STAGES.length) * 100);
                   const isNewTagVisible = isUnlaunched;
 

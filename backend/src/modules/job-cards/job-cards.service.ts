@@ -1101,9 +1101,9 @@ export class JobCardsService {
 
     let jobCardId = id;
     if (!subCard) {
-      // Find first active subJobCard for jobCard id
-      const jc = await this.prisma.jobCard.findUnique({
-        where: { id },
+      // Find first active subJobCard for jobCard id or jobCardNo
+      const jc = await this.prisma.jobCard.findFirst({
+        where: { OR: [{ id }, { jobCardNo: id }] },
         include: {
           subJobCards: { include: { currentStage: true } },
           processFlowMaster: {
@@ -1112,7 +1112,7 @@ export class JobCardsService {
         },
       });
       if (!jc) {
-        throw new NotFoundException(`Job Card or Sub-Job Card with ID "${id}" not found`);
+        throw new NotFoundException(`Job Card or Sub-Job Card with ID or Number "${id}" not found`);
       }
       jobCardId = jc.id;
       subCard = jc.subJobCards[0] as any;
@@ -1130,6 +1130,31 @@ export class JobCardsService {
     const currentStep = steps.find((s: any) => s.stageId === subCard?.currentStageId);
     const currentStepOrder = currentStep ? currentStep.stepOrder : 1;
     const nextStep = steps.find((s: any) => s.stepOrder > currentStepOrder);
+
+    let targetNextStageId: string | null = nextStep?.stageId || null;
+    let isLastStage = false;
+
+    if (!targetNextStageId) {
+      const currentStage = subCard.currentStage || (subCard.currentStageId ? await this.prisma.processStage.findUnique({ where: { id: subCard.currentStageId } }) : null);
+      const currentOrder = currentStage?.defaultOrder || 1;
+      const nextProcessStage = await this.prisma.processStage.findFirst({
+        where: { defaultOrder: { gt: currentOrder }, isActive: true },
+        orderBy: { defaultOrder: 'asc' },
+      });
+      if (nextProcessStage) {
+        targetNextStageId = nextProcessStage.id;
+      } else if (currentOrder >= 20) {
+        isLastStage = true;
+      } else {
+        const allStages = await this.prisma.processStage.findMany({ orderBy: { defaultOrder: 'asc' } });
+        const currIdx = allStages.findIndex((s) => s.id === subCard.currentStageId);
+        if (currIdx !== -1 && currIdx + 1 < allStages.length) {
+          targetNextStageId = allStages[currIdx + 1].id;
+        } else {
+          isLastStage = true;
+        }
+      }
+    }
 
     const userId = user?.id || user?.sub || user?.userId || subCard.createdById;
     const rejectPcb = Math.max(0, Number(body.rejectPcbQty || body.rejectQty) || 0);
@@ -1165,11 +1190,11 @@ export class JobCardsService {
         },
       });
 
-      if (nextStep) {
+      if (targetNextStageId && !isLastStage) {
         await tx.subJobCard.update({
           where: { id: subCard.id },
           data: {
-            currentStageId: nextStep.stageId,
+            currentStageId: targetNextStageId,
             status: SubJobCardStatus.IN_STAGE,
             qty: movedPcb,
             totalPcbQty: movedPcb,
