@@ -913,6 +913,9 @@ export default function JobCardsPage() {
                   (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
                 );
 
+                const subStatusRaw = String(sub.status || j.status || '').toUpperCase();
+                const subStatusNorm = (subStatusRaw === 'CREATED' || subStatusRaw === 'PENDING_LAUNCH' || subStatusRaw === 'UNLAUNCHED') ? 'UNLAUNCHED' : sub.status || j.status;
+
                 return {
                   id: sub.id,
                   jobCardNo: j.jobCardNo || sub.subJobCardNo,
@@ -933,7 +936,7 @@ export default function JobCardsPage() {
                   customerPoId: j.customerPoId,
                   productId: j.productId,
                   totalQty: subPcbQty,
-                  status: sub.status === 'CREATED' ? 'UNLAUNCHED' : sub.status || j.status,
+                  status: subStatusNorm,
                   qrCodeValue: sub.qrCodeValue || sub.subJobCardNo,
                   launchedAt: j.launchedAt,
                   completedAt: j.completedAt,
@@ -949,6 +952,9 @@ export default function JobCardsPage() {
             const stageIdx = PF01_STAGES.findIndex(
               (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
             );
+
+            const jStatusRaw = String(j.status || '').toUpperCase();
+            const jStatusNorm = (jStatusRaw === 'CREATED' || jStatusRaw === 'PENDING_LAUNCH' || jStatusRaw === 'UNLAUNCHED') ? 'UNLAUNCHED' : j.status;
 
             return [{
               id: j.id,
@@ -970,7 +976,7 @@ export default function JobCardsPage() {
               customerPoId: j.customerPoId,
               productId: j.productId,
               totalQty: masterPcbQty,
-              status: j.status === 'CREATED' ? 'UNLAUNCHED' : j.status,
+              status: jStatusNorm,
               qrCodeValue: j.qrCodeValue || `${j.jobCardNo}-PARENT`,
               launchedAt: j.launchedAt,
               completedAt: j.completedAt,
@@ -1070,16 +1076,32 @@ export default function JobCardsPage() {
   };
 
   // Launch Existing Unlaunched Job Card
-  const handleLaunchExistingJobCard = (jobCardId: string) => {
+  const handleLaunchExistingJobCard = async (jobCardId: string) => {
     if (userRole === 'NORMAL') {
       showToast('Permission Denied: Normal Users cannot launch Job Cards.', 'error');
       return;
     }
 
-    runWithLoading('Releasing Job Card into Stage 1 Production (1. SHEARING)...', () => {
+    const targetJob = jobCards.find((j) => j.id === jobCardId || j.jobCardNo === jobCardId);
+    const cardId = targetJob?.id || jobCardId;
+
+    runWithLoading('Releasing Job Card into Stage 1 Production (1. SHEARING)...', async () => {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        await fetch(`${getApiBaseUrl()}/job-cards/${cardId}/launch`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }).catch(() => {});
+      } catch (e) {
+        console.warn('Backend launch API call failed or offline mode', e);
+      }
+
       setJobCards((prev) =>
         prev.map((j) => {
-          if (j.id === jobCardId) {
+          if (j.id === cardId || j.jobCardNo === cardId) {
             return {
               ...j,
               status: 'IN_PROGRESS',
@@ -1093,8 +1115,8 @@ export default function JobCardsPage() {
         })
       );
 
-      const targetJob = jobCards.find((j) => j.id === jobCardId);
-      showToast(`Job Card ${targetJob?.jobCardNo || ''} launched into Stage 1 (${PF01_STAGES[0]})`, 'success');
+      showToast(`🚀 Job Card ${targetJob?.jobCardNo || cardId} launched successfully into Stage 1 (${PF01_STAGES[0]})`, 'success');
+      fetchBackendJobCards();
     });
   };
 

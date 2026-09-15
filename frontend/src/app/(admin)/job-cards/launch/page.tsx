@@ -76,6 +76,7 @@ export default function JobCardLaunchPage() {
         custPnlAreaSqm: prodPnlAreaSqm,
         jobFlowSelection: launchForm.jobFlowSelection,
         photoUrl: launchForm.photoUrl,
+        autoLaunch: false,
         subJobCards: [],
       };
 
@@ -87,7 +88,7 @@ export default function JobCardLaunchPage() {
         // Retain client fallback gracefully
       });
 
-      showToastMsg(`Job Card ${launchForm.jobCardNo} Launched Successfully!`, 'success');
+      showToastMsg(`Job Card ${launchForm.jobCardNo} Created Successfully (UNLAUNCHED)! Release via "Launch Job Card" button.`, 'success');
       setTimeout(() => {
         router.push('/job-cards');
       }, 1000);
