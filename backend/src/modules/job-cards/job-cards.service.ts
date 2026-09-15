@@ -426,12 +426,12 @@ export class JobCardsService {
           data: {
             code,
             name,
-            sequenceOrder: i + 1,
+            defaultOrder: i + 1,
             description: `${name} Stage`,
           },
         }).catch(() => {});
       }
-      stages = await this.prisma.processStage.findMany({ orderBy: { sequenceOrder: 'asc' } });
+      stages = await this.prisma.processStage.findMany({ orderBy: { defaultOrder: 'asc' } });
     }
 
     let processFlow = await this.prisma.processFlowMaster.findFirst({
