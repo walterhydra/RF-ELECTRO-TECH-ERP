@@ -507,7 +507,7 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
 
               <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
                 <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">TOTAL PCB QTY</span>
-                <strong className="text-indigo-700 font-mono font-black block">{jobCard.totalPcbQty || jobCard.custPnlQty || (jobCard.prodPnlQty * 2) || 0} PCB</strong>
+                <strong className="text-indigo-700 font-mono font-black block">{jobCard.totalPcbQty || (jobCard.custPnlQty && jobCard.custPnlQty > 50 ? jobCard.custPnlQty : (jobCard.prodPnlQty * 4)) || 0} PCB</strong>
               </div>
 
               <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
@@ -554,13 +554,13 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
                 SUB-LOTS ({jobCard.subJobCards?.length || 1})
               </h5>
               <span className="text-[11px] font-mono font-black text-amber-900 bg-amber-200 px-2 py-0.5 rounded border border-amber-400">
-                {jobCard.totalPcbQty || (jobCard.prodPnlQty * 2)} PCBs
+                {jobCard.totalPcbQty || (jobCard.custPnlQty && jobCard.custPnlQty > 50 ? jobCard.custPnlQty : (jobCard.prodPnlQty * 4))} PCBs
               </span>
             </div>
 
             <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
               {(jobCard.subJobCards || []).map((sub) => {
-                const subPcb = (sub as any).totalPcbQty || (sub.qty * 2);
+                const subPcb = (sub as any).totalPcbQty || ((sub as any).qty && (sub as any).qty > 50 ? (sub as any).qty : jobCard.totalPcbQty || 160);
                 return (
                   <div key={sub.id} className="bg-white p-2.5 rounded-xl border border-slate-200 flex items-center justify-between text-xs font-sans shadow-2xs">
                     <div>
@@ -901,12 +901,12 @@ export default function JobCardsPage() {
         const data = await res.json();
         if (Array.isArray(data)) {
           const mapped: JobCard[] = data.flatMap((j: any) => {
-            const masterPcbQty = j.totalPcbQty || j.custPnlQty || (j.prodPnlQty ? j.prodPnlQty * 4 : 160);
+            const masterPcbQty = j.totalPcbQty || (j.custPnlQty && j.custPnlQty > 50 ? j.custPnlQty : (j.prodPnlQty ? j.prodPnlQty * 4 : 160));
             const masterAreaSqm = j.custPnlAreaSqm || j.prodPnlAreaSqm || 45;
 
             if (j.subJobCards && j.subJobCards.length > 0) {
               return j.subJobCards.map((sub: any) => {
-                const subPcbQty = sub.totalPcbQty || sub.qty || masterPcbQty;
+                const subPcbQty = sub.totalPcbQty || (sub.qty && sub.qty > 50 ? sub.qty : masterPcbQty);
                 const subAreaSqm = sub.custPnlAreaSqm || sub.prodPnlAreaSqm || masterAreaSqm;
                 const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
                 const stageIdx = PF01_STAGES.findIndex(
@@ -1321,7 +1321,7 @@ export default function JobCardsPage() {
       return;
     }
 
-    const currentPcb = selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || Math.round((selectedMovementJob.prodPnlQty || 0) * 2) || 160;
+    const currentPcb = selectedMovementJob.totalPcbQty || (selectedMovementJob.custPnlQty && selectedMovementJob.custPnlQty > 50 ? selectedMovementJob.custPnlQty : Math.round((selectedMovementJob.prodPnlQty || 0) * 4)) || 160;
     const currentArea = selectedMovementJob.custPnlAreaSqm || selectedMovementJob.prodPnlAreaSqm || 45;
     const rejectPcb = Math.min(Math.max(0, Number(fullMoveRejectQty) || 0), currentPcb);
 
@@ -1449,7 +1449,7 @@ export default function JobCardsPage() {
       return;
     }
 
-    const masterPcb = selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || Math.round((selectedMovementJob.prodPnlQty || 0) * 2) || 160;
+    const masterPcb = selectedMovementJob.totalPcbQty || (selectedMovementJob.custPnlQty && selectedMovementJob.custPnlQty > 50 ? selectedMovementJob.custPnlQty : Math.round((selectedMovementJob.prodPnlQty || 0) * 4)) || 160;
     const parsedMoveQty = typeof partialMoveQty === 'number' ? partialMoveQty : (parseInt(String(partialMoveQty), 10) || 0);
 
     if (parsedMoveQty <= 0 || parsedMoveQty >= masterPcb) {
@@ -1823,7 +1823,7 @@ export default function JobCardsPage() {
   const inProgressCount = jobCards.filter((j) => j.status === 'IN_PROGRESS').length;
   const totalSubLots = jobCards.reduce((acc, j) => acc + (j.subJobCards?.length || 1), 0);
   const activePnlCount = jobCards.reduce((acc, j) => acc + (j.prodPnlQty || 0), 0);
-  const activePcbCount = jobCards.reduce((acc, j) => acc + (j.totalPcbQty || j.custPnlQty || ((j.prodPnlQty || 0) * 2)), 0);
+  const activePcbCount = jobCards.reduce((acc, j) => acc + (j.totalPcbQty || (j.custPnlQty && j.custPnlQty > 50 ? j.custPnlQty : ((j.prodPnlQty || 0) * 4))), 0);
   const activeSqmArea = jobCards.reduce((acc, j) => acc + (j.prodPnlAreaSqm || 0), 0);
 
   const overdueCards = React.useMemo(() => jobCards.filter(isCardOverdue), [jobCards, isCardOverdue]);
@@ -2698,7 +2698,7 @@ export default function JobCardsPage() {
 
                       {/* Pndg */}
                       <td className="py-2.5 px-3 border-r border-slate-200 font-mono text-right font-bold text-slate-900 whitespace-nowrap">
-                        {jc.totalPcbQty || jc.custPnlQty || (jc.prodPnlQty ? Math.round(jc.prodPnlQty * 2) : 0)}
+                        {jc.totalPcbQty || (jc.custPnlQty && jc.custPnlQty > 50 ? jc.custPnlQty : (jc.prodPnlQty ? Math.round(jc.prodPnlQty * 4) : 160))}
                       </td>
 
                       {/* Unit */}
@@ -3049,7 +3049,7 @@ export default function JobCardsPage() {
                         ...launchForm,
                         totalPcbQty: qty,
                         prodPnlQty: pnlCount,
-                        custPnlQty: pnlCount * 2,
+                        custPnlQty: qty,
                         custPnlAreaSqm: calculatedArea,
                         prodPnlAreaSqm: Number((calculatedArea * 1.1).toFixed(2)),
                       });
@@ -3485,7 +3485,7 @@ export default function JobCardsPage() {
                           <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
                             <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">TOTAL PCB QTY</span>
                             <strong className="text-indigo-700 font-mono font-black block mt-0.5 text-sm">
-                              {selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || Math.round((selectedMovementJob.prodPnlQty || 0) * 2)} PCBs
+                              {selectedMovementJob.totalPcbQty || (selectedMovementJob.custPnlQty && selectedMovementJob.custPnlQty > 50 ? selectedMovementJob.custPnlQty : Math.round((selectedMovementJob.prodPnlQty || 0) * 4))} PCBs
                             </strong>
                           </div>
 
@@ -3515,7 +3515,7 @@ export default function JobCardsPage() {
                                 SUB-JOB LOTS BREAKDOWN ({selectedMovementJob.subJobCards.length} LOTS)
                               </h5>
                               <span className="text-xs text-amber-900 font-mono font-black bg-amber-200/80 px-2.5 py-0.5 rounded-lg border border-amber-400/80 shadow-2xs">
-                                Total: {selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || Math.round((selectedMovementJob.prodPnlQty || 0) * 2)} PCBs
+                                Total: {selectedMovementJob.totalPcbQty || (selectedMovementJob.custPnlQty && selectedMovementJob.custPnlQty > 50 ? selectedMovementJob.custPnlQty : Math.round((selectedMovementJob.prodPnlQty || 0) * 4))} PCBs
                               </span>
                             </div>
                             <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
@@ -3703,7 +3703,7 @@ export default function JobCardsPage() {
 
                 {/* TAB C: UNCOMPLETED / SPLIT MOVEMENT (HORIZONTAL SIDE-BY-SIDE) */}
                 {movementTab === 'PARTIAL' && (() => {
-                  const masterPcb = selectedMovementJob.totalPcbQty || selectedMovementJob.custPnlQty || Math.round((selectedMovementJob.prodPnlQty || 0) * 2) || 160;
+                  const masterPcb = selectedMovementJob.totalPcbQty || (selectedMovementJob.custPnlQty && selectedMovementJob.custPnlQty > 50 ? selectedMovementJob.custPnlQty : Math.round((selectedMovementJob.prodPnlQty || 0) * 4)) || 160;
                   const parsedMoveQty = typeof partialMoveQty === 'number' ? partialMoveQty : (parseInt(String(partialMoveQty), 10) || 0);
                   const validMoveQty = Math.min(Math.max(1, parsedMoveQty), Math.max(1, masterPcb - 1));
                   const remPcb = Math.max(0, masterPcb - validMoveQty);
@@ -3962,8 +3962,8 @@ export default function JobCardsPage() {
                         const totalStageJobsCount = activeMasterJobs.length + activeSubJobs.length;
 
                         const pcbSum =
-                          activeMasterJobs.reduce((s, j) => s + (j.totalPcbQty || j.custPnlQty || ((j.prodPnlQty || 0) * 2)), 0) +
-                          activeSubJobs.reduce((s, sub) => s + ((sub as any).totalPcbQty || (sub.qty * 2)), 0);
+                          activeMasterJobs.reduce((s, j) => s + (j.totalPcbQty || (j.custPnlQty && j.custPnlQty > 50 ? j.custPnlQty : ((j.prodPnlQty || 0) * 4))), 0) +
+                          activeSubJobs.reduce((s, sub) => s + ((sub as any).totalPcbQty || ((sub.qty && sub.qty > 50) ? sub.qty : (sub.qty * 4))), 0);
 
                         const sqmSum = activeMasterJobs.reduce((s, j) => s + (j.prodPnlAreaSqm || 50), 0);
 
@@ -4206,7 +4206,7 @@ export default function JobCardsPage() {
                 <div className="space-y-1 bg-white p-3 rounded-xl border border-slate-200 font-mono text-[11px]">
                   <div><span className="text-slate-400">Customer Part:</span> <strong className="text-slate-800">{deleteConfirmCard.customerPartNo}</strong></div>
                   <div><span className="text-slate-400">Customer Code:</span> <strong className="text-slate-800">{deleteConfirmCard.customerCode}</strong></div>
-                  <div><span className="text-slate-400">Quantity:</span> <strong className="text-indigo-700">{deleteConfirmCard.totalPcbQty || deleteConfirmCard.custPnlQty || (deleteConfirmCard.prodPnlQty * 2)} PCBs</strong></div>
+                  <div><span className="text-slate-400 font-mono">Quantity:</span> <strong className="text-indigo-700">{deleteConfirmCard.totalPcbQty || (deleteConfirmCard.custPnlQty && deleteConfirmCard.custPnlQty > 50 ? deleteConfirmCard.custPnlQty : (deleteConfirmCard.prodPnlQty * 4))} PCBs</strong></div>
                 </div>
                 <p className="text-[11px] text-rose-600 font-bold flex items-center gap-1">
                   <AlertCircle className="w-3.5 h-3.5 shrink-0" /> This will delete all associated sub-lots & stage logs. Action cannot be undone!

@@ -102,7 +102,7 @@ export default function JobCardPdfPage() {
 
   if (!card) return null;
 
-  const qrDataPayload = `http://localhost:3000/job-cards-pdf/${id}\nJobCard:${card.jobCardNo}\nPart:${card.rfePartCode}\nQty:${card.totalPcbQty || (card as any).custPnlQty || (card.prodPnlQty * 2)} PCBs`;
+  const qrDataPayload = `http://localhost:3000/job-cards-pdf/${id}\nJobCard:${card.jobCardNo}\nPart:${card.rfePartCode}\nQty:${card.totalPcbQty || ((card as any).custPnlQty && (card as any).custPnlQty > 50 ? (card as any).custPnlQty : card.prodPnlQty * 4)} PCBs`;
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrDataPayload)}`;
   const barcodeImageUrl = `https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(card.jobCardNo)}&scale=3&rotate=N&includetext`;
 
@@ -240,7 +240,7 @@ export default function JobCardPdfPage() {
             </div>
             <div>
               <span className="text-[10px] text-slate-500 uppercase font-bold block">TOTAL PCB QTY</span>
-              <span className="font-black text-emerald-700 text-sm">{card.totalPcbQty || (card as any).custPnlQty || (card.prodPnlQty * 2)} PCBs</span>
+              <span className="font-black text-emerald-700 text-sm">{card.totalPcbQty || ((card as any).custPnlQty && (card as any).custPnlQty > 50 ? (card as any).custPnlQty : card.prodPnlQty * 4)} PCBs</span>
             </div>
             <div>
               <span className="text-[10px] text-slate-500 uppercase font-bold block">TOTAL WIP AREA</span>

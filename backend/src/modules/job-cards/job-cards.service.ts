@@ -125,11 +125,11 @@ export class JobCardsService {
     // Auto-correct sub-job card PCB quantities & clean sub-card numbers
     for (const jc of jobCards) {
       if (jc.subJobCards && jc.subJobCards.length > 0) {
-        const masterPcbQty = jc.totalPcbQty || jc.custPnlQty || (jc.prodPnlQty ? jc.prodPnlQty * 4 : 160);
+        const masterPcbQty = jc.totalPcbQty || (jc.custPnlQty && jc.custPnlQty > 50 ? jc.custPnlQty : (jc.prodPnlQty ? jc.prodPnlQty * 4 : 160));
         const usedLetters = new Set<string>();
 
         for (const sub of jc.subJobCards) {
-          const subPcbQty = sub.totalPcbQty || sub.qty || masterPcbQty;
+          const subPcbQty = sub.totalPcbQty || (sub.qty && sub.qty > 50 ? sub.qty : masterPcbQty);
 
           // Clean subJobCardNo if it has nested hyphens e.g. 26-27-1590-A-A -> 26-27-1590-A
           let cleanNo = sub.subJobCardNo;
@@ -675,13 +675,13 @@ export class JobCardsService {
         }
       }
 
-      // Handle pre-launch splits if provided
+      const totalMasterPcb = Number(data.totalPcbQty) || 160;
       const rawSplits = Array.isArray(data.splits) ? data.splits : [];
       if (rawSplits.length > 0) {
         for (let i = 0; i < rawSplits.length; i++) {
           const subQty = Number(typeof rawSplits[i] === 'object' ? rawSplits[i].qty : rawSplits[i]);
           const subJobCardNo = `${jobCardNo}-${i + 1}`;
-          const ratio = (Number(data.prodPnlQty) || 40) > 0 ? subQty / (Number(data.prodPnlQty) || 40) : 1;
+          const ratio = totalMasterPcb > 0 ? subQty / totalMasterPcb : 1;
 
           const existingSub = await tx.subJobCard.findFirst({ where: { subJobCardNo } });
           if (!existingSub) {
@@ -690,8 +690,9 @@ export class JobCardsService {
                 subJobCardNo,
                 jobCardId: jobCard.id,
                 qty: subQty,
-                prodPnlQty: subQty,
-                totalPcbQty: data.totalPcbQty ? Math.round(Number(data.totalPcbQty) * ratio) : null,
+                totalPcbQty: subQty,
+                custPnlQty: subQty,
+                prodPnlQty: Math.ceil(subQty / 4),
                 prodPnlAreaSqm: data.prodPnlAreaSqm ? Number((Number(data.prodPnlAreaSqm) * ratio).toFixed(2)) : null,
                 custPnlAreaSqm: data.custPnlAreaSqm ? Number((Number(data.custPnlAreaSqm) * ratio).toFixed(2)) : null,
                 status: data.autoLaunch ? SubJobCardStatus.IN_STAGE : SubJobCardStatus.PENDING_LAUNCH,
@@ -711,9 +712,10 @@ export class JobCardsService {
             data: {
               subJobCardNo,
               jobCardId: jobCard.id,
-              qty: Number(data.prodPnlQty) || 40,
-              prodPnlQty: Number(data.prodPnlQty) || 40,
-              totalPcbQty: Number(data.totalPcbQty) || 160,
+              qty: totalMasterPcb,
+              totalPcbQty: totalMasterPcb,
+              custPnlQty: totalMasterPcb,
+              prodPnlQty: Number(data.prodPnlQty) || Math.ceil(totalMasterPcb / 4),
               prodPnlAreaSqm: Number(data.prodPnlAreaSqm) || 50,
               custPnlAreaSqm: Number(data.custPnlAreaSqm) || 45,
               status: data.autoLaunch ? SubJobCardStatus.IN_STAGE : SubJobCardStatus.PENDING_LAUNCH,
@@ -779,12 +781,16 @@ export class JobCardsService {
         // Auto-create 1 single sub-job card for the full quantity
         const subJobCardNo = `${jobCard.jobCardNo}-1`;
         const qrCodeValue = `RFE-SJC-${subJobCardNo}-${Date.now().toString().slice(-4)}`;
+        const fullPcbQty = jobCard.totalPcbQty || jobCard.totalQty || 160;
 
         await tx.subJobCard.create({
           data: {
             subJobCardNo,
             jobCardId: id,
-            qty: jobCard.totalQty,
+            qty: fullPcbQty,
+            totalPcbQty: fullPcbQty,
+            custPnlQty: fullPcbQty,
+            prodPnlQty: jobCard.prodPnlQty || Math.ceil(fullPcbQty / 4),
             status: SubJobCardStatus.IN_STAGE,
             currentStageId: firstStageId,
             qrCodeValue,

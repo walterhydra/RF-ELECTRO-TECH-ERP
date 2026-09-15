@@ -668,7 +668,7 @@ export default function JobMovementUpdatePage() {
 
                   <div>
                     <span className="text-[10px] text-slate-500 uppercase font-mono font-bold block">QUANTITY</span>
-                    <span className="font-black text-amber-300 font-mono">{j.totalPcbQty || (j.prodPnlQty * 2)} PCBs</span>
+                    <span className="font-black text-amber-300 font-mono">{j.totalPcbQty || (j.prodPnlQty ? j.prodPnlQty * 4 : 160)} PCBs</span>
                   </div>
 
                   <div>
@@ -842,7 +842,7 @@ export default function JobMovementUpdatePage() {
                     </div>
                     <div className="flex justify-between border-b border-slate-800/60 pb-1.5">
                       <span className="text-slate-400">Total PCB Quantity:</span>
-                      <strong className="font-mono text-emerald-400 font-bold">{selectedJob.totalPcbQty || (selectedJob.prodPnlQty * 2)} PCBs</strong>
+                      <strong className="font-mono text-emerald-400 font-bold">{selectedJob.totalPcbQty || (selectedJob.prodPnlQty ? selectedJob.prodPnlQty * 4 : 160)} PCBs</strong>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-400">Production WIP Area:</span>
