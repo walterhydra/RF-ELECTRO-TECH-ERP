@@ -1195,18 +1195,23 @@ export class JobCardsService {
 
 
   async moveFull(id: string, body: { id?: string; cardId?: string; jobId?: string; jobCardNo?: string; rejectPcbQty?: number; rejectQty?: number; remark?: string; remarkType?: string; status?: string } | any, user: any) {
-    const rawTarget = id || body?.id || body?.cardId || body?.jobId || body?.jobCardNo || '';
+    const rawTarget = (id || body?.id || body?.cardId || body?.jobId || body?.jobCardNo || '').trim();
     const searchNo = (body?.jobCardNo || rawTarget || '').trim();
+    const isUuidTarget = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawTarget);
+
+    const subCardOr: any[] = [
+      { subJobCardNo: rawTarget },
+      { subJobCardNo: searchNo },
+      { qrCodeValue: rawTarget },
+    ];
+    if (isUuidTarget) {
+      subCardOr.push({ id: rawTarget });
+    }
 
     // 1. Try finding target SubJobCard directly by ID, subJobCardNo, or QR code
     let subCard: any = await this.prisma.subJobCard.findFirst({
       where: {
-        OR: [
-          { id: rawTarget },
-          { subJobCardNo: rawTarget },
-          { subJobCardNo: searchNo },
-          { qrCodeValue: rawTarget },
-        ].filter(Boolean),
+        OR: subCardOr.filter(Boolean),
       },
       include: {
         currentStage: true,
@@ -1222,13 +1227,17 @@ export class JobCardsService {
 
     let jobCardId = subCard ? subCard.jobCardId : rawTarget;
     if (!subCard) {
+      const jcOr: any[] = [
+        { jobCardNo: rawTarget },
+        { jobCardNo: searchNo },
+      ];
+      if (isUuidTarget) {
+        jcOr.push({ id: rawTarget });
+      }
+
       let jc: any = await this.prisma.jobCard.findFirst({
         where: {
-          OR: [
-            { id: rawTarget },
-            { jobCardNo: rawTarget },
-            { jobCardNo: searchNo },
-          ].filter(Boolean),
+          OR: jcOr.filter(Boolean),
         },
         include: {
           subJobCards: { include: { currentStage: true } },
