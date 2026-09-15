@@ -435,33 +435,49 @@ export class JobCardsService {
       throw new BadRequestException('System initialization error: Could not find or create default User account.');
     }
 
-    // Ensure standard stages exist
-    let stages = await this.prisma.processStage.findMany();
-    if (stages.length === 0) {
-      const defaultStageNames = [
-        'CAM / MI Generation', 'Job Registration & Barcoding', 'Board Cutting & Edge Milling',
-        'CNC Drilling', 'Deburring & Surface Prep', 'Electroless Copper (PTH)',
-        'Outer Layer Photo Image / Lamination', 'Pattern Electroplating (Cu + Sn)',
-        'Alkaline Etching', 'Tin Stripping', 'Solder Mask Coating & Printing',
-        'UV Exposure & Developer', 'Legend / Silkscreen Printing', 'Thermal Curing',
-        'Surface Finish (HASL / ENIG)', 'CNC Routing / V-Scoring', 'Electrical Testing (E-Test)',
-        'Final Quality Inspection (FQC)', 'Vacuum Packaging & Dispatch'
-      ];
+    // Ensure standard 19 process stages exist matching PF01_STAGES
+    let stages = await this.prisma.processStage.findMany({ orderBy: { defaultOrder: 'asc' } });
+    const defaultStageList = [
+      { name: '1. SHEARING', code: 'SHR', order: 1 },
+      { name: '2. DRILLING', code: 'DRL', order: 2 },
+      { name: '3. DRL-QC', code: 'DRL-QC', order: 3 },
+      { name: '4. PTH', code: 'PTH', order: 4 },
+      { name: '5. PTH-QC', code: 'PTH-QC', order: 5 },
+      { name: '6. PHOTO PRINTING', code: 'PHOTO', order: 6 },
+      { name: '7. PHOTO-QC', code: 'PHOTO-QC', order: 7 },
+      { name: '8. PATTERN PLATING', code: 'PLT', order: 8 },
+      { name: '9. ETCHING', code: 'ETC', order: 9 },
+      { name: '10. ETCHING-QC', code: 'ETC-QC', order: 10 },
+      { name: '11. SOLDER MASK', code: 'SM', order: 11 },
+      { name: '12. SOLDER MASK-QC', code: 'SM-QC', order: 12 },
+      { name: '13. LEGEND PRINTING', code: 'LGD', order: 13 },
+      { name: '14. HAL / ENIG', code: 'HAL', order: 14 },
+      { name: '15. PUNCHING / ROUTING', code: 'RTE', order: 15 },
+      { name: '16. E-TESTING', code: 'BBT', order: 16 },
+      { name: '17. FINAL QC', code: 'FQC', order: 17 },
+      { name: '18. PACKING', code: 'PKG', order: 18 },
+      { name: '19. DISPATCH', code: 'DSP', order: 19 },
+    ];
 
-      for (let i = 0; i < defaultStageNames.length; i++) {
-        const name = defaultStageNames[i];
-        const code = `STG-${String(i + 1).padStart(2, '0')}`;
+    for (const item of defaultStageList) {
+      const existing = stages.find((s) => s.defaultOrder === item.order || s.name.toLowerCase() === item.name.toLowerCase());
+      if (!existing) {
         await this.prisma.processStage.create({
           data: {
-            code,
-            name,
-            defaultOrder: i + 1,
-            description: `${name} Stage`,
+            code: item.code,
+            name: item.name,
+            defaultOrder: item.order,
+            description: `${item.name} Stage`,
           },
         }).catch(() => {});
+      } else if (existing.name !== item.name) {
+        await this.prisma.processStage.update({
+          where: { id: existing.id },
+          data: { name: item.name },
+        }).catch(() => {});
       }
-      stages = await this.prisma.processStage.findMany({ orderBy: { defaultOrder: 'asc' } });
     }
+    stages = await this.prisma.processStage.findMany({ orderBy: { defaultOrder: 'asc' } });
 
     let processFlow = await this.prisma.processFlowMaster.findFirst({
       where: { isActive: true },
@@ -1183,26 +1199,24 @@ export class JobCardsService {
       });
       if (nextProcessStage) {
         targetNextStageId = nextProcessStage.id;
-      } else if (currentOrder >= 20) {
+      } else if (currentOrder >= 19) {
         isLastStage = true;
       }
     }
 
-    // Fallback if processStage lookup wasn't available
+    // Fallback if processStage lookup wasn't available directly
     if (!targetNextStageId && !isLastStage) {
-      const steps = (subCard as any).jobCard?.processFlowMaster?.steps || [];
-      const currentStep = steps.find((s: any) => s.stageId === subCard?.currentStageId);
-      const currentStepOrder = currentStep ? currentStep.stepOrder : 1;
-      const nextStep = steps.find((s: any) => s.stepOrder > currentStepOrder);
-      if (nextStep) {
-        targetNextStageId = nextStep.stageId;
-      } else {
-        const allStages = await this.prisma.processStage.findMany({ orderBy: { defaultOrder: 'asc' } });
-        const currIdx = allStages.findIndex((s) => s.id === subCard?.currentStageId);
-        if (currIdx !== -1 && currIdx + 1 < allStages.length) {
-          targetNextStageId = allStages[currIdx + 1].id;
+      const allStages = await this.prisma.processStage.findMany({ orderBy: { defaultOrder: 'asc' } });
+      if (allStages.length > 0) {
+        if (!subCard?.currentStageId) {
+          targetNextStageId = allStages[1]?.id || allStages[0].id;
         } else {
-          isLastStage = true;
+          const currIdx = allStages.findIndex((s) => s.id === subCard?.currentStageId);
+          if (currIdx !== -1 && currIdx + 1 < allStages.length) {
+            targetNextStageId = allStages[currIdx + 1].id;
+          } else {
+            isLastStage = true;
+          }
         }
       }
     }
@@ -1376,11 +1390,17 @@ export class JobCardsService {
     }
 
     if (!targetNextStageId) {
-      const steps = (subCard as any).jobCard?.processFlowMaster?.steps || [];
-      const currentStep = steps.find((s: any) => s.stageId === subCard?.currentStageId);
-      const currentStepOrder = currentStep ? currentStep.stepOrder : 1;
-      const nextStep = steps.find((s: any) => s.stepOrder > currentStepOrder);
-      if (nextStep) targetNextStageId = nextStep.stageId;
+      const allStages = await this.prisma.processStage.findMany({ orderBy: { defaultOrder: 'asc' } });
+      if (allStages.length > 0) {
+        if (!subCard?.currentStageId) {
+          targetNextStageId = allStages[1]?.id || allStages[0].id;
+        } else {
+          const currIdx = allStages.findIndex((s) => s.id === subCard?.currentStageId);
+          if (currIdx !== -1 && currIdx + 1 < allStages.length) {
+            targetNextStageId = allStages[currIdx + 1].id;
+          }
+        }
+      }
     }
 
     if (!targetNextStageId) {

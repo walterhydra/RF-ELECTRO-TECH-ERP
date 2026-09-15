@@ -961,15 +961,17 @@ export default function JobCardsPage() {
             const rawStage = activeSub?.currentStage?.name || j.currentStageName || j.currentStage?.name || (j.status === 'COMPLETED' ? '20. PACKING' : PF01_STAGES[0]);
 
             let stageIdx = activeSub?.currentStage?.defaultOrder
-              ? Math.min(Math.max(0, activeSub.currentStage.defaultOrder - 1), 19)
+              ? Math.min(Math.max(0, activeSub.currentStage.defaultOrder - 1), 18)
               : normalizeStageIndex(rawStage);
 
             const jStatusRaw = String(j.status || activeSub?.status || '').toUpperCase();
             let jStatusNorm = (jStatusRaw === 'CREATED' || jStatusRaw === 'PENDING_LAUNCH' || jStatusRaw === 'UNLAUNCHED') ? 'UNLAUNCHED' : (j.status || 'IN_PROGRESS');
 
-            if (jStatusNorm === 'COMPLETED' || stageIdx >= 19) {
-              stageIdx = 19;
-              jStatusNorm = 'COMPLETED';
+            if (jStatusNorm === 'COMPLETED' || stageIdx >= 18) {
+              stageIdx = Math.min(stageIdx, 18);
+              if (stageIdx === 18 && activeSub?.currentStage?.name?.includes('DISPATCH')) {
+                jStatusNorm = 'COMPLETED';
+              }
             }
 
             return {
