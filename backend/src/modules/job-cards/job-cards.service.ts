@@ -187,43 +187,68 @@ export class JobCardsService {
   async findOne(id: string, client: any = this.prisma) {
     const db = client || this.prisma;
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-    const searchWhere: any = isUuid
-      ? { OR: [{ id }, { jobCardNo: id }] }
-      : { jobCardNo: id };
 
     let jobCard: any = null;
     try {
-      jobCard = await db.jobCard.findFirst({
-        where: searchWhere,
-        include: {
-          customerPO: { include: { customer: true } },
-          product: true,
-          processFlowMaster: {
-            include: {
-              steps: { include: { stage: true }, orderBy: { stepOrder: 'asc' } },
-            },
-          },
-          subJobCards: { include: { currentStage: true }, orderBy: { subJobCardNo: 'asc' } },
-        },
-      });
-    } catch (err1: any) {
-      console.error('findOne full include failed:', err1?.message || err1);
-      try {
-        jobCard = await db.jobCard.findFirst({
-          where: searchWhere,
+      if (isUuid) {
+        jobCard = await db.jobCard.findUnique({
+          where: { id },
           include: {
             customerPO: { include: { customer: true } },
             product: true,
-            processFlowMaster: true,
-            subJobCards: true,
+            processFlowMaster: {
+              include: {
+                steps: { include: { stage: true }, orderBy: { stepOrder: 'asc' } },
+              },
+            },
+            subJobCards: { include: { currentStage: true }, orderBy: { subJobCardNo: 'asc' } },
           },
         });
+      } else {
+        jobCard = await db.jobCard.findFirst({
+          where: { jobCardNo: id },
+          include: {
+            customerPO: { include: { customer: true } },
+            product: true,
+            processFlowMaster: {
+              include: {
+                steps: { include: { stage: true }, orderBy: { stepOrder: 'asc' } },
+              },
+            },
+            subJobCards: { include: { currentStage: true }, orderBy: { subJobCardNo: 'asc' } },
+          },
+        });
+      }
+    } catch (err1: any) {
+      console.error('findOne full include failed:', err1?.message || err1);
+      try {
+        if (isUuid) {
+          jobCard = await db.jobCard.findUnique({
+            where: { id },
+            include: {
+              customerPO: { include: { customer: true } },
+              product: true,
+              processFlowMaster: true,
+              subJobCards: true,
+            },
+          });
+        } else {
+          jobCard = await db.jobCard.findFirst({
+            where: { jobCardNo: id },
+            include: {
+              customerPO: { include: { customer: true } },
+              product: true,
+              processFlowMaster: true,
+              subJobCards: true,
+            },
+          });
+        }
       } catch (err2: any) {
         console.error('findOne simple include failed:', err2?.message || err2);
         try {
-          jobCard = await db.jobCard.findFirst({
-            where: searchWhere,
-          });
+          jobCard = isUuid
+            ? await db.jobCard.findUnique({ where: { id } })
+            : await db.jobCard.findFirst({ where: { jobCardNo: id } });
         } catch (err3: any) {
           console.error('findOne plain query failed:', err3?.message || err3);
           throw new BadRequestException(`Database query error: ${err3?.message || 'Unknown Prisma error'}`);
