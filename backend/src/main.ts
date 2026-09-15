@@ -7,8 +7,8 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
 
-  // Enable global API prefixing per spec
-  app.setGlobalPrefix('api/v1');
+  // Enable global API prefixing per spec (excluding root and health for cloud monitoring)
+  app.setGlobalPrefix('api/v1', { exclude: ['/', 'health'] });
 
   // Enable CORS for frontend and mobile PWA across network
   app.enableCors({
