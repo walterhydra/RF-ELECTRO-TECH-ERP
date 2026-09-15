@@ -7,17 +7,30 @@ export function cn(...inputs: ClassValue[]) {
 
 export function getApiBaseUrl(): string {
   if (typeof window !== 'undefined') {
-    // 1. Check explicit localStorage override (user custom server IP or tunnel URL)
+    // Purge legacy localtunnel overrides if present in browser storage
     const savedApiHost = localStorage.getItem('erp_backend_api_url') || localStorage.getItem('erp_qr_server_host');
-    if (savedApiHost && savedApiHost.trim() !== '') {
-      let cleaned = savedApiHost.trim();
+    if (savedApiHost && savedApiHost.includes('loca.lt')) {
+      localStorage.removeItem('erp_backend_api_url');
+      localStorage.removeItem('erp_qr_server_host');
+    }
+
+    // 1. Handle Vercel deployment (e.g. rf-electrotech.vercel.app)
+    const hostname = window.location.hostname || 'localhost';
+    if (hostname.includes('vercel.app')) {
+      return 'https://rf-electro-tech-erp.onrender.com/api/v1';
+    }
+
+    // 2. Check explicit localStorage override (user custom server IP or custom cloud URL)
+    const validSavedHost = localStorage.getItem('erp_backend_api_url');
+    if (validSavedHost && validSavedHost.trim() !== '') {
+      let cleaned = validSavedHost.trim();
       if (!cleaned.startsWith('http://') && !cleaned.startsWith('https://')) {
         cleaned = `https://${cleaned}`;
       }
       return cleaned.endsWith('/api/v1') ? cleaned : `${cleaned}/api/v1`;
     }
 
-    // 2. Check environment variable NEXT_PUBLIC_API_URL
+    // 3. Check environment variable NEXT_PUBLIC_API_URL
     const envUrl = process.env.NEXT_PUBLIC_API_URL;
     if (envUrl && envUrl.trim() !== '') {
       let cleaned = envUrl.trim();
@@ -25,12 +38,6 @@ export function getApiBaseUrl(): string {
         cleaned = `https://${cleaned}`;
       }
       return cleaned.endsWith('/api/v1') ? cleaned : `${cleaned}/api/v1`;
-    }
-
-    // 3. Handle Vercel deployment (e.g. rf-electrotech.vercel.app)
-    const hostname = window.location.hostname || 'localhost';
-    if (hostname.includes('vercel.app')) {
-      return 'https://rf-electro-tech-erp.onrender.com/api/v1';
     }
 
     // 4. Default LAN / Localhost resolution
