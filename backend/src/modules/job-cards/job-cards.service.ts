@@ -590,7 +590,7 @@ export class JobCardsService {
       customerPO = deps.customerPO;
     }
 
-    const createdId = await this.prisma.$transaction(async (tx) => {
+    const createdJobCard = await this.prisma.$transaction(async (tx) => {
       const fallbackPo = customerPO || deps.customerPO;
       const fallbackProduct = product || deps.product;
       const fallbackFlow = processFlow || deps.processFlow;
@@ -695,7 +695,7 @@ export class JobCardsService {
       return jobCard;
     });
 
-    return jobCard;
+    return createdJobCard;
   }
 
   async updateJobCard(id: string, data: any) {
