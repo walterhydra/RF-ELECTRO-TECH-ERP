@@ -39,10 +39,10 @@ import {
   Check,
   Eye,
   Download,
-  Share2,
   Scan,
   Settings,
-  Upload
+  Upload,
+  History
 } from 'lucide-react';
 import { Portal } from '@/components/ui/Portal';
 import { getApiBaseUrl } from '@/lib/utils';
@@ -1116,6 +1116,33 @@ export default function JobCardsPage() {
       });
     } else {
       showToast(`No Job Card found matching Scanned Data "${rawInput}"`, 'error');
+    }
+  // Traceability & Movement History State
+  const [historyModalJob, setHistoryModalJob] = useState<JobCard | null>(null);
+  const [historyLogs, setHistoryLogs] = useState<any[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+
+  const fetchJobCardHistory = async (job: JobCard) => {
+    setHistoryModalJob(job);
+    setIsHistoryLoading(true);
+    setHistoryLogs([]);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const targetId = job.id || job.jobCardNo;
+      const res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetId)}/history`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setHistoryLogs(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch job card history', err);
+    } finally {
+      setIsHistoryLoading(false);
     }
   };
 
@@ -3016,6 +3043,15 @@ export default function JobCardsPage() {
                           )}
 
                           <button
+                            onClick={() => fetchJobCardHistory(jc)}
+                            title="View Full Stage Movement & Traceability History"
+                            className="h-7 px-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg inline-flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-95 shadow-2xs font-bold text-[11px]"
+                          >
+                            <History className="w-3.5 h-3.5 text-purple-600" />
+                            <span className="hidden sm:inline">History</span>
+                          </button>
+
+                          <button
                             onClick={() => handleOpenEditModal(jc)}
                             title="Edit Job Card Parameters"
                             className="h-7 w-7 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg inline-flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
@@ -4477,6 +4513,196 @@ export default function JobCardsPage() {
                       <span>Confirm & Delete</span>
                     </>
                   )}
+                </button>
+              </div>
+            </div>
+          </div>
+      {/* MODAL 7: JOB CARD TRACEABILITY & STAGE MOVEMENT HISTORY TIMELINE */}
+      {historyModalJob && (
+        <Portal>
+          <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 overflow-y-auto font-sans text-slate-900">
+            <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-4xl p-5 sm:p-7 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200 my-8">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-bold shrink-0 shadow-md">
+                    <History className="w-5 h-5 stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-extrabold text-slate-950 text-lg">
+                        Job Card Traceability & Stage Movement History
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-300 font-mono">
+                        {historyModalJob.jobCardNo}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium mt-0.5">
+                      Chronological movement logs, stage transfers, operator timestamps & PCB rejections
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setHistoryModalJob(null);
+                    setHistoryLogs([]);
+                  }}
+                  className="text-slate-400 hover:text-slate-700 text-base font-bold p-2 rounded-xl hover:bg-slate-100 cursor-pointer transition-all"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Job Card Meta Specs summary */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 text-xs font-mono">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">WIP Job No</span>
+                  <strong className="text-slate-900 text-sm font-black">{historyModalJob.jobCardNo}</strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Customer Code</span>
+                  <strong className="text-slate-800 font-bold">{historyModalJob.customerCode}</strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Customer Part</span>
+                  <strong className="text-slate-800 font-bold truncate block">{historyModalJob.customerPartNo}</strong>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Total Quantity</span>
+                  <strong className="text-indigo-700 font-black">{historyModalJob.totalPcbQty || historyModalJob.custPnlQty || 160} PCBs</strong>
+                </div>
+              </div>
+
+              {/* Timeline Logs Container */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5 font-mono">
+                    <Clock className="w-4 h-4 text-purple-600" />
+                    <span>Chronological Stage Movement Logs ({historyLogs.length})</span>
+                  </h4>
+                  {historyLogs.length > 0 && (
+                    <button
+                      onClick={() => {
+                        let csvContent = "data:text/csv;charset=utf-8,Timestamp,Job Card No,Sub Lot,Stage,Qty Forwarded,Qty Rejected,Remarks,Operator\n";
+                        historyLogs.forEach((l: any) => {
+                          const dateStr = l.createdAt ? new Date(l.createdAt).toLocaleString('en-GB') : '-';
+                          const stageName = l.stage?.name || l.stageName || '-';
+                          const subNo = l.subJobCard?.subJobCardNo || historyModalJob.jobCardNo;
+                          const remarkStr = `"${(l.remarks || '').replace(/"/g, '""')}"`;
+                          const userStr = `"${l.createdBy?.name || 'Operator'}"`;
+                          csvContent += `${dateStr},${historyModalJob.jobCardNo},${subNo},${stageName},${l.qtyForwarded || 0},${l.qtyRejected || 0},${remarkStr},${userStr}\n`;
+                        });
+                        const encodedUri = encodeURI(csvContent);
+                        const link = document.createElement("a");
+                        link.setAttribute("href", encodedUri);
+                        link.setAttribute("download", `traceability_history_${historyModalJob.jobCardNo}_${new Date().toISOString().split('T')[0]}.csv`);
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                      }}
+                      className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-purple-200 cursor-pointer shadow-2xs"
+                    >
+                      <Download className="w-3.5 h-3.5 text-purple-600" />
+                      <span>Export History CSV</span>
+                    </button>
+                  )}
+                </div>
+
+                {isHistoryLoading ? (
+                  <div className="py-12 text-center text-xs text-slate-500 font-mono flex flex-col items-center justify-center gap-2">
+                    <RefreshCw className="w-5 h-5 text-purple-600 animate-spin" />
+                    <span>Loading stage movement traceability records from database...</span>
+                  </div>
+                ) : historyLogs.length === 0 ? (
+                  <div className="py-10 text-center text-xs text-slate-400 font-mono bg-slate-50 rounded-2xl border border-slate-200/80 p-4">
+                    <p className="font-sans font-semibold text-slate-600 text-sm">No stage movement logs recorded yet for this Job Card.</p>
+                    <p className="text-[11px] text-slate-400 mt-1">Logs will appear automatically whenever an operator advances a stage or logs rejections.</p>
+                  </div>
+                ) : (
+                  <div className="max-h-[50vh] overflow-y-auto pr-1 space-y-3">
+                    {historyLogs.map((log: any, idx: number) => {
+                      const dateObj = log.createdAt ? new Date(log.createdAt) : null;
+                      const formattedDate = dateObj ? dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+                      const formattedTime = dateObj ? dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+                      const isRejection = (log.qtyRejected || 0) > 0 || String(log.remarkType || '').includes('REJECT');
+
+                      return (
+                        <div
+                          key={log.id || idx}
+                          className={`p-3.5 rounded-2xl border text-xs font-sans transition-all space-y-2 ${
+                            isRejection
+                              ? 'bg-rose-50/80 border-rose-200 shadow-2xs'
+                              : 'bg-slate-50/90 border-slate-200/90 hover:bg-slate-100/80'
+                          }`}
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 pb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="w-6 h-6 rounded-lg bg-purple-600 text-white font-black text-[10px] flex items-center justify-center font-mono">
+                                #{historyLogs.length - idx}
+                              </span>
+                              <span className="font-mono font-black text-xs text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
+                                {log.subJobCard?.subJobCardNo || historyModalJob.jobCardNo}
+                              </span>
+                              <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-mono text-[11px]">
+                                {log.stage?.name || 'Process Stage'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 font-mono text-[11px] text-slate-500">
+                              <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                              <span className="font-bold text-slate-700">{formattedDate}</span>
+                              <span className="text-slate-400">{formattedTime}</span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-0.5">
+                            <div className="bg-white p-2 rounded-xl border border-slate-200/80">
+                              <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">QTY FORWARDED</span>
+                              <strong className="text-emerald-700 font-mono font-black text-xs">
+                                {log.qtyForwarded || log.qtyProcessed || 0} PCBs
+                              </strong>
+                            </div>
+                            <div className="bg-white p-2 rounded-xl border border-slate-200/80">
+                              <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">REJECTED PCB QTY</span>
+                              <strong className={`font-mono font-black text-xs ${isRejection ? 'text-rose-700' : 'text-slate-600'}`}>
+                                {log.qtyRejected || 0} PCBs
+                              </strong>
+                            </div>
+                            <div className="bg-white p-2 rounded-xl border border-slate-200/80">
+                              <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">OPERATOR / INSPECTOR</span>
+                              <strong className="text-slate-800 font-bold truncate block">
+                                {log.createdBy?.name || 'Production Operator'}
+                              </strong>
+                            </div>
+                          </div>
+
+                          {log.remarks && (
+                            <div className={`p-2 rounded-xl border font-mono text-[11px] ${
+                              isRejection ? 'bg-rose-100/60 text-rose-900 border-rose-300' : 'bg-white text-slate-700 border-slate-200'
+                            }`}>
+                              <span className="font-extrabold uppercase mr-1">Remarks:</span>
+                              <span>{log.remarks}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-xs">
+                <span className="text-slate-500 font-mono text-[11px]">
+                  RF ELECTRO TECH ERP • ISO Traceability System
+                </span>
+                <button
+                  onClick={() => {
+                    setHistoryModalJob(null);
+                    setHistoryLogs([]);
+                  }}
+                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl text-xs transition-all cursor-pointer"
+                >
+                  Close History
                 </button>
               </div>
             </div>
