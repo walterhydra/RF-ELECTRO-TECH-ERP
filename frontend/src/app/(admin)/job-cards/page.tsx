@@ -3001,24 +3001,16 @@ export default function JobCardsPage() {
                           ) : (
                             <div className="inline-flex items-center gap-1">
                               <button
-                                onClick={() => handleQuickAdvanceStage(jc)}
-                                title="1-Click Advance Stage to Next Stage"
-                                className="h-7 px-3 bg-gradient-to-r from-amber-500 via-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black rounded-lg border border-amber-600/90 text-[11px] inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 whitespace-nowrap"
-                              >
-                                <RefreshCw className="w-3 h-3 stroke-[3]" />
-                                <span>Move Stage ➔</span>
-                              </button>
-
-                              <button
                                 onClick={() => {
                                   setSelectedMovementJob(jc);
                                   setPartialMoveQty(Math.max(1, Math.floor((jc.totalPcbQty || 160) / 2)));
                                   setMovementTab('FULL');
                                 }}
-                                title="Open Full Stage Movement Options (Rejections & Splits)"
-                                className="h-7 w-7 bg-amber-100/90 hover:bg-amber-200 text-amber-950 border border-amber-300 rounded-lg inline-flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
+                                title="Open Stage Movement Options (Rejections, Remarks & Partial Splits)"
+                                className="h-7 px-3 bg-gradient-to-r from-amber-500 via-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black rounded-lg border border-amber-600/90 text-[11px] inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 whitespace-nowrap"
                               >
-                                <Settings className="w-3.5 h-3.5" />
+                                <RefreshCw className="w-3 h-3 stroke-[3]" />
+                                <span>Move Stage ➔</span>
                               </button>
                             </div>
                           )}
