@@ -22,6 +22,12 @@ export class JobCardsController {
   }
 
   @Post('create')
+  @Public()
+  @ApiOperation({ summary: 'Create a new Job Card (alias endpoint)' })
+  async createJobCardAlias(@Body() body: any, @Req() req: any) {
+    return this.createJobCard(body, req);
+  }
+
   @Post()
   @Public()
   @ApiOperation({ summary: 'Create a new Job Card with full 13 PDF metadata fields & pre-launch split options' })
@@ -66,6 +72,12 @@ export class JobCardsController {
   }
 
   @Put(':id')
+  @Public()
+  @ApiOperation({ summary: 'Update an existing Job Card (PUT)' })
+  async updateJobCardPut(@Param('id') id: string, @Body() body: any) {
+    return this.updateJobCard(id, body);
+  }
+
   @Patch(':id')
   @Public()
   @ApiOperation({ summary: 'Update an existing Job Card' })
@@ -113,8 +125,26 @@ export class JobCardsController {
   }
 
   @Post('move-stage')
+  @Public()
+  @ApiOperation({ summary: 'Execute Full Job Movement to next process stage (Root route)' })
+  async moveStageRoot(@Body() body: any, @Req() req: any) {
+    return this.moveFull('', body, req);
+  }
+
   @Post('move-full')
+  @Public()
+  @ApiOperation({ summary: 'Execute Full Job Movement to next process stage (Alias root route)' })
+  async moveFullRoot(@Body() body: any, @Req() req: any) {
+    return this.moveFull('', body, req);
+  }
+
   @Post(':id/move-stage')
+  @Public()
+  @ApiOperation({ summary: 'Execute Full Job Movement to next process stage by ID' })
+  async moveStageParam(@Param('id') pathId: string, @Body() body: any, @Req() req: any) {
+    return this.moveFull(pathId, body, req);
+  }
+
   @Post(':id/move-full')
   @Public()
   @ApiOperation({ summary: 'Execute Full Job Movement to next process stage' })
