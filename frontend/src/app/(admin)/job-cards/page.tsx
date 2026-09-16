@@ -3026,29 +3026,26 @@ export default function JobCardsPage() {
                               <span>🚀 LAUNCH JOB</span>
                             </button>
                           ) : (
-                            <div className="inline-flex items-center gap-1">
-                              <button
-                                onClick={() => {
-                                  setSelectedMovementJob(jc);
-                                  setPartialMoveQty(Math.max(1, Math.floor((jc.totalPcbQty || 160) / 2)));
-                                  setMovementTab('FULL');
-                                }}
-                                title="Open Stage Movement Options (Rejections, Remarks & Partial Splits)"
-                                className="h-7 px-3 bg-gradient-to-r from-amber-500 via-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black rounded-lg border border-amber-600/90 text-[11px] inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 whitespace-nowrap"
-                              >
-                                <RefreshCw className="w-3 h-3 stroke-[3]" />
-                                <span>Move Stage ➔</span>
-                              </button>
-                            </div>
+                            <button
+                              onClick={() => {
+                                setSelectedMovementJob(jc);
+                                setPartialMoveQty(Math.max(1, Math.floor((jc.totalPcbQty || 160) / 2)));
+                                setMovementTab('FULL');
+                              }}
+                              title="Open Stage Movement Options (Rejections, Remarks & Partial Splits)"
+                              className="h-7 px-3 bg-gradient-to-r from-amber-500 via-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black rounded-lg border border-amber-600/90 text-[11px] inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 whitespace-nowrap"
+                            >
+                              <RefreshCw className="w-3 h-3 stroke-[3]" />
+                              <span>Move Stage ➔</span>
+                            </button>
                           )}
 
                           <button
                             onClick={() => fetchJobCardHistory(jc)}
                             title="View Full Stage Movement & Traceability History"
-                            className="h-7 px-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg inline-flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-95 shadow-2xs font-bold text-[11px]"
+                            className="h-7 w-7 bg-purple-50 hover:bg-purple-100 text-purple-600 border border-purple-200 rounded-lg inline-flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
                           >
-                            <History className="w-3.5 h-3.5 text-purple-600" />
-                            <span className="hidden sm:inline">History</span>
+                            <History className="w-3.5 h-3.5" />
                           </button>
 
                           <button
