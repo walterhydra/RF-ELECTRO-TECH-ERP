@@ -1397,8 +1397,6 @@ export class JobCardsService {
         },
       });
 
-      const targetStageObj = targetNextStageId ? await this.prisma.processStage.findUnique({ where: { id: targetNextStageId } }) : null;
-
       if (targetNextStageId && !isLastStage) {
         await tx.subJobCard.updateMany({
           where: { jobCardId },
@@ -1417,11 +1415,10 @@ export class JobCardsService {
           where: { id: jobCardId },
           data: {
             status: JobCardStatus.IN_PROGRESS,
-            currentStageId: targetNextStageId,
-            currentStageName: targetStageObj?.name || undefined,
             totalPcbQty: movedPcb,
             custPnlQty: movedPcb,
             prodPnlQty: Math.ceil(movedPcb / 4),
+            updatedAt: new Date(),
           },
         });
       } else {
@@ -1443,8 +1440,8 @@ export class JobCardsService {
           where: { id: jobCardId },
           data: {
             status: JobCardStatus.COMPLETED,
-            currentStageName: '19. PACKING',
             completedAt: new Date(),
+            updatedAt: new Date(),
           },
         });
       }
