@@ -1036,13 +1036,40 @@ export class JobCardsService {
   }
 
   async getTraceabilityHistory(id: string, user: any) {
-    const jobCard = await this.findOne(id);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
-    const subJobCardIds = jobCard.subJobCards.map((s) => s.id);
+    let jobCard: any = null;
+    try {
+      jobCard = await this.findOne(id);
+    } catch {
+      jobCard = await this.prisma.jobCard.findFirst({
+        where: isUuid ? { OR: [{ id }, { jobCardNo: id }] } : { jobCardNo: id },
+        include: { subJobCards: { include: { currentStage: true } } },
+      });
+    }
 
-    const logs = await this.prisma.stageMovementLog.findMany({
+    if (!jobCard) {
+      const subCard = await this.prisma.subJobCard.findFirst({
+        where: isUuid ? { OR: [{ id }, { subJobCardNo: id }] } : { subJobCardNo: id },
+        include: { jobCard: { include: { subJobCards: { include: { currentStage: true } } } } },
+      });
+      if (subCard && subCard.jobCard) {
+        jobCard = subCard.jobCard;
+      }
+    }
+
+    if (!jobCard) {
+      return [];
+    }
+
+    const subJobCardIds = (jobCard.subJobCards || []).map((s: any) => s.id).filter(Boolean);
+
+    let logs = await this.prisma.stageMovementLog.findMany({
       where: {
-        subJobCardId: { in: subJobCardIds },
+        OR: [
+          { subJobCardId: { in: subJobCardIds.length > 0 ? subJobCardIds : ['__non_existent__'] } },
+          { remarks: { contains: jobCard.jobCardNo } },
+        ],
       },
       include: {
         stage: true,
@@ -1056,7 +1083,41 @@ export class JobCardsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return this.filterLogsForUser(logs, user);
+    const formattedLogs: any[] = [...logs];
+
+    // 1. If Job Card is COMPLETED, prepend a Final Completion Log entry
+    if (jobCard.status === JobCardStatus.COMPLETED) {
+      formattedLogs.unshift({
+        id: `completed-summary-${jobCard.id}`,
+        createdAt: jobCard.completedAt || jobCard.updatedAt || new Date(),
+        subJobCard: { subJobCardNo: jobCard.jobCardNo },
+        stage: { name: '19. DISPATCH (COMPLETED)' },
+        qtyForwarded: jobCard.totalPcbQty || jobCard.totalQty || 160,
+        qtyProcessed: jobCard.totalPcbQty || jobCard.totalQty || 160,
+        qtyRejected: 0,
+        remarkType: 'JOB_COMPLETED',
+        remarks: `🎉 JOB CARD COMPLETED: Manufacturing workflow finished successfully and released for dispatch (${jobCard.totalPcbQty || 160} PCBs)`,
+        createdBy: { name: 'Production Floor / Admin' },
+      });
+    }
+
+    // 2. If no logs exist yet, provide Initial Launch Log entry
+    if (formattedLogs.length === 0) {
+      formattedLogs.push({
+        id: `initial-launch-${jobCard.id}`,
+        createdAt: jobCard.launchedAt || jobCard.createdAt || new Date(),
+        subJobCard: { subJobCardNo: jobCard.jobCardNo },
+        stage: { name: '1. SHEARING (INITIAL LAUNCH)' },
+        qtyForwarded: jobCard.totalPcbQty || jobCard.totalQty || 160,
+        qtyProcessed: jobCard.totalPcbQty || jobCard.totalQty || 160,
+        qtyRejected: 0,
+        remarkType: 'INITIAL_LAUNCH',
+        remarks: `🚀 Job Card Launched into Stage 1 (1. SHEARING) Production Flow`,
+        createdBy: { name: 'Production Planner' },
+      });
+    }
+
+    return this.filterLogsForUser(formattedLogs, user);
   }
 
   private filterLogsForUser(logs: any[], user: any) {

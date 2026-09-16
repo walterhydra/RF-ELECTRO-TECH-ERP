@@ -3027,6 +3027,11 @@ export default function JobCardsPage() {
                               <Play className="w-3 h-3 fill-current" />
                               <span>🚀 LAUNCH JOB</span>
                             </button>
+                          ) : isCompleted ? (
+                            <span className="h-7 px-3 bg-emerald-100 border border-emerald-300 text-emerald-900 font-extrabold rounded-lg text-[11px] inline-flex items-center justify-center gap-1.5 whitespace-nowrap shadow-2xs font-mono">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span>COMPLETED</span>
+                            </span>
                           ) : (
                             <button
                               onClick={() => {
