@@ -2330,7 +2330,7 @@ export default function JobCardsPage() {
             className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md hover:shadow-lg transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-amber-600"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
-            <span>+ ADD NEW JOB CARD</span>
+            <span>ADD NEW JOB CARD</span>
           </button>
         </div>
       </div>
@@ -2723,9 +2723,168 @@ export default function JobCardsPage() {
 
       </div>
 
-      {/* 4. FOURTH ROW: PRODUCTION JOBS (WIP) DATA TABLE (Matching Screenshot 1 & PDF Specs) */}
+      {/* 4. FOURTH ROW: PRODUCTION JOBS (WIP) DATA TABLE & MOBILE CARDS LIST */}
       <div className="border border-slate-300/80 rounded-2xl overflow-hidden shadow-xs bg-white">
-        <div className="w-full overflow-x-auto">
+        
+        {/* MOBILE CARD LIST VIEW (< md) */}
+        <div className="block md:hidden space-y-3 p-3 bg-slate-50/80">
+          <div className="flex items-center justify-between pb-1 px-1">
+            <span className="text-xs font-black uppercase text-slate-700 tracking-wider font-mono">
+              Job Cards List ({filteredCards.length})
+            </span>
+            <button
+              onClick={handleExportExcel}
+              className="text-[11px] font-bold text-emerald-700 hover:underline flex items-center gap-1"
+            >
+              <Download className="w-3.5 h-3.5" /> Export Excel
+            </button>
+          </div>
+
+          {filteredCards.length === 0 ? (
+            <div className="p-8 text-center bg-white rounded-xl border border-slate-200 text-slate-500 text-xs font-medium space-y-2">
+              <p>No job cards match your current filters.</p>
+              <button
+                type="button"
+                onClick={() => handleOpenCreateModal()}
+                className="px-3 py-1.5 bg-amber-500 text-slate-950 font-black rounded-lg text-xs"
+              >
+                + Create Job Card
+              </button>
+            </div>
+          ) : (
+            filteredCards.map((jc) => {
+              const isUnlaunched = jc.status === 'UNLAUNCHED' || jc.status === 'CREATED' || (jc.status as string) === 'PENDING_LAUNCH';
+              const isCompleted = jc.status === 'COMPLETED';
+              const stageIndex = jc.currentStageIndex !== undefined && jc.currentStageIndex >= 0 ? jc.currentStageIndex : normalizeStageIndex(jc.currentStageName);
+              const progressPct = isUnlaunched ? 0 : isCompleted ? 100 : Math.round(((stageIndex + 1) / PF01_STAGES.length) * 100);
+
+              return (
+                <div key={jc.id} className="bg-white rounded-2xl p-3.5 border border-slate-200/90 shadow-2xs space-y-3">
+                  {/* Row 1: Job Card No & Status Badges */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-mono font-black text-xs text-slate-950 bg-amber-100 px-2 py-0.5 rounded border border-amber-300 truncate">
+                        {jc.jobCardNo}
+                      </span>
+                      {isUnlaunched && (
+                        <span className="px-1.5 py-0.2 bg-emerald-600 text-white font-black text-[9px] rounded uppercase animate-pulse shrink-0">
+                          NEW
+                        </span>
+                      )}
+                      {jc.subJobCards && jc.subJobCards.length > 1 && (
+                        <span className="text-[10px] text-slate-500 font-mono shrink-0">({jc.subJobCards.length} Lots)</span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${
+                        jc.priority === 'MOST URGENT' || jc.priority === 'HIGH'
+                          ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                          : 'bg-slate-100 text-slate-700 border border-slate-200'
+                      }`}>
+                        {jc.priority === 'MOST URGENT' ? 'Top' : jc.priority || 'Normal'}
+                      </span>
+                      {getStatusBadge(jc.status)}
+                    </div>
+                  </div>
+
+                  {/* Row 2: Product & Customer */}
+                  <div className="space-y-0.5">
+                    <h4 className="font-extrabold text-xs text-slate-900 line-clamp-1" title={jc.customerPartNo}>
+                      {jc.customerPartNo}
+                    </h4>
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
+                      <span>Code: <strong className="text-blue-700">{jc.rfePartCode}</strong></span>
+                      <span>Cust: <strong className="text-slate-800">{jc.customerCode}</strong></span>
+                    </div>
+                  </div>
+
+                  {/* Row 3: Stage & Quantity Grid */}
+                  <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 text-xs">
+                    <div>
+                      <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">QTY / AREA</span>
+                      <strong className="font-mono text-slate-900 text-[11px] block">
+                        {jc.totalPcbQty || 160} PCBs <span className="text-emerald-700 text-[10px]">({jc.custPnlAreaSqm ? jc.custPnlAreaSqm.toFixed(1) : '45'} m²)</span>
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">STAGE ({stageIndex + 1}/19)</span>
+                      <strong className="text-blue-700 text-[11px] block truncate">
+                        {isUnlaunched ? 'SHEARING (Pending)' : isCompleted ? 'PACKING (Done)' : jc.currentStageName || PF01_STAGES[0]}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {/* Row 4: Progress Bar */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[9px] font-mono text-slate-500 font-bold">
+                      <span>FLOW PROGRESS</span>
+                      <span>{progressPct}%</span>
+                    </div>
+                    <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          progressPct >= 100 ? 'bg-emerald-600' : progressPct >= 50 ? 'bg-amber-500' : 'bg-rose-500'
+                        }`}
+                        style={{ width: `${Math.max(10, progressPct)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Row 5: Quick Mobile Action Buttons */}
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <button
+                      onClick={() => setShowQrModal(jc)}
+                      title="Print Tag"
+                      className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-bold flex items-center justify-center gap-1 shrink-0"
+                    >
+                      <Printer className="w-3.5 h-3.5 text-amber-700" />
+                      <span>Tag</span>
+                    </button>
+
+                    {isUnlaunched ? (
+                      <button
+                        onClick={() => handleLaunchExistingJobCard(jc.id)}
+                        className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-1 shadow-xs"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Launch Stage 1</span>
+                      </button>
+                    ) : isCompleted ? (
+                      <span className="flex-1 py-1.5 bg-emerald-100 text-emerald-900 font-extrabold rounded-xl text-xs flex items-center justify-center gap-1 border border-emerald-300">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Completed</span>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setSelectedMovementJob(jc);
+                          setPartialMoveQty(Math.max(1, Math.floor((jc.totalPcbQty || 160) / 2)));
+                          setMovementTab('FULL');
+                        }}
+                        className="flex-1 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1 shadow-xs border border-amber-600"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 stroke-[3]" />
+                        <span>Move Stage ➔</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => fetchJobCardHistory(jc)}
+                      title="View History"
+                      className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 shrink-0"
+                    >
+                      <History className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* DESKTOP DATA TABLE (md:block) */}
+        <div className="hidden md:block w-full overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs font-sans">
             <thead>
               {/* Row 1: Column Header Titles */}

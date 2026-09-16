@@ -329,13 +329,13 @@ class MainActivity : AppCompatActivity() {
                         };
                     }
 
-                    // 5. Menu Button (Three Dots ⋮) Injection - Integrated into Navbar
+                    // 5. Menu Button (Three Lines ☰) Injection - Integrated into Navbar
                     var existingBtn = document.getElementById('mobile-hamburger-btn');
                     if (sidebar) {
                         if (!existingBtn) {
                             var btn = document.createElement('button');
                             btn.id = 'mobile-hamburger-btn';
-                            btn.innerHTML = '&#8942;'; // Vertical Ellipsis ⋮
+                            btn.innerHTML = '&#9776;'; // Hamburger Menu ☰
                             btn.style.cssText = 'position:fixed;top:0px;left:0px;height:60px;width:55px;z-index:100001;background:transparent;color:#64748b;border:none;font-size:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;';
                             btn.onclick = function(e) {
                                 e.stopPropagation();
