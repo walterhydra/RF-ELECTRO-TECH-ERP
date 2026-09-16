@@ -2261,7 +2261,7 @@ export default function JobCardsPage() {
             <div className="flex items-center gap-2 pt-1 overflow-x-auto max-w-full no-scrollbar whitespace-nowrap">
               <Link
                 href="/job-cards/launch"
-                className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition-all border border-amber-600 whitespace-nowrap cursor-pointer active:scale-95 shrink-0"
+                className="h-8 px-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-[11px] flex items-center gap-1.5 shadow-xs transition-all border border-amber-600 whitespace-nowrap cursor-pointer active:scale-95 shrink-0"
               >
                 <Plus className="w-3.5 h-3.5 stroke-[3]" />
                 <span>Launch Page ↗</span>
@@ -2269,7 +2269,7 @@ export default function JobCardsPage() {
 
               <Link
                 href="/job-cards/movement"
-                className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition-all border border-blue-500/40 whitespace-nowrap cursor-pointer active:scale-95 shrink-0"
+                className="h-8 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-lg text-[11px] flex items-center gap-1.5 shadow-xs transition-all border border-blue-500/40 whitespace-nowrap cursor-pointer active:scale-95 shrink-0"
               >
                 <RefreshCw className="w-3.5 h-3.5 stroke-[3] text-amber-400" />
                 <span>Job Movement Center ➔</span>
@@ -2279,9 +2279,9 @@ export default function JobCardsPage() {
         </div>
 
         {/* Right Actions: Role Selector, WIP Report Drawer, Add Job Card */}
-        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto shrink-0">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full xl:w-auto shrink-0">
           {/* RBAC Role Switcher Pill */}
-          <div className="flex-1 sm:flex-initial flex items-center gap-1.5 bg-slate-100/80 border border-slate-200 px-2.5 py-1.5 rounded-xl text-xs max-w-full overflow-hidden">
+          <div className="h-9 flex items-center gap-1.5 bg-slate-100/80 border border-slate-200 px-2.5 rounded-xl text-xs max-w-full overflow-hidden">
             <UserCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
             <span className="text-slate-500 font-medium shrink-0 text-[11px]">Role:</span>
             <select
@@ -2289,14 +2289,14 @@ export default function JobCardsPage() {
               onChange={(e: any) => setUserRole(e.target.value)}
               className="bg-transparent font-bold text-slate-900 cursor-pointer outline-none text-[11px] truncate min-w-0 flex-1"
             >
-              <option value="MASTER">Master ID (Full Control)</option>
-              <option value="SUPER_USER">Super User (Overview)</option>
-              <option value="NORMAL">Normal Operator ({assignedStage})</option>
+              <option value="MASTER">Master (Full)</option>
+              <option value="SUPER_USER">Super User</option>
+              <option value="NORMAL">Operator ({assignedStage})</option>
             </select>
           </div>
 
           {/* Stage Operator Login Selector */}
-          <div className="flex-1 sm:flex-initial flex items-center gap-1.5 bg-amber-50 border border-amber-300 px-2.5 py-1.5 rounded-xl text-xs shadow-2xs max-w-full overflow-hidden">
+          <div className="h-9 flex items-center gap-1.5 bg-amber-50 border border-amber-300 px-2.5 rounded-xl text-xs shadow-2xs max-w-full overflow-hidden">
             <span className="text-amber-900 font-bold text-[10px] uppercase tracking-wider font-mono shrink-0">Stage:</span>
             <select
               value={assignedStage}
@@ -2318,19 +2318,19 @@ export default function JobCardsPage() {
           {/* Report Drawer Button */}
           <button
             onClick={() => setShowReportDrawer(true)}
-            className="flex-1 sm:flex-initial px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-[11px] flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer whitespace-nowrap"
+            className="h-9 px-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-[11px] flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer whitespace-nowrap"
           >
-            <BarChart3 className="w-3.5 h-3.5 text-blue-600" />
-            <span>WIP & Daily Report</span>
+            <BarChart3 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            <span className="truncate">WIP & Daily Report</span>
           </button>
 
           {/* Add New Job Card Button */}
           <button
             onClick={() => handleOpenCreateModal()}
-            className="w-full sm:w-auto px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md hover:shadow-lg transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-amber-600"
+            className="h-9 px-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-[11px] flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-amber-600"
           >
-            <Plus className="w-4 h-4 stroke-[3]" />
-            <span>ADD NEW JOB CARD</span>
+            <Plus className="w-3.5 h-3.5 stroke-[3] shrink-0" />
+            <span className="truncate">ADD NEW JOB CARD</span>
           </button>
         </div>
       </div>
@@ -2628,66 +2628,66 @@ export default function JobCardsPage() {
         </div>
 
         {/* Status Count Pills */}
-        <div className="flex items-center gap-2 overflow-x-auto max-w-full no-scrollbar whitespace-nowrap pb-1">
-          <span className="text-xs font-bold text-slate-500 mr-1">Status:</span>
+        <div className="flex items-center gap-1.5 overflow-x-auto max-w-full no-scrollbar whitespace-nowrap pb-0.5">
+          <span className="text-[11px] font-bold text-slate-500 mr-0.5 shrink-0 hidden sm:inline-block">Status:</span>
 
           <button
             onClick={() => setStatusRadio('All')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`h-8 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
               statusRadio === 'All'
-                ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+                ? 'bg-amber-500 text-slate-950 shadow-2xs font-black'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
             <span>All Cards</span>
-            <span className="px-1.5 py-0.2 bg-slate-950/10 rounded font-mono text-[11px]">{totalMasterCards}</span>
+            <span className="px-1.5 py-0.2 bg-slate-950/10 rounded font-mono text-[10px]">{totalMasterCards}</span>
           </button>
 
           <button
             onClick={() => setStatusRadio('Unstarted')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`h-8 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
               statusRadio === 'Unstarted'
-                ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+                ? 'bg-amber-500 text-slate-950 shadow-2xs font-black'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
             <span>UNLAUNCHED</span>
-            <span className="px-1.5 py-0.2 bg-slate-950/10 rounded font-mono text-[11px]">
+            <span className="px-1.5 py-0.2 bg-slate-950/10 rounded font-mono text-[10px]">
               {jobCards.filter((j) => j.status === 'UNLAUNCHED' || j.status === 'CREATED').length}
             </span>
           </button>
 
           <button
             onClick={() => setStatusRadio('Active')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`h-8 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
               statusRadio === 'Active'
-                ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+                ? 'bg-amber-500 text-slate-950 shadow-2xs font-black'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
             <span>IN PROGRESS</span>
-            <span className="px-1.5 py-0.2 bg-slate-950/10 rounded font-mono text-[11px]">{inProgressCount}</span>
+            <span className="px-1.5 py-0.2 bg-slate-950/10 rounded font-mono text-[10px]">{inProgressCount}</span>
           </button>
 
           <button
             onClick={() => setStatusRadio('Done')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`h-8 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
               statusRadio === 'Done'
-                ? 'bg-amber-500 text-slate-950 shadow-xs font-black'
+                ? 'bg-amber-500 text-slate-950 shadow-2xs font-black'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
             <span>COMPLETED</span>
-            <span className="px-1.5 py-0.2 bg-slate-950/10 rounded font-mono text-[11px]">
+            <span className="px-1.5 py-0.2 bg-slate-950/10 rounded font-mono text-[10px]">
               {jobCards.filter((j) => j.status === 'COMPLETED').length}
             </span>
           </button>
 
           <button
             onClick={() => setStatusRadio(statusRadio === 'Overdue' ? 'All' : 'Overdue')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border ${
+            className={`h-8 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 border shrink-0 ${
               statusRadio === 'Overdue'
-                ? 'bg-rose-600 text-white border-rose-700 shadow-xs font-black'
+                ? 'bg-rose-600 text-white border-rose-700 shadow-2xs font-black'
                 : overdueCount > 0
                 ? 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 font-extrabold'
                 : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
@@ -2695,7 +2695,7 @@ export default function JobCardsPage() {
           >
             <AlertCircle className="w-3.5 h-3.5" />
             <span>OVERDUE</span>
-            <span className="px-1.5 py-0.2 bg-slate-950/10 rounded font-mono text-[11px]">
+            <span className="px-1.5 py-0.2 bg-slate-950/10 rounded font-mono text-[10px]">
               {overdueCount} ({overduePcbCount} PCBs)
             </span>
           </button>
@@ -2703,7 +2703,7 @@ export default function JobCardsPage() {
           {/* Toggle Column Filters Button */}
           <button
             onClick={() => setShowColFilters(!showColFilters)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border ${
+            className={`h-8 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 border shrink-0 ${
               showColFilters
                 ? 'bg-blue-50 text-blue-700 border-blue-300 shadow-2xs font-extrabold'
                 : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
@@ -2711,11 +2711,11 @@ export default function JobCardsPage() {
             title="Toggle per-column search filter inputs"
           >
             <Filter className="w-3.5 h-3.5" />
-            <span>{showColFilters ? 'Hide Column Filters' : 'Column Filters'}</span>
+            <span>{showColFilters ? 'Hide Filters' : 'Column Filters'}</span>
           </button>
 
           {userRole === 'NORMAL' && (
-            <span className="px-3 py-1.5 bg-amber-100 border border-amber-300 text-amber-900 rounded-xl font-mono text-xs font-black inline-flex items-center gap-1.5 shadow-2xs animate-pulse">
+            <span className="h-8 px-2.5 bg-amber-100 border border-amber-300 text-amber-900 rounded-lg font-mono text-[11px] font-black inline-flex items-center gap-1.5 shadow-2xs animate-pulse shrink-0">
               🔒 Operator Stage Locked: {assignedStage}
             </span>
           )}
