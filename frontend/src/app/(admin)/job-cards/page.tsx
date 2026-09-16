@@ -1117,6 +1117,8 @@ export default function JobCardsPage() {
     } else {
       showToast(`No Job Card found matching Scanned Data "${rawInput}"`, 'error');
     }
+  };
+
   // Traceability & Movement History State
   const [historyModalJob, setHistoryModalJob] = useState<JobCard | null>(null);
   const [historyLogs, setHistoryLogs] = useState<any[]>([]);
@@ -4515,6 +4517,9 @@ export default function JobCardsPage() {
               </div>
             </div>
           </div>
+        </Portal>
+      )}
+
       {/* MODAL 7: JOB CARD TRACEABILITY & STAGE MOVEMENT HISTORY TIMELINE */}
       {historyModalJob && (
         <Portal>
