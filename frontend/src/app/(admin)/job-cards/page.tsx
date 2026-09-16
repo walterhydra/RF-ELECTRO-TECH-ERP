@@ -2279,15 +2279,15 @@ export default function JobCardsPage() {
         </div>
 
         {/* Right Actions: Role Selector, WIP Report Drawer, Add Job Card */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto shrink-0">
+        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto shrink-0">
           {/* RBAC Role Switcher Pill */}
-          <div className="flex items-center gap-1.5 bg-slate-100/80 border border-slate-200 px-3 py-2 rounded-xl text-xs max-w-full overflow-hidden">
-            <UserCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span className="text-slate-500 font-medium shrink-0">Role:</span>
+          <div className="flex-1 sm:flex-initial flex items-center gap-1.5 bg-slate-100/80 border border-slate-200 px-2.5 py-1.5 rounded-xl text-xs max-w-full overflow-hidden">
+            <UserCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            <span className="text-slate-500 font-medium shrink-0 text-[11px]">Role:</span>
             <select
               value={userRole}
               onChange={(e: any) => setUserRole(e.target.value)}
-              className="bg-transparent font-bold text-slate-900 cursor-pointer outline-none text-xs truncate min-w-0 flex-1"
+              className="bg-transparent font-bold text-slate-900 cursor-pointer outline-none text-[11px] truncate min-w-0 flex-1"
             >
               <option value="MASTER">Master ID (Full Control)</option>
               <option value="SUPER_USER">Super User (Overview)</option>
@@ -2296,15 +2296,15 @@ export default function JobCardsPage() {
           </div>
 
           {/* Stage Operator Login Selector */}
-          <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-300 px-3 py-2 rounded-xl text-xs shadow-2xs max-w-full overflow-hidden">
-            <span className="text-amber-900 font-bold text-[11px] uppercase tracking-wider font-mono shrink-0">Stage:</span>
+          <div className="flex-1 sm:flex-initial flex items-center gap-1.5 bg-amber-50 border border-amber-300 px-2.5 py-1.5 rounded-xl text-xs shadow-2xs max-w-full overflow-hidden">
+            <span className="text-amber-900 font-bold text-[10px] uppercase tracking-wider font-mono shrink-0">Stage:</span>
             <select
               value={assignedStage}
               onChange={(e) => {
                 setAssignedStage(e.target.value);
                 setUserRole('NORMAL');
               }}
-              className="bg-transparent font-extrabold text-amber-950 cursor-pointer outline-none text-xs font-mono truncate min-w-0 flex-1"
+              className="bg-transparent font-extrabold text-amber-950 cursor-pointer outline-none text-[11px] font-mono truncate min-w-0 flex-1"
               title="Select Stage Account to view only jobs pending at this stage"
             >
               {PF01_STAGES.map((stg) => (
@@ -2318,16 +2318,16 @@ export default function JobCardsPage() {
           {/* Report Drawer Button */}
           <button
             onClick={() => setShowReportDrawer(true)}
-            className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer whitespace-nowrap"
+            className="flex-1 sm:flex-initial px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-[11px] flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer whitespace-nowrap"
           >
-            <BarChart3 className="w-4 h-4 text-blue-600" />
+            <BarChart3 className="w-3.5 h-3.5 text-blue-600" />
             <span>WIP & Daily Report</span>
           </button>
 
           {/* Add New Job Card Button */}
           <button
             onClick={() => handleOpenCreateModal()}
-            className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md hover:shadow-lg transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-amber-600"
+            className="w-full sm:w-auto px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md hover:shadow-lg transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-amber-600"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
             <span>ADD NEW JOB CARD</span>
@@ -2723,168 +2723,9 @@ export default function JobCardsPage() {
 
       </div>
 
-      {/* 4. FOURTH ROW: PRODUCTION JOBS (WIP) DATA TABLE & MOBILE CARDS LIST */}
+      {/* 4. FOURTH ROW: PRODUCTION JOBS (WIP) DATA TABLE */}
       <div className="border border-slate-300/80 rounded-2xl overflow-hidden shadow-xs bg-white">
-        
-        {/* MOBILE CARD LIST VIEW (< md) */}
-        <div className="block md:hidden space-y-3 p-3 bg-slate-50/80">
-          <div className="flex items-center justify-between pb-1 px-1">
-            <span className="text-xs font-black uppercase text-slate-700 tracking-wider font-mono">
-              Job Cards List ({filteredCards.length})
-            </span>
-            <button
-              onClick={handleExportExcel}
-              className="text-[11px] font-bold text-emerald-700 hover:underline flex items-center gap-1"
-            >
-              <Download className="w-3.5 h-3.5" /> Export Excel
-            </button>
-          </div>
-
-          {filteredCards.length === 0 ? (
-            <div className="p-8 text-center bg-white rounded-xl border border-slate-200 text-slate-500 text-xs font-medium space-y-2">
-              <p>No job cards match your current filters.</p>
-              <button
-                type="button"
-                onClick={() => handleOpenCreateModal()}
-                className="px-3 py-1.5 bg-amber-500 text-slate-950 font-black rounded-lg text-xs"
-              >
-                + Create Job Card
-              </button>
-            </div>
-          ) : (
-            filteredCards.map((jc) => {
-              const isUnlaunched = jc.status === 'UNLAUNCHED' || jc.status === 'CREATED' || (jc.status as string) === 'PENDING_LAUNCH';
-              const isCompleted = jc.status === 'COMPLETED';
-              const stageIndex = jc.currentStageIndex !== undefined && jc.currentStageIndex >= 0 ? jc.currentStageIndex : normalizeStageIndex(jc.currentStageName);
-              const progressPct = isUnlaunched ? 0 : isCompleted ? 100 : Math.round(((stageIndex + 1) / PF01_STAGES.length) * 100);
-
-              return (
-                <div key={jc.id} className="bg-white rounded-2xl p-3.5 border border-slate-200/90 shadow-2xs space-y-3">
-                  {/* Row 1: Job Card No & Status Badges */}
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="font-mono font-black text-xs text-slate-950 bg-amber-100 px-2 py-0.5 rounded border border-amber-300 truncate">
-                        {jc.jobCardNo}
-                      </span>
-                      {isUnlaunched && (
-                        <span className="px-1.5 py-0.2 bg-emerald-600 text-white font-black text-[9px] rounded uppercase animate-pulse shrink-0">
-                          NEW
-                        </span>
-                      )}
-                      {jc.subJobCards && jc.subJobCards.length > 1 && (
-                        <span className="text-[10px] text-slate-500 font-mono shrink-0">({jc.subJobCards.length} Lots)</span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1 shrink-0">
-                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${
-                        jc.priority === 'MOST URGENT' || jc.priority === 'HIGH'
-                          ? 'bg-rose-100 text-rose-800 border border-rose-300'
-                          : 'bg-slate-100 text-slate-700 border border-slate-200'
-                      }`}>
-                        {jc.priority === 'MOST URGENT' ? 'Top' : jc.priority || 'Normal'}
-                      </span>
-                      {getStatusBadge(jc.status)}
-                    </div>
-                  </div>
-
-                  {/* Row 2: Product & Customer */}
-                  <div className="space-y-0.5">
-                    <h4 className="font-extrabold text-xs text-slate-900 line-clamp-1" title={jc.customerPartNo}>
-                      {jc.customerPartNo}
-                    </h4>
-                    <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
-                      <span>Code: <strong className="text-blue-700">{jc.rfePartCode}</strong></span>
-                      <span>Cust: <strong className="text-slate-800">{jc.customerCode}</strong></span>
-                    </div>
-                  </div>
-
-                  {/* Row 3: Stage & Quantity Grid */}
-                  <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 text-xs">
-                    <div>
-                      <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">QTY / AREA</span>
-                      <strong className="font-mono text-slate-900 text-[11px] block">
-                        {jc.totalPcbQty || 160} PCBs <span className="text-emerald-700 text-[10px]">({jc.custPnlAreaSqm ? jc.custPnlAreaSqm.toFixed(1) : '45'} m²)</span>
-                      </strong>
-                    </div>
-                    <div>
-                      <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">STAGE ({stageIndex + 1}/19)</span>
-                      <strong className="text-blue-700 text-[11px] block truncate">
-                        {isUnlaunched ? 'SHEARING (Pending)' : isCompleted ? 'PACKING (Done)' : jc.currentStageName || PF01_STAGES[0]}
-                      </strong>
-                    </div>
-                  </div>
-
-                  {/* Row 4: Progress Bar */}
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-[9px] font-mono text-slate-500 font-bold">
-                      <span>FLOW PROGRESS</span>
-                      <span>{progressPct}%</span>
-                    </div>
-                    <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-300 ${
-                          progressPct >= 100 ? 'bg-emerald-600' : progressPct >= 50 ? 'bg-amber-500' : 'bg-rose-500'
-                        }`}
-                        style={{ width: `${Math.max(10, progressPct)}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Row 5: Quick Mobile Action Buttons */}
-                  <div className="flex items-center gap-1.5 pt-1">
-                    <button
-                      onClick={() => setShowQrModal(jc)}
-                      title="Print Tag"
-                      className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl text-xs font-bold flex items-center justify-center gap-1 shrink-0"
-                    >
-                      <Printer className="w-3.5 h-3.5 text-amber-700" />
-                      <span>Tag</span>
-                    </button>
-
-                    {isUnlaunched ? (
-                      <button
-                        onClick={() => handleLaunchExistingJobCard(jc.id)}
-                        className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-1 shadow-xs"
-                      >
-                        <Play className="w-3.5 h-3.5 fill-current" />
-                        <span>Launch Stage 1</span>
-                      </button>
-                    ) : isCompleted ? (
-                      <span className="flex-1 py-1.5 bg-emerald-100 text-emerald-900 font-extrabold rounded-xl text-xs flex items-center justify-center gap-1 border border-emerald-300">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Completed</span>
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setSelectedMovementJob(jc);
-                          setPartialMoveQty(Math.max(1, Math.floor((jc.totalPcbQty || 160) / 2)));
-                          setMovementTab('FULL');
-                        }}
-                        className="flex-1 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1 shadow-xs border border-amber-600"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5 stroke-[3]" />
-                        <span>Move Stage ➔</span>
-                      </button>
-                    )}
-
-                    <button
-                      onClick={() => fetchJobCardHistory(jc)}
-                      title="View History"
-                      className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 shrink-0"
-                    >
-                      <History className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* DESKTOP DATA TABLE (md:block) */}
-        <div className="hidden md:block w-full overflow-x-auto">
+        <div className="w-full overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs font-sans">
             <thead>
               {/* Row 1: Column Header Titles */}
@@ -3198,21 +3039,21 @@ export default function JobCardsPage() {
                       </td>
 
                       {/* Stage Movement Action Button & Super Admin Delete Option */}
-                      <td className="py-2 px-3 text-center whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1.5">
+                      <td className="py-2 px-2.5 text-center whitespace-nowrap">
+                        <div className="inline-flex items-center gap-1">
                           {isUnlaunched ? (
                             <button
                               onClick={() => handleLaunchExistingJobCard(jc.id)}
                               title="Launch Job Card into Stage 1 Production"
-                              className="h-7 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-lg text-[11px] inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 whitespace-nowrap"
+                              className="h-6.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-md text-[10px] inline-flex items-center justify-center gap-1 cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap"
                             >
-                              <Play className="w-3 h-3 fill-current" />
-                              <span>🚀 LAUNCH JOB</span>
+                              <Play className="w-2.5 h-2.5 fill-current" />
+                              <span>LAUNCH</span>
                             </button>
                           ) : isCompleted ? (
-                            <span className="h-7 px-3 bg-emerald-100 border border-emerald-300 text-emerald-900 font-extrabold rounded-lg text-[11px] inline-flex items-center justify-center gap-1.5 whitespace-nowrap shadow-2xs font-mono">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                              <span>COMPLETED</span>
+                            <span className="h-6.5 px-2 bg-emerald-100 border border-emerald-300 text-emerald-900 font-extrabold rounded-md text-[10px] inline-flex items-center justify-center gap-1 whitespace-nowrap shadow-2xs font-mono">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                              <span>DONE</span>
                             </span>
                           ) : (
                             <button
@@ -3222,9 +3063,9 @@ export default function JobCardsPage() {
                                 setMovementTab('FULL');
                               }}
                               title="Open Stage Movement Options (Rejections, Remarks & Partial Splits)"
-                              className="h-7 px-3 bg-gradient-to-r from-amber-500 via-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black rounded-lg border border-amber-600/90 text-[11px] inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 whitespace-nowrap"
+                              className="h-6.5 px-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black rounded-md border border-amber-600/90 text-[10px] inline-flex items-center justify-center gap-1 cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap"
                             >
-                              <RefreshCw className="w-3 h-3 stroke-[3]" />
+                              <RefreshCw className="w-2.5 h-2.5 stroke-[3]" />
                               <span>Move Stage ➔</span>
                             </button>
                           )}
@@ -3232,27 +3073,27 @@ export default function JobCardsPage() {
                           <button
                             onClick={() => fetchJobCardHistory(jc)}
                             title="View Full Stage Movement & Traceability History"
-                            className="h-7 px-2.5 bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-lg text-[11px] inline-flex items-center justify-center gap-1 cursor-pointer shadow-xs active:scale-95 whitespace-nowrap"
+                            className="h-6.5 px-2 bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-md text-[10px] inline-flex items-center justify-center gap-1 cursor-pointer shadow-2xs active:scale-95 whitespace-nowrap"
                           >
-                            <History className="w-3.5 h-3.5 text-white" />
+                            <History className="w-3 h-3 text-white" />
                             <span>History</span>
                           </button>
 
                           <button
                             onClick={() => handleOpenEditModal(jc)}
                             title="Edit Job Card Parameters"
-                            className="h-7 w-7 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg inline-flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
+                            className="h-6.5 w-6.5 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-md inline-flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
                           >
-                            <Pencil className="w-3.5 h-3.5" />
+                            <Pencil className="w-3 h-3" />
                           </button>
 
                           {isSuperAdmin && (
                             <button
                               onClick={() => setDeleteConfirmCard(jc)}
                               title="Delete Job Card (Super Admin Only)"
-                              className="h-7 w-7 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg inline-flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
+                              className="h-6.5 w-6.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-md inline-flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-3 h-3" />
                             </button>
                           )}
                         </div>
