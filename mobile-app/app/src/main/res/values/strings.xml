@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RF Electro ERP</string>
+    <string name="erp_url">https://rf-electrotech.vercel.app/</string>
+    <string name="error_offline_title">No Internet Connection</string>
+    <string name="error_offline_desc">Please check your network settings and tap retry to load the ERP portal.</string>
+    <string name="btn_retry">Retry Connection</string>
+</resources>

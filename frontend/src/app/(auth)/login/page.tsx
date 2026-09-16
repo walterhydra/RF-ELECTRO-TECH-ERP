@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Mail, Lock, ArrowRight, Shield, Layers, CheckCircle2, Truck, Info, Check } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Shield, Layers, CheckCircle2, Truck, Info, Check, Globe } from 'lucide-react';
 
 const DEMO_CREDENTIALS = [
   {
@@ -116,19 +116,18 @@ export default function LoginPage() {
 
       {/* Right side - Login Form */}
       <div className="flex-1 flex items-center justify-center p-6 sm:p-12 relative bg-white">
-        <div className="absolute top-0 right-0 p-8">
-          <a href="/" className="text-sm font-semibold text-slate-500 hover:text-slate-900 flex items-center gap-2 transition-colors">
-            Back to Website <ArrowRight className="w-4 h-4" />
+        <div className="absolute top-4 right-4 sm:top-6 sm:right-8 z-10">
+          <a href="/" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-all border border-slate-200/80 shadow-xs">
+            <span>Website</span>
+            <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
           </a>
         </div>
 
         <div className="w-full max-w-md space-y-8 animate-in fade-in zoom-in-95 duration-500">
           
           {/* Mobile Header (Hidden on Desktop) */}
-          <div className="md:hidden flex flex-col items-center gap-3 mb-10">
-            <div className="p-4 bg-slate-900 rounded-2xl">
-              <Image src="/Assets/logo-1.png" alt="RF Electrotech" width={160} height={45} className="object-contain" />
-            </div>
+          <div className="md:hidden flex flex-col items-center gap-3 mb-6">
+            <Image src="/logo-removebg-preview.png" alt="RF Electrotech" width={200} height={55} className="object-contain filter drop-shadow-xs" />
           </div>
 
           <div className="space-y-3 text-center md:text-left">

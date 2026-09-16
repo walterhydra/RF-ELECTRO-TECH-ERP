@@ -27,12 +27,23 @@ export const Sidebar: React.FC = () => {
   const [userEmail, setUserEmail] = React.useState('admin@rfelectro.com');
   const [showRestrictedModal, setShowRestrictedModal] = React.useState(false);
 
+  const [isMobileOpen, setIsMobileOpen] = React.useState(false);
+
   React.useEffect(() => {
     const role = localStorage.getItem('userRole');
     const email = localStorage.getItem('userEmail');
     if (role) setUserRole(role);
     if (email) setUserEmail(email);
+
+    const handleToggle = () => setIsMobileOpen(prev => !prev);
+    window.addEventListener('toggle-mobile-sidebar', handleToggle);
+    return () => window.removeEventListener('toggle-mobile-sidebar', handleToggle);
   }, []);
+
+  // Close mobile sidebar on route change
+  React.useEffect(() => {
+    setIsMobileOpen(false);
+  }, [pathname]);
   
   const allNavItems = [
     { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -55,8 +66,24 @@ export const Sidebar: React.FC = () => {
 
   return (
     <>
-      <aside className="w-64 bg-[#0f172a] flex flex-col text-slate-400 h-full shrink-0" data-purpose="main-sidebar">
-        <div className="p-6 flex items-center space-x-3">
+      {/* Mobile Backdrop Overlay */}
+      {isMobileOpen && (
+        <div 
+          className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-xs md:hidden"
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
+
+      {/* Sidebar Component: Desktop (static md:flex) + Mobile Drawer (fixed z-50 md:hidden) */}
+      <aside 
+        className={`bg-[#0f172a] flex-col text-slate-400 h-full shrink-0 ${
+          isMobileOpen 
+            ? 'fixed inset-y-0 left-0 z-50 w-72 flex shadow-2xl animate-in slide-in-from-left duration-200' 
+            : 'hidden md:flex w-64'
+        }`}
+        data-purpose="main-sidebar"
+      >
+        <div className="p-6 flex items-center justify-between">
           <Image src="/Assets/logo-1.png" alt="RF Electrotech Logo" width={180} height={45} className="object-contain opacity-90" />
         </div>
 

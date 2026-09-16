@@ -2258,16 +2258,10 @@ export default function JobCardsPage() {
             </p>
 
             {/* Sub Quick Navigation Shortcuts */}
-            <div className="flex items-center gap-2 pt-1 flex-wrap">
+            <div className="flex items-center gap-2 pt-1 overflow-x-auto max-w-full no-scrollbar whitespace-nowrap">
               <Link
                 href="/job-cards/launch"
-                onClick={(e) => {
-                  // Allow opening inline launch modal directly if on desktop
-                  if (!e.ctrlKey && !e.metaKey) {
-                    // navigate to launch page
-                  }
-                }}
-                className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition-all border border-amber-600 whitespace-nowrap cursor-pointer active:scale-95"
+                className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition-all border border-amber-600 whitespace-nowrap cursor-pointer active:scale-95 shrink-0"
               >
                 <Plus className="w-3.5 h-3.5 stroke-[3]" />
                 <span>Launch Page ↗</span>
@@ -2275,7 +2269,7 @@ export default function JobCardsPage() {
 
               <Link
                 href="/job-cards/movement"
-                className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition-all border border-blue-500/40 whitespace-nowrap cursor-pointer active:scale-95"
+                className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-xs transition-all border border-blue-500/40 whitespace-nowrap cursor-pointer active:scale-95 shrink-0"
               >
                 <RefreshCw className="w-3.5 h-3.5 stroke-[3] text-amber-400" />
                 <span>Job Movement Center ➔</span>
@@ -2285,32 +2279,32 @@ export default function JobCardsPage() {
         </div>
 
         {/* Right Actions: Role Selector, WIP Report Drawer, Add Job Card */}
-        <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto shrink-0">
           {/* RBAC Role Switcher Pill */}
-          <div className="flex items-center gap-1.5 bg-slate-100/80 border border-slate-200 px-3 py-2 rounded-xl text-xs">
+          <div className="flex items-center gap-1.5 bg-slate-100/80 border border-slate-200 px-3 py-2 rounded-xl text-xs max-w-full overflow-hidden">
             <UserCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span className="text-slate-500 font-medium">Role:</span>
+            <span className="text-slate-500 font-medium shrink-0">Role:</span>
             <select
               value={userRole}
               onChange={(e: any) => setUserRole(e.target.value)}
-              className="bg-transparent font-bold text-slate-900 cursor-pointer outline-none text-xs"
+              className="bg-transparent font-bold text-slate-900 cursor-pointer outline-none text-xs truncate min-w-0 flex-1"
             >
-              <option value="MASTER">Master ID (Full Control - All Stages)</option>
-              <option value="SUPER_USER">Super User (All Stages Overview)</option>
+              <option value="MASTER">Master ID (Full Control)</option>
+              <option value="SUPER_USER">Super User (Overview)</option>
               <option value="NORMAL">Normal Operator ({assignedStage})</option>
             </select>
           </div>
 
           {/* Stage Operator Login Selector */}
-          <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-300 px-3 py-2 rounded-xl text-xs shadow-2xs">
-            <span className="text-amber-900 font-bold text-[11px] uppercase tracking-wider font-mono">Stage Account:</span>
+          <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-300 px-3 py-2 rounded-xl text-xs shadow-2xs max-w-full overflow-hidden">
+            <span className="text-amber-900 font-bold text-[11px] uppercase tracking-wider font-mono shrink-0">Stage:</span>
             <select
               value={assignedStage}
               onChange={(e) => {
                 setAssignedStage(e.target.value);
                 setUserRole('NORMAL');
               }}
-              className="bg-transparent font-extrabold text-amber-950 cursor-pointer outline-none text-xs font-mono"
+              className="bg-transparent font-extrabold text-amber-950 cursor-pointer outline-none text-xs font-mono truncate min-w-0 flex-1"
               title="Select Stage Account to view only jobs pending at this stage"
             >
               {PF01_STAGES.map((stg) => (
@@ -2324,7 +2318,7 @@ export default function JobCardsPage() {
           {/* Report Drawer Button */}
           <button
             onClick={() => setShowReportDrawer(true)}
-            className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer whitespace-nowrap"
+            className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer whitespace-nowrap"
           >
             <BarChart3 className="w-4 h-4 text-blue-600" />
             <span>WIP & Daily Report</span>
@@ -2333,7 +2327,7 @@ export default function JobCardsPage() {
           {/* Add New Job Card Button */}
           <button
             onClick={() => handleOpenCreateModal()}
-            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-md hover:shadow-lg transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-amber-600"
+            className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md hover:shadow-lg transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-amber-600"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
             <span>+ ADD NEW JOB CARD</span>
@@ -2634,7 +2628,7 @@ export default function JobCardsPage() {
         </div>
 
         {/* Status Count Pills */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 overflow-x-auto max-w-full no-scrollbar whitespace-nowrap pb-1">
           <span className="text-xs font-bold text-slate-500 mr-1">Status:</span>
 
           <button

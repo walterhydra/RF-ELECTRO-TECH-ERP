@@ -23,3 +23,11 @@ postgres_data/
 .DS_Store
 Thumbs.db
 
+# Android build outputs & IDE settings
+.idea/
+.gradle/
+**/build/
+*.apk
+*.aab
+
+

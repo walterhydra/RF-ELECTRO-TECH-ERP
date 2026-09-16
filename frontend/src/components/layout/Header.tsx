@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Bell, Wifi, Search, ChevronDown, LogOut, User, Loader2 } from 'lucide-react';
+import { Bell, Wifi, Search, ChevronDown, LogOut, User, Loader2, Menu } from 'lucide-react';
 
 const MOCK_SEARCH_DB = [
   { type: 'Job Card', id: 'JC-4021', title: 'Mainboard Assembly', status: 'WIP', url: '/job-cards/4021' },
@@ -118,11 +118,18 @@ export const Header: React.FC = () => {
   };
 
   return (
-    <header className="h-16 flex items-center justify-between px-6 lg:px-8 bg-white border-b border-slate-200/80 sticky top-0 z-30 shrink-0 shadow-xs">
-      <div className="flex items-center space-x-4 lg:space-x-6 flex-1 max-w-4xl">
-        <h1 className="text-xl font-extrabold text-slate-800 tracking-tight hidden sm:block min-w-[120px]">{title}</h1>
+    <header className="h-16 flex items-center justify-between px-4 sm:px-6 lg:px-8 bg-white border-b border-slate-200/80 sticky top-0 z-30 shrink-0 shadow-xs">
+      <div className="flex items-center space-x-2 sm:space-x-4 lg:space-x-6 flex-1 max-w-4xl min-w-0">
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('toggle-mobile-sidebar'))}
+          className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg md:hidden shrink-0 cursor-pointer"
+          aria-label="Toggle Menu"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+        <h1 className="text-base sm:text-xl font-extrabold text-slate-800 tracking-tight truncate min-w-0">{title}</h1>
 
-        <div className="relative flex-1 max-w-2xl">
+        <div className="relative flex-1 max-w-2xl hidden md:block">
           {isLoading ? (
             <Loader2 className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-500 animate-spin" />
           ) : (
