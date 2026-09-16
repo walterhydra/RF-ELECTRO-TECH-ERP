@@ -3043,9 +3043,10 @@ export default function JobCardsPage() {
                           <button
                             onClick={() => fetchJobCardHistory(jc)}
                             title="View Full Stage Movement & Traceability History"
-                            className="h-7 w-7 bg-purple-50 hover:bg-purple-100 text-purple-600 border border-purple-200 rounded-lg inline-flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
+                            className="h-7 px-2.5 bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-lg text-[11px] inline-flex items-center justify-center gap-1 cursor-pointer shadow-xs active:scale-95 whitespace-nowrap"
                           >
-                            <History className="w-3.5 h-3.5" />
+                            <History className="w-3.5 h-3.5 text-white" />
+                            <span>History</span>
                           </button>
 
                           <button
