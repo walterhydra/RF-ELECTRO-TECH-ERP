@@ -17,8 +17,8 @@ export class JobCardsController {
   @Get()
   @Public()
   @ApiOperation({ summary: 'List all Job Cards with optional status and search filters' })
-  async findAll(@Query() query: any) {
-    return this.jobCardsService.findAll(query);
+  async findAll(@Query() query: any, @Req() req: any) {
+    return this.jobCardsService.findAll(query, req.user);
   }
 
   @Post('create')

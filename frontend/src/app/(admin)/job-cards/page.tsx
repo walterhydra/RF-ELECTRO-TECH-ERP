@@ -2051,7 +2051,10 @@ export default function JobCardsPage() {
     const matchesProduct = !colFilters.product || jc.customerPartNo?.toLowerCase().includes(colFilters.product.toLowerCase());
     const matchesCode = !colFilters.productCode || jc.rfePartCode?.toLowerCase().includes(colFilters.productCode.toLowerCase());
     const matchesCust = !colFilters.customer || jc.customerCode?.toLowerCase().includes(colFilters.customer.toLowerCase());
-    const matchesStage = !colFilters.stage || (jc.currentStageName || '').toLowerCase().includes(colFilters.stage.toLowerCase());
+
+    const isOperatorUser = userRole === 'NORMAL';
+    const effectiveStageFilter = isOperatorUser ? assignedStage : colFilters.stage;
+    const matchesStage = !effectiveStageFilter || (jc.currentStageName || '').toLowerCase().includes(effectiveStageFilter.toLowerCase());
     const matchesPriority = !colFilters.priority || jc.priority.toLowerCase().includes(colFilters.priority.toLowerCase());
     
     const matchesGlobal =
@@ -2696,6 +2699,12 @@ export default function JobCardsPage() {
             <Filter className="w-3.5 h-3.5" />
             <span>{showColFilters ? 'Hide Column Filters' : 'Column Filters'}</span>
           </button>
+
+          {userRole === 'NORMAL' && (
+            <span className="px-3 py-1.5 bg-amber-100 border border-amber-300 text-amber-900 rounded-xl font-mono text-xs font-black inline-flex items-center gap-1.5 shadow-2xs animate-pulse">
+              🔒 Operator Stage Locked: {assignedStage}
+            </span>
+          )}
         </div>
 
       </div>

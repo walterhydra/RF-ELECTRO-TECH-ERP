@@ -87,12 +87,15 @@ export class JobCardsService {
     });
   }
 
-  async findAll(query?: {
-    status?: JobCardStatus;
-    customerPoId?: string;
-    productId?: string;
-    search?: string;
-  }) {
+  async findAll(
+    query?: {
+      status?: JobCardStatus;
+      customerPoId?: string;
+      productId?: string;
+      search?: string;
+    },
+    user?: any,
+  ) {
     const where: any = {};
     if (query?.status) where.status = query.status;
     if (query?.customerPoId) where.customerPoId = query.customerPoId;
@@ -234,6 +237,55 @@ export class JobCardsService {
         return await this.seedCloudDb();
       } catch (err) {
         console.error('Auto seed job cards failed:', err);
+      }
+    }
+
+    // Filter job cards for Process Operators to ONLY show jobs assigned to their active stage
+    if (user) {
+      const roleName = String(user.roleName || user.role || user.role?.name || user.roleCode || '').toUpperCase();
+      const isOperator =
+        roleName === 'NORMAL_USER' ||
+        roleName === 'PROCESS_OPERATOR' ||
+        roleName === 'NORMAL' ||
+        roleName === 'OPERATOR';
+
+      if (isOperator) {
+        const assignedStageId = user.assignedStageId;
+        const assignedStageName = String(user.assignedStageName || user.assignedStage?.name || '').toLowerCase().trim();
+
+        if (assignedStageId || assignedStageName) {
+          return jobCards.filter((jc: any) => {
+            const currentStageName = String(jc.currentStageName || '').toLowerCase().trim();
+
+            let matches = false;
+            if (assignedStageName && currentStageName) {
+              if (
+                currentStageName === assignedStageName ||
+                currentStageName.includes(assignedStageName) ||
+                assignedStageName.includes(currentStageName)
+              ) {
+                matches = true;
+              }
+            }
+
+            if (!matches && jc.subJobCards && Array.isArray(jc.subJobCards)) {
+              matches = jc.subJobCards.some((s: any) => {
+                if (assignedStageId && s.currentStageId === assignedStageId) return true;
+                const sName = String(s.currentStage?.name || '').toLowerCase().trim();
+                if (
+                  assignedStageName &&
+                  sName &&
+                  (sName === assignedStageName || sName.includes(assignedStageName) || assignedStageName.includes(sName))
+                ) {
+                  return true;
+                }
+                return false;
+              });
+            }
+
+            return matches;
+          });
+        }
       }
     }
 
