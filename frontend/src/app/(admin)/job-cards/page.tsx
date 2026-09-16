@@ -1025,19 +1025,14 @@ export default function JobCardsPage() {
                   ? (local.rejectionLogs || [])
                   : (backendCard.rejectionLogs && backendCard.rejectionLogs.length > 0 ? backendCard.rejectionLogs : (local.rejectionLogs || []));
 
-                // Take max stage index between local optimistic state & backend DB to prevent stage reversal
-                const localIdx = local.currentStageIndex !== undefined ? local.currentStageIndex : 0;
-                const backendIdx = backendCard.currentStageIndex !== undefined ? backendCard.currentStageIndex : 0;
-                const activeStageIdx = Math.max(localIdx, backendIdx);
-
-                const finalStatus = (backendCard.status === 'COMPLETED' || local.status === 'COMPLETED')
-                  ? 'COMPLETED'
-                  : (activeStageIdx > 0 ? 'IN_PROGRESS' : (backendCard.status || local.status));
+                // Always trust backend server data as single source of truth for stage index & status (multi-device sync)
+                const activeStageIdx = backendCard.currentStageIndex !== undefined ? backendCard.currentStageIndex : 0;
+                const finalStatus = backendCard.status || local.status;
 
                 return {
                   ...backendCard,
                   currentStageIndex: activeStageIdx,
-                  currentStageName: PF01_STAGES[activeStageIdx] || backendCard.currentStageName || local.currentStageName,
+                  currentStageName: backendCard.currentStageName || PF01_STAGES[activeStageIdx] || local.currentStageName,
                   status: finalStatus as any,
                   rejectedPcbQty: maxRejectedQty,
                   rejectedAreaSqm: Math.max(local.rejectedAreaSqm || 0, backendCard.rejectedAreaSqm || 0),
