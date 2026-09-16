@@ -533,7 +533,12 @@ export class JobCardsService {
     ];
 
     for (const item of defaultStageList) {
-      const existing = stages.find((s) => s.defaultOrder === item.order || s.name.toLowerCase() === item.name.toLowerCase());
+      const existing = stages.find(
+        (s) =>
+          s.defaultOrder === item.order ||
+          s.name.toLowerCase().includes(item.name.toLowerCase()) ||
+          item.name.toLowerCase().includes(s.name.toLowerCase())
+      );
       if (!existing) {
         await this.prisma.processStage.create({
           data: {
@@ -543,10 +548,10 @@ export class JobCardsService {
             description: `${item.name} Stage`,
           },
         }).catch(() => {});
-      } else if (existing.name !== item.name) {
+      } else if (existing.name !== item.name || existing.defaultOrder !== item.order) {
         await this.prisma.processStage.update({
           where: { id: existing.id },
-          data: { name: item.name },
+          data: { name: item.name, defaultOrder: item.order, code: item.code },
         }).catch(() => {});
       }
     }
@@ -1255,6 +1260,81 @@ export class JobCardsService {
 
 
 
+  private async getNextProcessStage(currentStage: any): Promise<{ targetNextStageId: string | null; isLastStage: boolean }> {
+    const currentStageName = String(currentStage?.name || '').trim();
+    const currentOrder = currentStage?.defaultOrder || 0;
+
+    const pfList = [
+      '1. SHEARING',
+      '2. DRILLING',
+      '3. DRL-QC',
+      '4. PTH',
+      '5. PTH-QC',
+      '6. PHOTO PRINTING',
+      '7. PHOTO-QC',
+      '8. PATTERN PLATING',
+      '9. ETCHING',
+      '10. ETCHING-QC',
+      '11. SOLDER MASK',
+      '12. SOLDER MASK-QC',
+      '13. LEGEND PRINTING',
+      '14. HAL / ENIG',
+      '15. PUNCHING / ROUTING',
+      '16. E-TESTING',
+      '17. FINAL QC',
+      '18. PACKING',
+      '19. DISPATCH',
+    ];
+
+    let currIdx = pfList.findIndex(
+      (s) =>
+        s.toLowerCase() === currentStageName.toLowerCase() ||
+        (currentStageName && s.toLowerCase().includes(currentStageName.toLowerCase())) ||
+        (currentStageName && currentStageName.toLowerCase().includes(s.toLowerCase().replace(/^\d+\.\s*/, '')))
+    );
+
+    if (currIdx === -1 && currentOrder > 0) {
+      currIdx = currentOrder - 1;
+    }
+
+    if (currIdx >= pfList.length - 1 || currentOrder >= 19) {
+      return { targetNextStageId: null, isLastStage: true };
+    }
+
+    const nextStageName = currIdx >= 0 && currIdx < pfList.length - 1 ? pfList[currIdx + 1] : pfList[1];
+    const nextOrder = currIdx >= 0 ? currIdx + 2 : 2;
+
+    let nextStage = await this.prisma.processStage.findFirst({
+      where: {
+        OR: [
+          { name: nextStageName },
+          { defaultOrder: nextOrder },
+        ],
+      },
+    });
+
+    if (!nextStage) {
+      nextStage = await this.prisma.processStage.create({
+        data: {
+          name: nextStageName,
+          code: nextStageName.split(' ')[1] || 'STG',
+          defaultOrder: nextOrder,
+          description: `${nextStageName} Stage`,
+        },
+      }).catch(() => null);
+    } else if (nextStage.name !== nextStageName || nextStage.defaultOrder !== nextOrder) {
+      nextStage = await this.prisma.processStage.update({
+        where: { id: nextStage.id },
+        data: { name: nextStageName, defaultOrder: nextOrder },
+      }).catch(() => nextStage);
+    }
+
+    return {
+      targetNextStageId: nextStage?.id || null,
+      isLastStage: false,
+    };
+  }
+
   async moveFull(id: string, body: { id?: string; cardId?: string; jobId?: string; jobCardNo?: string; rejectPcbQty?: number; rejectQty?: number; remark?: string; remarkType?: string; status?: string } | any, user: any) {
     const rawTarget = (id || body?.id || body?.cardId || body?.jobId || body?.jobCardNo || '').trim();
     const searchNo = (body?.jobCardNo || rawTarget || '').trim();
@@ -1385,44 +1465,12 @@ export class JobCardsService {
     // ENFORCE STAGE-WISE USER ACCESS RIGHT AT BACKEND / API LEVEL
     this.validateUserStagePermission(user, subCard.currentStage);
 
-    // Reliable Stage Calculation using processStage defaultOrder
     let currentStage = subCard.currentStage;
     if (!currentStage && subCard.currentStageId) {
       currentStage = await this.prisma.processStage.findUnique({ where: { id: subCard.currentStageId } });
     }
 
-    let targetNextStageId: string | null = null;
-    let isLastStage = false;
-
-    if (currentStage && currentStage.defaultOrder) {
-      const currentOrder = currentStage.defaultOrder;
-      const nextProcessStage = await this.prisma.processStage.findFirst({
-        where: { defaultOrder: { gt: currentOrder }, isActive: true },
-        orderBy: { defaultOrder: 'asc' },
-      });
-      if (nextProcessStage) {
-        targetNextStageId = nextProcessStage.id;
-      } else if (currentOrder >= 19) {
-        isLastStage = true;
-      }
-    }
-
-    // Fallback if processStage lookup wasn't available directly
-    if (!targetNextStageId && !isLastStage) {
-      const allStages = await this.prisma.processStage.findMany({ orderBy: { defaultOrder: 'asc' } });
-      if (allStages.length > 0) {
-        if (!subCard?.currentStageId) {
-          targetNextStageId = allStages[1]?.id || allStages[0].id;
-        } else {
-          const currIdx = allStages.findIndex((s) => s.id === subCard?.currentStageId);
-          if (currIdx !== -1 && currIdx + 1 < allStages.length) {
-            targetNextStageId = allStages[currIdx + 1].id;
-          } else {
-            isLastStage = true;
-          }
-        }
-      }
-    }
+    const { targetNextStageId, isLastStage } = await this.getNextProcessStage(currentStage);
 
     const userId = user?.id || user?.sub || user?.userId || subCard.createdById;
     const rejectPcb = Math.max(0, Number(body.rejectPcbQty || body.rejectQty) || 0);
@@ -1608,30 +1656,9 @@ export class JobCardsService {
       currentStage = await this.prisma.processStage.findUnique({ where: { id: subCard.currentStageId } });
     }
 
-    let targetNextStageId: string | null = null;
-    if (currentStage && currentStage.defaultOrder) {
-      const nextStage = await this.prisma.processStage.findFirst({
-        where: { defaultOrder: { gt: currentStage.defaultOrder }, isActive: true },
-        orderBy: { defaultOrder: 'asc' },
-      });
-      if (nextStage) targetNextStageId = nextStage.id;
-    }
+    const { targetNextStageId, isLastStage } = await this.getNextProcessStage(currentStage);
 
-    if (!targetNextStageId) {
-      const allStages = await this.prisma.processStage.findMany({ orderBy: { defaultOrder: 'asc' } });
-      if (allStages.length > 0) {
-        if (!subCard?.currentStageId) {
-          targetNextStageId = allStages[1]?.id || allStages[0].id;
-        } else {
-          const currIdx = allStages.findIndex((s) => s.id === subCard?.currentStageId);
-          if (currIdx !== -1 && currIdx + 1 < allStages.length) {
-            targetNextStageId = allStages[currIdx + 1].id;
-          }
-        }
-      }
-    }
-
-    if (!targetNextStageId) {
+    if (!targetNextStageId || isLastStage) {
       throw new BadRequestException('Job is already at the final stage and cannot move further');
     }
 
