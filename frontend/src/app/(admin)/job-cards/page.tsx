@@ -2295,9 +2295,29 @@ export default function JobCardsPage() {
               onChange={(e: any) => setUserRole(e.target.value)}
               className="bg-transparent font-bold text-slate-900 cursor-pointer outline-none text-xs"
             >
-              <option value="MASTER">Master ID (Full Control)</option>
-              <option value="SUPER_USER">Super User (All Stages)</option>
-              <option value="NORMAL">Normal User ({assignedStage})</option>
+              <option value="MASTER">Master ID (Full Control - All Stages)</option>
+              <option value="SUPER_USER">Super User (All Stages Overview)</option>
+              <option value="NORMAL">Normal Operator ({assignedStage})</option>
+            </select>
+          </div>
+
+          {/* Stage Operator Login Selector */}
+          <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-300 px-3 py-2 rounded-xl text-xs shadow-2xs">
+            <span className="text-amber-900 font-bold text-[11px] uppercase tracking-wider font-mono">Stage Account:</span>
+            <select
+              value={assignedStage}
+              onChange={(e) => {
+                setAssignedStage(e.target.value);
+                setUserRole('NORMAL');
+              }}
+              className="bg-transparent font-extrabold text-amber-950 cursor-pointer outline-none text-xs font-mono"
+              title="Select Stage Account to view only jobs pending at this stage"
+            >
+              {PF01_STAGES.map((stg) => (
+                <option key={stg} value={stg} className="bg-white text-slate-900 font-sans font-bold">
+                  {stg}
+                </option>
+              ))}
             </select>
           </div>
 
