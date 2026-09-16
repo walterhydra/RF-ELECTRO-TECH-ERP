@@ -74,11 +74,26 @@ async function main() {
 
   const stageMap: Record<string, string> = {};
   for (const stg of stages) {
-    const created = await prisma.processStage.upsert({
-      where: { name: stg.name },
-      update: {},
-      create: stg,
+    const existing = await prisma.processStage.findFirst({
+      where: {
+        OR: [
+          { name: stg.name },
+          { code: stg.code },
+        ],
+      },
     });
+
+    let created;
+    if (existing) {
+      created = await prisma.processStage.update({
+        where: { id: existing.id },
+        data: stg,
+      });
+    } else {
+      created = await prisma.processStage.create({
+        data: stg,
+      });
+    }
     stageMap[stg.name] = created.id;
   }
   console.log(`✅ Seeded ${stages.length} Process Stages`);
@@ -122,7 +137,7 @@ async function main() {
       passwordHash: hashPassword('Floor@123'),
       roleId: roleMap[RoleCode.PROCESS_OPERATOR],
       departmentId: deptMap['Production & Engineering'],
-      assignedStageId: stageMap['CNC Drilling'],
+      assignedStageId: stageMap['DRILLING'],
       isActive: true,
     },
   });
