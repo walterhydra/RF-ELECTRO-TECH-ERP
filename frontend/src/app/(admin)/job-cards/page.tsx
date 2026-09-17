@@ -1062,37 +1062,10 @@ export default function JobCardsPage() {
 
           const deleted = getDeletedJobCardIds();
           const filtered = mapped.filter((j: JobCard) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
-          setJobCards((prevLocalCards) => {
-            const localMap = new Map(prevLocalCards.map((c) => [c.id, c]));
-            const merged = filtered.map((backendCard) => {
-              const local = localMap.get(backendCard.id) || localMap.get(backendCard.jobCardNo);
-              if (local) {
-                const localRejectedQty = local.rejectedPcbQty || 0;
-                const backendRejectedQty = backendCard.rejectedPcbQty || 0;
-                const maxRejectedQty = Math.max(localRejectedQty, backendRejectedQty);
-                const logs = (maxRejectedQty === localRejectedQty && localRejectedQty > 0)
-                  ? (local.rejectionLogs || [])
-                  : (backendCard.rejectionLogs && backendCard.rejectionLogs.length > 0 ? backendCard.rejectionLogs : (local.rejectionLogs || []));
-
-                // Always trust backend server data as single source of truth for stage index & status (multi-device sync)
-                const activeStageIdx = backendCard.currentStageIndex !== undefined ? backendCard.currentStageIndex : 0;
-                const finalStatus = backendCard.status || local.status;
-
-                return {
-                  ...backendCard,
-                  currentStageIndex: activeStageIdx,
-                  currentStageName: backendCard.currentStageName || PF01_STAGES[activeStageIdx] || local.currentStageName,
-                  status: finalStatus as any,
-                  rejectedPcbQty: maxRejectedQty,
-                  rejectedAreaSqm: Math.max(local.rejectedAreaSqm || 0, backendCard.rejectedAreaSqm || 0),
-                  rejectionLogs: logs,
-                };
-              }
-              return backendCard;
-            });
-            saveJobCardsToStorage(merged);
-            return merged;
-          });
+          
+          // Server Database is 100% Single Source of Truth for Real-Time Multi-Device Sync
+          setJobCards(filtered);
+          saveJobCardsToStorage(filtered);
         }
       } else {
         setServerConnectionState({
@@ -1131,8 +1104,19 @@ export default function JobCardsPage() {
     fetchBackendJobCards();
     const interval = setInterval(() => {
       fetchBackendJobCards();
-    }, 5000);
-    return () => clearInterval(interval);
+    }, 2000);
+
+    const onFocus = () => fetchBackendJobCards();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', onFocus);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', onFocus);
+      }
+    };
   }, [fetchBackendJobCards]);
 
   // Movement Form & Rejection PCB State
