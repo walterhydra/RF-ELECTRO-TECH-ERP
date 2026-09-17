@@ -1312,9 +1312,6 @@ export class JobCardsService {
 
 
   private async getNextProcessStage(currentStage: any): Promise<{ targetNextStageId: string | null; isLastStage: boolean }> {
-    const currentStageName = String(currentStage?.name || '').trim();
-    const currentOrder = currentStage?.defaultOrder || 0;
-
     const pfList = [
       '1. SHEARING',
       '2. DRILLING',
@@ -1337,33 +1334,38 @@ export class JobCardsService {
       '19. DISPATCH',
     ];
 
-    let currIdx = pfList.findIndex(
-      (s) =>
-        s.toLowerCase() === currentStageName.toLowerCase() ||
-        (currentStageName && s.toLowerCase().includes(currentStageName.toLowerCase())) ||
-        (currentStageName && currentStageName.toLowerCase().includes(s.toLowerCase().replace(/^\d+\.\s*/, '')))
-    );
+    const currentStageName = String(currentStage?.name || '').trim();
+    const currentOrder = currentStage?.defaultOrder || 0;
 
-    if (currIdx === -1 && currentOrder > 0) {
+    let currIdx = -1;
+    if (currentOrder >= 1 && currentOrder <= pfList.length) {
       currIdx = currentOrder - 1;
+    } else {
+      currIdx = pfList.findIndex((s) => s.toLowerCase() === currentStageName.toLowerCase());
+      if (currIdx === -1) {
+        currIdx = pfList.findIndex((s) => {
+          const sClean = s.replace(/^\d+\.\s*/, '').toLowerCase();
+          const cClean = currentStageName.replace(/^\d+\.\s*/, '').toLowerCase();
+          return sClean === cClean;
+        });
+      }
     }
 
-    if (currIdx >= pfList.length - 1 || currentOrder >= 19) {
+    if (currIdx === -1 || currIdx >= pfList.length - 1) {
       return { targetNextStageId: null, isLastStage: true };
     }
 
-    const nextStageName = currIdx >= 0 && currIdx < pfList.length - 1 ? pfList[currIdx + 1] : pfList[1];
-    const nextOrder = currIdx >= 0 ? currIdx + 2 : 2;
+    const nextOrder = currIdx + 2;
+    const nextStageName = pfList[currIdx + 1];
 
     let nextStage = await this.prisma.processStage.findFirst({
-      where: { name: nextStageName },
+      where: {
+        OR: [
+          { defaultOrder: nextOrder },
+          { name: nextStageName },
+        ],
+      },
     });
-
-    if (!nextStage) {
-      nextStage = await this.prisma.processStage.findFirst({
-        where: { defaultOrder: nextOrder },
-      });
-    }
 
     if (!nextStage) {
       nextStage = await this.prisma.processStage.create({
@@ -1450,54 +1452,12 @@ export class JobCardsService {
       }
 
       if (!jc) {
-        const validJobCardNo = searchNo && searchNo !== 'move-stage' && searchNo !== 'move-full' ? searchNo : undefined;
-        const newJc = await this.createJobCard({
-          jobCardNo: validJobCardNo,
-          totalPcbQty: 160,
-          prodPnlQty: 40,
-          custPnlQty: 160,
-          prodPnlAreaSqm: 50,
-          custPnlAreaSqm: 45,
-          autoLaunch: true,
-        }, user?.id || '');
-
-        await this.launchJobCard(newJc.id).catch(() => {});
-
-        jc = await this.prisma.jobCard.findUnique({
-          where: { id: newJc.id },
-          include: {
-            subJobCards: { include: { currentStage: true } },
-            processFlowMaster: {
-              include: { steps: { include: { stage: true }, orderBy: { stepOrder: 'asc' } } },
-            },
-          },
-        });
+        throw new NotFoundException(`Job Card "${searchNo || rawTarget}" not found in database`);
       }
 
       if (jc) {
         jobCardId = jc.id;
         subCard = (jc.subJobCards && jc.subJobCards.length > 0) ? (jc.subJobCards[0] as any) : null;
-        if (!subCard) {
-          const fullQty = jc.totalPcbQty || jc.custPnlQty || 160;
-          const firstStage = await this.prisma.processStage.findFirst({ orderBy: { defaultOrder: 'asc' } });
-          subCard = await this.prisma.subJobCard.create({
-            data: {
-              subJobCardNo: `${jc.jobCardNo}-1`,
-              jobCardId: jc.id,
-              qty: fullQty,
-              totalPcbQty: fullQty,
-              custPnlQty: fullQty,
-              prodPnlQty: Math.ceil(fullQty / 4),
-              custPnlAreaSqm: jc.custPnlAreaSqm || 45,
-              prodPnlAreaSqm: jc.prodPnlAreaSqm || 50,
-              status: SubJobCardStatus.IN_STAGE,
-              currentStageId: firstStage?.id || null,
-              qrCodeValue: `RFE-SJC-${jc.jobCardNo}-1-${Date.now().toString().slice(-4)}`,
-              createdById: user?.id || jc.createdById,
-            },
-            include: { currentStage: true },
-          }) as any;
-        }
       }
     }
 
@@ -1554,8 +1514,8 @@ export class JobCardsService {
       });
 
       if (targetNextStageId && !isLastStage) {
-        await tx.subJobCard.updateMany({
-          where: { jobCardId },
+        await tx.subJobCard.update({
+          where: { id: subCard.id },
           data: {
             currentStageId: targetNextStageId,
             status: SubJobCardStatus.IN_STAGE,
@@ -1571,16 +1531,13 @@ export class JobCardsService {
           where: { id: jobCardId },
           data: {
             status: JobCardStatus.IN_PROGRESS,
-            totalPcbQty: movedPcb,
-            custPnlQty: movedPcb,
-            prodPnlQty: Math.ceil(movedPcb / 4),
             updatedAt: new Date(),
           },
         });
       } else {
         // Last stage reached (PACKING / DISPATCH) -> Mark completed
-        await tx.subJobCard.updateMany({
-          where: { jobCardId },
+        await tx.subJobCard.update({
+          where: { id: subCard.id },
           data: {
             currentStageId: null,
             status: SubJobCardStatus.COMPLETED,
@@ -1602,7 +1559,10 @@ export class JobCardsService {
         });
       }
 
-      return this.findOne(jobCardId);
+      return {
+        success: true,
+        message: `Job Card moved successfully to next process stage.`,
+      };
     });
   }
 
@@ -1637,27 +1597,7 @@ export class JobCardsService {
         },
       });
       if (!jc) {
-        const newJc = await this.createJobCard({
-          jobCardNo: id.includes('-') || id.startsWith('JC') ? id : undefined,
-          totalPcbQty: 160,
-          prodPnlQty: 40,
-          custPnlQty: 160,
-          prodPnlAreaSqm: 50,
-          custPnlAreaSqm: 45,
-          autoLaunch: true,
-        }, user?.id || '');
-        jc = await this.prisma.jobCard.findUnique({
-          where: { id: newJc.id },
-          include: {
-            subJobCards: { include: { currentStage: true } },
-            processFlowMaster: {
-              include: { steps: { include: { stage: true }, orderBy: { stepOrder: 'asc' } } },
-            },
-          },
-        });
-      }
-      if (!jc) {
-        throw new NotFoundException(`Job Card or Sub-Job Card with ID "${id}" not found`);
+        throw new NotFoundException(`Job Card or Sub-Job Card with ID "${id}" not found in database`);
       }
       jobCardId = jc.id;
       subCard = (jc.subJobCards && jc.subJobCards.length > 0) ? (jc.subJobCards[0] as any) : null;

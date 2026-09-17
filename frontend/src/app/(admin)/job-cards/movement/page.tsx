@@ -160,16 +160,14 @@ export default function JobMovementUpdatePage() {
   useEffect(() => {
     setIsMounted(true);
     const stored = getStoredJobCards();
-    if (stored !== null) {
+    if (stored !== null && Array.isArray(stored)) {
       setJobs(stored);
-    } else {
-      setJobs(SAMPLE_ACTIVE_JOBS);
     }
   }, []);
 
-  // Save jobs to localStorage whenever state updates (only after mount)
+  // Save jobs to localStorage whenever state updates (only when server returns data)
   useEffect(() => {
-    if (isMounted) {
+    if (isMounted && jobs.length > 0) {
       saveJobCardsToStorage(jobs);
     }
   }, [jobs, isMounted]);
