@@ -585,26 +585,31 @@ export class JobCardsService {
     ];
 
     for (const item of defaultStageList) {
-      const existing = stages.find(
-        (s) =>
-          s.defaultOrder === item.order ||
-          s.name.toLowerCase().includes(item.name.toLowerCase()) ||
-          item.name.toLowerCase().includes(s.name.toLowerCase())
-      );
-      if (!existing) {
-        await this.prisma.processStage.create({
-          data: {
-            code: item.code,
-            name: item.name,
-            defaultOrder: item.order,
-            description: `${item.name} Stage`,
-          },
-        }).catch(() => {});
-      } else if (existing.name !== item.name || existing.defaultOrder !== item.order) {
-        await this.prisma.processStage.update({
-          where: { id: existing.id },
-          data: { name: item.name, defaultOrder: item.order, code: item.code },
-        }).catch(() => {});
+      const existingByName = stages.find((s) => s.name.toLowerCase() === item.name.toLowerCase());
+      if (existingByName) {
+        if (existingByName.defaultOrder !== item.order || existingByName.code !== item.code || existingByName.name !== item.name) {
+          await this.prisma.processStage.update({
+            where: { id: existingByName.id },
+            data: { name: item.name, defaultOrder: item.order, code: item.code },
+          }).catch(() => {});
+        }
+      } else {
+        const existingByOrder = stages.find((s) => s.defaultOrder === item.order);
+        if (existingByOrder) {
+          await this.prisma.processStage.update({
+            where: { id: existingByOrder.id },
+            data: { name: item.name, defaultOrder: item.order, code: item.code },
+          }).catch(() => {});
+        } else {
+          await this.prisma.processStage.create({
+            data: {
+              code: item.code,
+              name: item.name,
+              defaultOrder: item.order,
+              description: `${item.name} Stage`,
+            },
+          }).catch(() => {});
+        }
       }
     }
     stages = await this.prisma.processStage.findMany({ orderBy: { defaultOrder: 'asc' } });
@@ -1357,13 +1362,14 @@ export class JobCardsService {
     const nextOrder = currIdx >= 0 ? currIdx + 2 : 2;
 
     let nextStage = await this.prisma.processStage.findFirst({
-      where: {
-        OR: [
-          { name: nextStageName },
-          { defaultOrder: nextOrder },
-        ],
-      },
+      where: { name: nextStageName },
     });
+
+    if (!nextStage) {
+      nextStage = await this.prisma.processStage.findFirst({
+        where: { defaultOrder: nextOrder },
+      });
+    }
 
     if (!nextStage) {
       nextStage = await this.prisma.processStage.create({
@@ -1374,11 +1380,6 @@ export class JobCardsService {
           description: `${nextStageName} Stage`,
         },
       }).catch(() => null);
-    } else if (nextStage.name !== nextStageName || nextStage.defaultOrder !== nextOrder) {
-      nextStage = await this.prisma.processStage.update({
-        where: { id: nextStage.id },
-        data: { name: nextStageName, defaultOrder: nextOrder },
-      }).catch(() => nextStage);
     }
 
     return {

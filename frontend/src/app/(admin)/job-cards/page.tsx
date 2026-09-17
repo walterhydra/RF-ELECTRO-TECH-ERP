@@ -138,6 +138,7 @@ interface JobCard {
   id: string;
   parentJobCardId?: string;
   jobCardNo: string;
+  subJobCardNo?: string;
   photoUrl?: string;
   customerPartNo: string;
   rfePartCode: string;
@@ -946,38 +947,86 @@ export default function JobCardsPage() {
         setServerConnectionState({ status: 'CONNECTED', url: targetUrl });
         const data = await res.json();
         if (Array.isArray(data)) {
-          const mapped: JobCard[] = data.map((j: any) => {
+          const mapped: JobCard[] = data.flatMap((j: any) => {
             const masterPcbQty = j.totalPcbQty || (j.custPnlQty && j.custPnlQty > 50 ? j.custPnlQty : (j.prodPnlQty ? j.prodPnlQty * 4 : 160));
             const masterAreaSqm = j.custPnlAreaSqm || j.prodPnlAreaSqm || 45;
 
             const subLots = Array.isArray(j.subJobCards) ? j.subJobCards : [];
-            const sortedSubs = [...subLots].sort((a: any, b: any) => {
-              const orderA = a.currentStage?.defaultOrder || (normalizeStageIndex(a.currentStage?.name) + 1);
-              const orderB = b.currentStage?.defaultOrder || (normalizeStageIndex(b.currentStage?.name) + 1);
-              return orderB - orderA;
-            });
+            if (subLots.length > 0) {
+              return subLots.map((sub: any) => {
+                const subPcbQty = sub.totalPcbQty || sub.qty || masterPcbQty;
+                const subAreaSqm = sub.custPnlAreaSqm || sub.prodPnlAreaSqm || masterAreaSqm;
+                const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
+                let stageIdx = sub.currentStage?.defaultOrder
+                  ? Math.min(Math.max(0, sub.currentStage.defaultOrder - 1), 18)
+                  : normalizeStageIndex(rawStage);
+                if (stageIdx < 0) stageIdx = 0;
 
-            const activeSub = sortedSubs[0] || null;
+                const jStatusRaw = String(j.status || '').toUpperCase();
+                const subStatusRaw = String(sub.status || '').toUpperCase();
+                const isParentLaunched = jStatusRaw === 'IN_PROGRESS' || jStatusRaw === 'COMPLETED';
 
-            const rawStage = activeSub?.currentStage?.name || j.currentStageName || j.currentStage?.name || (j.status === 'COMPLETED' ? '20. PACKING' : PF01_STAGES[0]);
+                let subStatusNorm = 'IN_PROGRESS';
+                if (jStatusRaw === 'COMPLETED' || subStatusRaw === 'COMPLETED' || stageIdx >= 18) {
+                  subStatusNorm = 'COMPLETED';
+                } else if (isParentLaunched || subStatusRaw === 'IN_STAGE' || subStatusRaw === 'IN_PROGRESS') {
+                  subStatusNorm = 'IN_PROGRESS';
+                } else {
+                  subStatusNorm = 'UNLAUNCHED';
+                }
 
-            let stageIdx = activeSub?.currentStage?.defaultOrder
-              ? Math.min(Math.max(0, activeSub.currentStage.defaultOrder - 1), 18)
-              : normalizeStageIndex(rawStage);
+                return {
+                  id: sub.id,
+                  parentJobCardId: j.id,
+                  jobCardNo: j.jobCardNo,
+                  subJobCardNo: sub.subJobCardNo || j.jobCardNo,
+                  photoUrl: j.photoUrl || '',
+                  customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
+                  rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
+                  customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
+                  targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
+                  priority: j.priority || 'NORMAL',
+                  prodPnlQty: Math.ceil(subPcbQty / 4),
+                  custPnlQty: subPcbQty,
+                  totalPcbQty: subPcbQty,
+                  prodPnlAreaSqm: subAreaSqm,
+                  custPnlAreaSqm: subAreaSqm,
+                  jobFlowSelection: j.processFlowMaster?.name || 'PF-01',
+                  currentStageIndex: stageIdx,
+                  currentStageName: PF01_STAGES[stageIdx] || rawStage,
+                  customerPoId: j.customerPoId,
+                  productId: j.productId,
+                  totalQty: subPcbQty,
+                  status: subStatusNorm as any,
+                  isNewlyCreated: subStatusNorm === 'UNLAUNCHED',
+                  qrCodeValue: sub.qrCodeValue || j.qrCodeValue || `${j.jobCardNo}-PARENT`,
+                  launchedAt: j.launchedAt,
+                  completedAt: j.completedAt,
+                  createdAt: j.createdAt,
+                  customerPO: j.customerPO,
+                  product: j.product,
+                  subJobCards: subLots,
+                  rejectedPcbQty: j.rejectedPcbQty || 0,
+                  rejectedAreaSqm: j.rejectedAreaSqm || 0,
+                  rejectionLogs: j.rejectionLogs || [],
+                };
+              });
+            }
 
-            const jStatusRaw = String(j.status || activeSub?.status || '').toUpperCase();
+            const rawStage = j.currentStageName || j.currentStage?.name || (j.status === 'COMPLETED' ? '20. PACKING' : PF01_STAGES[0]);
+            let stageIdx = normalizeStageIndex(rawStage);
+            const jStatusRaw = String(j.status || '').toUpperCase();
             let jStatusNorm = (jStatusRaw === 'CREATED' || jStatusRaw === 'PENDING_LAUNCH' || jStatusRaw === 'UNLAUNCHED') ? 'UNLAUNCHED' : (j.status || 'IN_PROGRESS');
 
             if (jStatusNorm === 'COMPLETED' || stageIdx >= 18) {
               stageIdx = Math.min(stageIdx, 18);
-              if (stageIdx === 18 && activeSub?.currentStage?.name?.includes('DISPATCH')) {
-                jStatusNorm = 'COMPLETED';
-              }
             }
 
-            return {
+            return [{
               id: j.id,
+              parentJobCardId: j.id,
               jobCardNo: j.jobCardNo,
+              subJobCardNo: j.jobCardNo,
               photoUrl: j.photoUrl || '',
               customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
               rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
@@ -991,7 +1040,7 @@ export default function JobCardsPage() {
               custPnlAreaSqm: masterAreaSqm,
               jobFlowSelection: j.processFlowMaster?.name || 'PF-01',
               currentStageIndex: stageIdx,
-              currentStageName: PF01_STAGES[stageIdx],
+              currentStageName: PF01_STAGES[stageIdx] || rawStage,
               customerPoId: j.customerPoId,
               productId: j.productId,
               totalQty: masterPcbQty,
@@ -1007,16 +1056,16 @@ export default function JobCardsPage() {
               rejectedPcbQty: j.rejectedPcbQty || 0,
               rejectedAreaSqm: j.rejectedAreaSqm || 0,
               rejectionLogs: j.rejectionLogs || [],
-            };
+            }];
           });
 
 
           const deleted = getDeletedJobCardIds();
           const filtered = mapped.filter((j: JobCard) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
           setJobCards((prevLocalCards) => {
-            const localMap = new Map(prevLocalCards.map((c) => [c.jobCardNo, c]));
+            const localMap = new Map(prevLocalCards.map((c) => [c.id, c]));
             const merged = filtered.map((backendCard) => {
-              const local = localMap.get(backendCard.jobCardNo);
+              const local = localMap.get(backendCard.id) || localMap.get(backendCard.jobCardNo);
               if (local) {
                 const localRejectedQty = local.rejectedPcbQty || 0;
                 const backendRejectedQty = backendCard.rejectedPcbQty || 0;
@@ -2856,7 +2905,7 @@ export default function JobCardsPage() {
                           >
                             <Printer className="w-3.5 h-3.5" />
                           </button>
-                          <span>{jc.jobCardNo}</span>
+                          <span>{jc.subJobCardNo || jc.jobCardNo}</span>
                           {isNewTagVisible && (
                             <span className="px-1.5 py-0.5 bg-emerald-600 text-white font-black text-[9px] rounded uppercase tracking-wider animate-pulse shrink-0 shadow-2xs">
                               NEW
