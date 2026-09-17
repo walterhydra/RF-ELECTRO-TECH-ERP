@@ -159,12 +159,11 @@ export default function JobMovementUpdatePage() {
   // Load stored job cards from localStorage after client mounts to avoid hydration mismatch
   useEffect(() => {
     setIsMounted(true);
-    const deleted = getDeletedJobCardIds();
     const stored = getStoredJobCards();
     if (stored !== null) {
-      setJobs(stored.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo)));
+      setJobs(stored);
     } else {
-      setJobs(SAMPLE_ACTIVE_JOBS.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo)));
+      setJobs(SAMPLE_ACTIVE_JOBS);
     }
   }, []);
 
@@ -189,7 +188,6 @@ export default function JobMovementUpdatePage() {
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data)) {
-          const deleted = getDeletedJobCardIds();
           const mapped: JobCard[] = data.flatMap((j: any) => {
             const masterPcbQty = j.totalPcbQty || j.custPnlQty || (j.prodPnlQty ? j.prodPnlQty * 4 : 160);
             const masterAreaSqm = j.custPnlAreaSqm || j.prodPnlAreaSqm || 45;
@@ -201,15 +199,12 @@ export default function JobMovementUpdatePage() {
                 const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
                 let stageIdx = sub.currentStage?.defaultOrder
                   ? Math.min(Math.max(0, sub.currentStage.defaultOrder - 1), 18)
-                  : PF01_STAGES.findIndex(
-                      (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
-                    );
+                  : PF01_STAGES.findIndex((s) => s.toLowerCase() === rawStage.toLowerCase());
                 if (stageIdx < 0) stageIdx = 0;
 
                 return {
                   id: sub.id,
-                  jobCardNo: j.jobCardNo || sub.subJobCardNo,
-                  photoUrl: j.photoUrl || '',
+                  jobCardNo: sub.subJobCardNo || j.jobCardNo,
                   customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
                   rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
                   customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
@@ -222,24 +217,19 @@ export default function JobMovementUpdatePage() {
                   custPnlAreaSqm: subAreaSqm,
                   currentStageIndex: stageIdx,
                   currentStageName: PF01_STAGES[stageIdx] || rawStage,
-                  status: sub.status === 'CREATED' ? 'UNLAUNCHED' : sub.status || j.status,
+                  status: sub.status === 'CREATED' ? 'UNLAUNCHED' : sub.status,
                   createdAt: j.createdAt,
                 };
               });
             }
 
-            const rawStage = j.subJobCards?.[0]?.currentStage?.name || j.currentStageName || j.currentStage?.name || PF01_STAGES[0];
-            let stageIdx = j.subJobCards?.[0]?.currentStage?.defaultOrder
-              ? Math.min(Math.max(0, j.subJobCards[0].currentStage.defaultOrder - 1), 18)
-              : PF01_STAGES.findIndex(
-                  (s) => s.toLowerCase() === rawStage.toLowerCase() || s.toLowerCase().includes(rawStage.toLowerCase()) || rawStage.toLowerCase().includes(s.toLowerCase())
-                );
+            const rawStage = j.currentStageName || j.currentStage?.name || PF01_STAGES[0];
+            let stageIdx = PF01_STAGES.findIndex((s) => s.toLowerCase() === rawStage.toLowerCase());
             if (stageIdx < 0) stageIdx = 0;
 
             return [{
               id: j.id,
               jobCardNo: j.jobCardNo,
-              photoUrl: j.photoUrl || '',
               customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
               rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
               customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
@@ -256,7 +246,7 @@ export default function JobMovementUpdatePage() {
               createdAt: j.createdAt,
             }];
 
-          }).filter((j: JobCard) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
+          });
 
           setJobs(mapped);
           saveJobCardsToStorage(mapped);

@@ -677,27 +677,7 @@ const saveJobCardsToStorage = (cards: JobCard[]) => {
   }
 };
 
-const getDeletedJobCardIds = (): string[] => {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem('erp_deleted_job_card_ids');
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-};
 
-const markJobCardAsDeleted = (id: string, jobCardNo?: string) => {
-  if (typeof window === 'undefined') return;
-  try {
-    const current = getDeletedJobCardIds();
-    const toAdd = [id, jobCardNo].filter(Boolean) as string[];
-    const updated = Array.from(new Set([...current, ...toAdd]));
-    localStorage.setItem('erp_deleted_job_card_ids', JSON.stringify(updated));
-  } catch (err) {
-    console.error('Failed to save deleted job card ID:', err);
-  }
-};
 
 export default function JobCardsPage() {
   const [isMounted, setIsMounted] = useState(false);
@@ -739,10 +719,12 @@ export default function JobCardsPage() {
   // Set client mount state & load initial stored cards
   useEffect(() => {
     setIsMounted(true);
-    const deleted = getDeletedJobCardIds();
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('erp_deleted_job_card_ids');
+    }
     const stored = getStoredJobCards();
     if (stored !== null) {
-      setJobCards(stored.filter((j) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo)));
+      setJobCards(stored);
     }
   }, []);
 
@@ -791,9 +773,6 @@ export default function JobCardsPage() {
     const cardNo = targetCard?.jobCardNo || id;
     const targetId = targetCard?.id || id;
 
-    // Mark as deleted in local storage registry so sample data never resurrects it on page refresh
-    markJobCardAsDeleted(targetId, cardNo);
-
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       const headers = {
@@ -824,6 +803,8 @@ export default function JobCardsPage() {
         setSelectedMovementJob(null);
       }
       setIsDeleting(false);
+      // Immediately refetch from backend to confirm multi-device sync state
+      fetchBackendJobCards();
     }
   };
 
@@ -1060,12 +1041,9 @@ export default function JobCardsPage() {
           });
 
 
-          const deleted = getDeletedJobCardIds();
-          const filtered = mapped.filter((j: JobCard) => !deleted.includes(j.id) && !deleted.includes(j.jobCardNo));
-          
           // Server Database is 100% Single Source of Truth for Real-Time Multi-Device Sync
-          setJobCards(filtered);
-          saveJobCardsToStorage(filtered);
+          setJobCards(mapped);
+          saveJobCardsToStorage(mapped);
         }
       } else {
         setServerConnectionState({

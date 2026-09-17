@@ -232,13 +232,7 @@ export class JobCardsService {
       }
     }
 
-    if (jobCards.length === 0 && !query?.status && !query?.customerPoId && !query?.productId && !query?.search) {
-      try {
-        return await this.seedCloudDb();
-      } catch (err) {
-        console.error('Auto seed job cards failed:', err);
-      }
-    }
+
 
     // Filter job cards for Process Operators to ONLY show jobs assigned to their active stage
     if (user) {

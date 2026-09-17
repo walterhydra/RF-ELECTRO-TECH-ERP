@@ -131,13 +131,6 @@ export default function JobCardDetailPage() {
     setDeleting(true);
 
     try {
-      const raw = localStorage.getItem('erp_deleted_job_card_ids');
-      const current = raw ? JSON.parse(raw) : [];
-      const updated = Array.from(new Set([...current, jobCard.id, jobCard.jobCardNo]));
-      localStorage.setItem('erp_deleted_job_card_ids', JSON.stringify(updated));
-    } catch (e) {}
-
-    try {
       await fetch(`${getApi()}/job-cards/${id}`, {
         method: 'DELETE',
         headers: getAuthHeaders(),
