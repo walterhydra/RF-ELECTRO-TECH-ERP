@@ -1262,20 +1262,43 @@ export class JobCardsService {
       );
     }
 
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const rawId = String(id || '').trim();
+    if (!rawId) {
+      throw new BadRequestException('Job Card ID or number is required for deletion');
+    }
 
-    // 1. Try finding JobCard directly
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId);
+    const cleanNo = rawId.replace(/-\d+$/, '').replace(/-[A-Z]+$/i, '').trim();
+
+    // 1. Search for JobCard directly by ID, jobCardNo, or cleanNo
+    const jcOr: any[] = [
+      { jobCardNo: rawId },
+      { jobCardNo: cleanNo },
+    ];
+    if (isUuid) {
+      jcOr.push({ id: rawId });
+    }
+
     let jobCard = await this.prisma.jobCard.findFirst({
-      where: isUuid ? { OR: [{ id }, { jobCardNo: id }] } : { jobCardNo: id },
+      where: { OR: jcOr.filter(Boolean) },
       include: { subJobCards: true },
     });
 
-    // 2. If not found directly, check if subJobCard matches ID or subJobCardNo
+    // 2. If not found, search subJobCard table by ID, subJobCardNo, or cleanNo
     if (!jobCard) {
+      const subOr: any[] = [
+        { subJobCardNo: rawId },
+        { subJobCardNo: cleanNo },
+      ];
+      if (isUuid) {
+        subOr.push({ id: rawId });
+      }
+
       const subCard = await this.prisma.subJobCard.findFirst({
-        where: isUuid ? { OR: [{ id }, { subJobCardNo: id }] } : { subJobCardNo: id },
+        where: { OR: subOr.filter(Boolean) },
         include: { jobCard: { include: { subJobCards: true } } },
       });
+
       if (subCard && subCard.jobCard) {
         jobCard = subCard.jobCard;
       }
@@ -1284,7 +1307,7 @@ export class JobCardsService {
     if (!jobCard) {
       return {
         success: true,
-        message: `Job Card "${id}" deleted or not present in database.`,
+        message: `Job Card "${rawId}" deleted or not present in database.`,
       };
     }
 

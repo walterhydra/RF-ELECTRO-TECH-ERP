@@ -769,9 +769,13 @@ export default function JobCardsPage() {
   const handleDeleteJobCard = async (id: string) => {
     if (!id) return;
     setIsDeleting(true);
-    const targetCard = jobCards.find((j) => j.id === id || j.jobCardNo === id);
+    const targetCard = jobCards.find(
+      (j) => j.id === id || j.jobCardNo === id || j.subJobCardNo === id || (j as any).parentJobCardId === id
+    );
     const cardNo = targetCard?.jobCardNo || id;
+    const subCardNo = targetCard?.subJobCardNo || id;
     const targetId = targetCard?.id || id;
+    const parentId = (targetCard as any)?.parentJobCardId || targetId;
 
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -780,21 +784,28 @@ export default function JobCardsPage() {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
 
-      // Send DELETE to backend database using cardNo and targetId
-      await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(cardNo)}`, {
-        method: 'DELETE',
-        headers,
-      }).catch(() => {});
-      if (targetId !== cardNo) {
-        await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetId)}`, {
+      const idsToDelete = Array.from(
+        new Set([id, cardNo, subCardNo, targetId, parentId, cardNo.replace(/-\d+$/, '')].filter(Boolean))
+      );
+
+      for (const delId of idsToDelete) {
+        await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(delId)}`, {
           method: 'DELETE',
           headers,
-        }).catch(() => {});
+        }).catch((err) => console.warn('Delete attempt failed:', err));
       }
     } catch (err: any) {
       console.warn('Backend DELETE call failed or offline mode', err);
     } finally {
-      const updated = jobCards.filter((jc) => jc.id !== targetId && jc.jobCardNo !== cardNo && jc.id !== id);
+      const updated = jobCards.filter(
+        (jc) =>
+          jc.id !== targetId &&
+          jc.id !== id &&
+          jc.jobCardNo !== cardNo &&
+          jc.subJobCardNo !== subCardNo &&
+          (jc as any).parentJobCardId !== parentId &&
+          (jc as any).parentJobCardId !== targetId
+      );
       setJobCards(updated);
       saveJobCardsToStorage(updated);
       showToast('Job Card deleted successfully!', 'success');
@@ -804,7 +815,7 @@ export default function JobCardsPage() {
       }
       setIsDeleting(false);
       // Immediately refetch from backend to confirm multi-device sync state
-      fetchBackendJobCards();
+      await fetchBackendJobCards();
     }
   };
 
