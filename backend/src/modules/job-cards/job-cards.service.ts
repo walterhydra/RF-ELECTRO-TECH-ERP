@@ -1349,6 +1349,17 @@ export class JobCardsService {
     };
   }
 
+  async clearAllJobCards() {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.stageMovementLog.deleteMany({});
+      await tx.dispatch.deleteMany({});
+      await tx.subJobCard.updateMany({ data: { parentSubJobCardId: null } });
+      await tx.subJobCard.deleteMany({});
+      await tx.jobCard.deleteMany({});
+    });
+    return { success: true, message: 'All Job Cards cleared successfully' };
+  }
+
 
 
   private async getNextProcessStage(currentStage: any): Promise<{ targetNextStageId: string | null; isLastStage: boolean }> {

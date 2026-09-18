@@ -168,6 +168,13 @@ export class JobCardsController {
     return this.jobCardsService.movePartial(id, body, req.user);
   }
 
+  @Delete('clear-all/all')
+  @Public()
+  @ApiOperation({ summary: 'Clear all Job Cards permanently' })
+  async clearAllJobCards() {
+    return this.jobCardsService.clearAllJobCards();
+  }
+
   @Delete(':id')
   @Public()
   @ApiOperation({ summary: 'Delete Job Card (Master role restricted)' })
