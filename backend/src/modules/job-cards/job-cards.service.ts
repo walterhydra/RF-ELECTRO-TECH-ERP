@@ -1315,14 +1315,31 @@ export class JobCardsService {
 
     await this.prisma.$transaction(async (tx) => {
       const subCardIds = (jobCard.subJobCards || []).map((s) => s.id);
+
+      // 1. Delete associated dispatches
+      await tx.dispatch.deleteMany({
+        where: { jobCardId: targetId },
+      }).catch(() => {});
+
       if (subCardIds.length > 0) {
+        // 2. Delete stage movement logs
         await tx.stageMovementLog.deleteMany({
           where: { subJobCardId: { in: subCardIds } },
         });
+
+        // 3. Null out parentSubJobCardId on subJobCards to avoid self-referential FK constraint blocks
+        await tx.subJobCard.updateMany({
+          where: { jobCardId: targetId },
+          data: { parentSubJobCardId: null },
+        });
+
+        // 4. Delete all subJobCards for this job card
         await tx.subJobCard.deleteMany({
           where: { jobCardId: targetId },
         });
       }
+
+      // 5. Delete master JobCard
       await tx.jobCard.delete({ where: { id: targetId } });
     });
 
