@@ -1407,22 +1407,27 @@ export class JobCardsService {
     };
   }
 
-  async moveFull(id: string, body: { id?: string; cardId?: string; jobId?: string; jobCardNo?: string; rejectPcbQty?: number; rejectQty?: number; remark?: string; remarkType?: string; status?: string } | any, user: any) {
-    const rawTarget = (id || body?.id || body?.cardId || body?.jobId || body?.jobCardNo || '').trim();
+  async moveFull(id: string, body: { id?: string; cardId?: string; jobId?: string; jobCardNo?: string; subJobCardNo?: string; rejectPcbQty?: number; rejectQty?: number; remark?: string; remarkType?: string; status?: string } | any, user: any) {
+    const cardId = (body?.cardId || body?.id || id || '').trim();
+    const subJobCardNo = (body?.subJobCardNo || id || '').trim();
+    const rawTarget = (id || body?.cardId || body?.id || body?.jobId || body?.subJobCardNo || body?.jobCardNo || '').trim();
     const searchNo = (body?.jobCardNo || rawTarget || '').trim();
-    const isUuidTarget = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawTarget);
 
-    const subCardOr: any[] = [
-      { subJobCardNo: rawTarget },
-      { subJobCardNo: searchNo },
-      { qrCodeValue: rawTarget },
-    ];
+    const isUuidTarget = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cardId) ||
+                         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawTarget);
+
+    const subCardOr: any[] = [];
     if (isUuidTarget) {
-      subCardOr.push({ id: rawTarget });
+      if (cardId) subCardOr.push({ id: cardId });
+      if (rawTarget && rawTarget !== cardId) subCardOr.push({ id: rawTarget });
     }
+    if (subJobCardNo) subCardOr.push({ subJobCardNo: subJobCardNo });
+    if (rawTarget && rawTarget !== subJobCardNo && rawTarget !== searchNo) subCardOr.push({ subJobCardNo: rawTarget });
+    if (searchNo && searchNo !== rawTarget) subCardOr.push({ subJobCardNo: searchNo });
+    subCardOr.push({ qrCodeValue: rawTarget });
 
     // 1. Try finding target SubJobCard directly by ID, subJobCardNo, or QR code
-    let subCard: any = await this.prisma.subJobCard.findFirst({
+    let subCard: any = subCardOr.length > 0 ? await this.prisma.subJobCard.findFirst({
       where: {
         OR: subCardOr.filter(Boolean),
       },
@@ -1436,7 +1441,7 @@ export class JobCardsService {
           },
         },
       },
-    });
+    }) : null;
 
     let jobCardId = subCard ? subCard.jobCardId : rawTarget;
     if (!subCard) {

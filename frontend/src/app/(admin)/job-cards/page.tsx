@@ -1492,12 +1492,13 @@ export default function JobCardsPage() {
 
     const nextStage = PF01_STAGES[nextIndex];
     const cardNo = card.jobCardNo;
-    const cardId = card.parentJobCardId || card.id;
+    const subCardNo = card.subJobCardNo || card.jobCardNo;
+    const cardId = card.id;
 
-    // Immediately update local UI state for instant response
+    // Immediately update local UI state ONLY for this specific sub-lot row
     setJobCards((prev) =>
       prev.map((j) =>
-        j.id === card.id || j.jobCardNo === card.jobCardNo
+        j.id === card.id
           ? {
               ...j,
               currentStageIndex: nextIndex,
@@ -1509,13 +1510,13 @@ export default function JobCardsPage() {
       )
     );
 
-    showToast(`🚀 Job Card ${cardNo} moved to ${nextStage}`, 'success');
+    showToast(`🚀 Sub-Lot ${subCardNo} moved to ${nextStage}`, 'success');
 
-    runWithLoading(`Moving Job ${cardNo} to ${nextStage}...`, async () => {
+    runWithLoading(`Moving Sub-Lot ${subCardNo} to ${nextStage}...`, async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        const targetNo = cardNo;
-        const primaryTarget = targetNo ? encodeURIComponent(targetNo) : encodeURIComponent(cardId);
+        const targetSubNo = subCardNo;
+        const primaryTarget = encodeURIComponent(cardId || targetSubNo);
 
         let res = await fetch(`${getApiBaseUrl()}/job-cards/${primaryTarget}/move-stage`, {
           method: 'POST',
@@ -1524,20 +1525,24 @@ export default function JobCardsPage() {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({
+            cardId: cardId,
+            subJobCardNo: targetSubNo,
             jobCardNo: cardNo,
             remark: `Quick Stage Movement to ${nextStage}`,
             remarkType: 'FULL_MOVEMENT',
           }),
         });
 
-        if (!res.ok && cardId && cardId !== targetNo) {
-          res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(cardId)}/move-stage`, {
+        if (!res.ok && targetSubNo && targetSubNo !== cardId) {
+          res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetSubNo)}/move-stage`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
             body: JSON.stringify({
+              cardId: cardId,
+              subJobCardNo: targetSubNo,
               jobCardNo: cardNo,
               remark: `Quick Stage Movement to ${nextStage}`,
               remarkType: 'FULL_MOVEMENT',
@@ -1600,12 +1605,13 @@ export default function JobCardsPage() {
       }
     ] : (selectedMovementJob.rejectionLogs || []);
 
-    runWithLoading(`Moving Job ${selectedMovementJob.jobCardNo} to ${nextStage}...`, async () => {
+    const targetSubNo = selectedMovementJob.subJobCardNo || selectedMovementJob.jobCardNo;
+    const targetSubId = selectedMovementJob.id;
+
+    runWithLoading(`Moving Sub-Lot ${targetSubNo} to ${nextStage}...`, async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        const targetNo = selectedMovementJob.jobCardNo;
-        const targetId = selectedMovementJob.parentJobCardId || selectedMovementJob.id;
-        const primaryTarget = targetNo ? encodeURIComponent(targetNo) : encodeURIComponent(targetId);
+        const primaryTarget = encodeURIComponent(targetSubId || targetSubNo);
 
         let res = await fetch(`${getApiBaseUrl()}/job-cards/${primaryTarget}/move-stage`, {
           method: 'POST',
@@ -1614,22 +1620,26 @@ export default function JobCardsPage() {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({
-            jobCardNo: targetNo,
+            cardId: targetSubId,
+            subJobCardNo: targetSubNo,
+            jobCardNo: selectedMovementJob.jobCardNo,
             rejectPcbQty: rejectPcb,
             remark: fullMoveRemarks.trim() || undefined,
             remarkType: rejectPcb > 0 ? 'REJECTION' : 'FULL_MOVEMENT',
           }),
         });
 
-        if (!res.ok && targetId && targetId !== targetNo) {
-          res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetId)}/move-stage`, {
+        if (!res.ok && targetSubNo && targetSubNo !== targetSubId) {
+          res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetSubNo)}/move-stage`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
             body: JSON.stringify({
-              jobCardNo: targetNo,
+              cardId: targetSubId,
+              subJobCardNo: targetSubNo,
+              jobCardNo: selectedMovementJob.jobCardNo,
               rejectPcbQty: rejectPcb,
               remark: fullMoveRemarks.trim() || undefined,
               remarkType: rejectPcb > 0 ? 'REJECTION' : 'FULL_MOVEMENT',
@@ -1638,8 +1648,8 @@ export default function JobCardsPage() {
         }
 
         if (!res.ok) {
-          const errTxt = await res.text().catch(() => '');
-          showToast(`Backend Stage Move Alert (${res.status}): ${errTxt.slice(0, 80) || 'Check server connection'}`, 'error');
+          const errBody = await res.text().catch(() => '');
+          showToast(`Backend Stage Move Alert (${res.status}): ${errBody.slice(0, 80) || 'Check server connection'}`, 'error');
         }
       } catch (err: any) {
         showToast(`Backend connection issue: Local state updated`, 'info');
@@ -1647,7 +1657,7 @@ export default function JobCardsPage() {
 
       setJobCards((prev) =>
         prev.map((j) =>
-          j.id === selectedMovementJob.id || j.jobCardNo === selectedMovementJob.jobCardNo
+          j.id === selectedMovementJob.id
             ? {
                 ...j,
                 currentStageIndex: nextIndex,
@@ -1675,7 +1685,7 @@ export default function JobCardsPage() {
       if (rejectPcb > 0) {
         showToast(`Full Lot moved to ${nextStage}: ${movedPcb} PCBs moved (${movedArea} Sqm), ${rejectPcb} PCBs REJECTED due to "${fullMoveRemarks}"`, 'success');
       } else {
-        showToast(`🚀 Lot (${movedPcb} PCBs) of ${selectedMovementJob.jobCardNo} moved to ${nextStage}`, 'success');
+        showToast(`🚀 Lot (${movedPcb} PCBs) of ${targetSubNo} moved to ${nextStage}`, 'success');
       }
     });
   };
