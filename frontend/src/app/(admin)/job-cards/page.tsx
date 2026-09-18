@@ -671,7 +671,11 @@ const getStoredJobCards = (): JobCard[] | null => {
 const saveJobCardsToStorage = (cards: JobCard[]) => {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(LOCAL_STORAGE_CARDS_KEY, JSON.stringify(cards));
+    if (cards.length === 0) {
+      localStorage.removeItem(LOCAL_STORAGE_CARDS_KEY);
+    } else {
+      localStorage.setItem(LOCAL_STORAGE_CARDS_KEY, JSON.stringify(cards));
+    }
   } catch (err) {
     console.warn('Failed to persist job cards to localStorage', err);
   }
