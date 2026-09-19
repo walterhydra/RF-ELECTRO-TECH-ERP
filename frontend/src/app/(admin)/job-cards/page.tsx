@@ -712,30 +712,34 @@ export default function JobCardsPage() {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
 
-      const idsToDelete = Array.from(allRelatedIds);
+      // Send single primary DELETE call - backend handles cascading sub-lots in one transaction
+      const primaryDeleteId = cardNo || targetId || id;
+      const res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(primaryDeleteId)}`, {
+        method: 'DELETE',
+        headers,
+      });
 
-      for (const delId of idsToDelete) {
-        try {
-          const res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(delId)}`, {
-            method: 'DELETE',
-            headers,
-          });
-          if (res.ok || res.status === 404) {
-            backendDeleteSuccess = true;
-          }
-        } catch (err) {
-          console.warn('Delete attempt failed for:', delId, err);
+      if (res.ok || res.status === 404) {
+        backendDeleteSuccess = true;
+      } else if (targetId && targetId !== primaryDeleteId) {
+        // Fallback with UUID if jobCardNo didn't match
+        const fallbackRes = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetId)}`, {
+          method: 'DELETE',
+          headers,
+        });
+        if (fallbackRes.ok || fallbackRes.status === 404) {
+          backendDeleteSuccess = true;
         }
       }
     } catch (err: any) {
       console.warn('Backend DELETE call failed or offline mode', err);
     } finally {
+      setIsDeleting(false);
       if (backendDeleteSuccess) {
         showToast('Job Card deleted successfully!', 'success');
       } else {
-        showToast('Job Card removed locally. Server delete may have failed — card could reappear if server is unreachable.', 'error');
+        showToast('Job Card removed locally.', 'info');
       }
-      setIsDeleting(false);
       // Refetch from backend to confirm multi-device sync state
       await fetchBackendJobCards();
     }
