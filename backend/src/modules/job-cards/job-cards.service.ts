@@ -150,9 +150,23 @@ export class JobCardsService {
             cleanNo = `${base}-${letter}`;
           }
 
-          const lastSeg = cleanNo.split('-').pop() || '';
-          if (/^[A-Z]+$/.test(lastSeg)) {
-            usedLetters.add(lastSeg);
+          // Clean subJobCardNo if it has random 3+ digit timestamp suffix e.g. 26-27-1396-167 -> 26-27-1396-2
+          const tsMatch = cleanNo.match(/^(.*)-(\d{3,})$/);
+          if (tsMatch) {
+            const base = tsMatch[1];
+            let nextIdx = 2;
+            const existingIndices = new Set(
+              jc.subJobCards
+                .map((s) => {
+                  const m = s.subJobCardNo.match(/-(\d+)$/);
+                  return m && parseInt(m[1], 10) < 100 ? parseInt(m[1], 10) : null;
+                })
+                .filter(Boolean),
+            );
+            while (existingIndices.has(nextIdx)) {
+              nextIdx++;
+            }
+            cleanNo = `${base}-${nextIdx}`;
           }
 
           if (sub.totalPcbQty !== subPcbQty || sub.qty !== subPcbQty || sub.subJobCardNo !== cleanNo) {
@@ -1816,9 +1830,26 @@ export class JobCardsService {
           },
         });
       } else {
+        const allSubs = await tx.subJobCard.findMany({
+          where: { jobCardId: subCard.jobCardId },
+          select: { subJobCardNo: true },
+        });
+        const parentJobCardNo = (subCard as any).jobCard?.jobCardNo || subCard.subJobCardNo.replace(/-\d+$/, '');
+
+        // Determine next clean sequential sub-lot suffix e.g. -2, -3 instead of random timestamp
+        let maxSuffix = 1;
+        for (const s of allSubs) {
+          const match = s.subJobCardNo.match(/-(\d+)$/);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (num < 100 && num > maxSuffix) maxSuffix = num;
+          }
+        }
+        const nextSubNo = `${parentJobCardNo}-${maxSuffix + 1}`;
+
         await tx.subJobCard.create({
           data: {
-            subJobCardNo: `${(subCard as any).jobCard?.jobCardNo || subCard.subJobCardNo}-${Date.now().toString().slice(-3)}`,
+            subJobCardNo: nextSubNo,
             jobCardId: subCard.jobCardId,
             qty: qtyToMove,
             totalPcbQty: qtyToMove,
@@ -1828,7 +1859,7 @@ export class JobCardsService {
             prodPnlAreaSqm: areaToMove,
             status: SubJobCardStatus.IN_STAGE,
             currentStageId: targetNextStageId,
-            qrCodeValue: `RFE-SJC-${subCard.subJobCardNo}-MOVED-${Date.now().toString().slice(-4)}`,
+            qrCodeValue: `RFE-SJC-${nextSubNo}-STAGE-${Date.now().toString().slice(-4)}`,
             createdById: userId,
           },
         });

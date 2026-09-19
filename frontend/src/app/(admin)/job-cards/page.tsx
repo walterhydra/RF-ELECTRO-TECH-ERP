@@ -1728,10 +1728,18 @@ export default function JobCardsPage() {
         console.warn('Backend API call failed, using client state update');
       }
 
+      const baseJc = selectedMovementJob.jobCardNo.replace(/-\d+$/, '');
+      const existingSubNo = selectedMovementJob.subJobCardNo || selectedMovementJob.jobCardNo;
+      const matchSuffix = existingSubNo.match(/-(\d+)$/);
+      const currentSuffixNum = matchSuffix ? parseInt(matchSuffix[1], 10) : 1;
+      const movedSubNo = `${baseJc}-${currentSuffixNum + 1}`;
+      const remainingSubNo = existingSubNo.includes('-') ? existingSubNo : `${baseJc}-1`;
+
       const movedBatch: JobCard = {
         ...selectedMovementJob,
         id: `jc-part-${Date.now()}-moved`,
-        jobCardNo: selectedMovementJob.jobCardNo, // Same Job Card Number (No -A, -B suffix as per PDF spec)
+        jobCardNo: selectedMovementJob.jobCardNo,
+        subJobCardNo: movedSubNo,
         prodPnlQty: Math.ceil(parsedMoveQty / 4),
         custPnlQty: parsedMoveQty,
         totalPcbQty: parsedMoveQty,
@@ -1745,7 +1753,8 @@ export default function JobCardsPage() {
 
       const remainingBatch: JobCard = {
         ...selectedMovementJob,
-        jobCardNo: selectedMovementJob.jobCardNo, // Same Job Card Number (No -A, -B suffix as per PDF spec)
+        jobCardNo: selectedMovementJob.jobCardNo,
+        subJobCardNo: remainingSubNo,
         prodPnlQty: Math.ceil(remainingPcb / 4),
         custPnlQty: remainingPcb,
         totalPcbQty: remainingPcb,
