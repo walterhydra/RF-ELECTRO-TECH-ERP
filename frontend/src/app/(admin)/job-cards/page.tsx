@@ -3065,451 +3065,598 @@ export default function JobCardsPage() {
       {/* MODAL 1: ADD NEW JOB CARD */}
       {showGenerateModal && (
         <Portal>
-          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-xl p-6 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900">
-            
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold shrink-0 shadow-sm">
-                  <Plus className="w-5 h-5 stroke-[3]" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-900 text-base">
-                    {editingCardId ? `Edit Job Card Parameters (${launchForm.jobCardNo})` : 'New Job Card Creation & Launch'}
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    {editingCardId ? 'Modify PCB parameters and update existing job card record' : 'Fill job parameters to generate QR code & launch into production'}
-                  </p>
-                </div>
-              </div>
-              <button onClick={() => setShowGenerateModal(false)} className="text-slate-400 hover:text-slate-700 text-base font-bold p-1 rounded-lg hover:bg-slate-100 cursor-pointer">✕</button>
-            </div>
-
-            <form onSubmit={handleLaunchJobCard} className="space-y-4 text-xs">
+          <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-[9999] flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+            <div className="bg-white border border-slate-200/90 rounded-3xl w-full max-w-4xl shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900 flex flex-col max-h-[92vh] overflow-hidden my-auto">
               
-              {/* Job Card Photo Attachment Field */}
-              <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-2xl space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                    <Camera className="w-4 h-4 text-blue-600" />
-                    <span>Job Card Photo (Attach Original Physical Job Card Photo) *</span>
-                  </label>
-                  {launchForm.photoUrl && (
-                    <button
-                      type="button"
-                      onClick={() => setPhotoLightbox(launchForm.photoUrl)}
-                      className="text-[11px] font-bold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
-                    >
-                      <Eye className="w-3.5 h-3.5" /> Preview Full
-                    </button>
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80 shrink-0">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-slate-950 flex items-center justify-center font-black shadow-sm border border-amber-300 shrink-0">
+                    {editingCardId ? <Pencil className="w-5 h-5 stroke-[2.5]" /> : <Plus className="w-5 h-5 stroke-[2.5]" />}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2.5">
+                      <h3 className="font-extrabold text-slate-950 text-base sm:text-lg tracking-tight">
+                        {editingCardId ? 'Edit Job Card Parameters' : 'New Job Card Creation & Launch'}
+                      </h3>
+                      <span className="font-mono text-[11px] px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-extrabold border border-amber-300/80 shadow-2xs">
+                        {launchForm.jobCardNo || 'DRAFT'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {editingCardId 
+                        ? 'Modify PCB parameters and update existing job card record' 
+                        : 'Configure production parameters, generate industrial traveler QR tag & launch WIP'}
+                    </p>
+                  </div>
+                </div>
+                
+                <button 
+                  type="button"
+                  onClick={() => setShowGenerateModal(false)} 
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer text-sm font-bold"
+                  title="Close modal"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Scrollable Form Body */}
+              <form onSubmit={handleLaunchJobCard} className="flex-1 overflow-y-auto px-6 py-5 space-y-6 text-xs custom-scrollbar">
+                
+                {/* 1. Job Card Physical Photo Attachment */}
+                <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4 space-y-3 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+                        <Camera className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="font-bold text-slate-800 text-xs tracking-tight">
+                        Original Physical Job Card Photo <span className="text-rose-500">*</span>
+                      </span>
+                    </div>
+                    {launchForm.photoUrl && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Photo Attached
+                      </span>
+                    )}
+                  </div>
+
+                  <input
+                    type="file"
+                    id="jobCardPhotoFileInput"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (uploadEvt) => {
+                          const res = uploadEvt.target?.result as string;
+                          if (res) {
+                            setLaunchForm({ ...launchForm, photoUrl: res });
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="hidden"
+                  />
+
+                  {launchForm.photoUrl ? (
+                    /* Attached Photo Preview State */
+                    <div className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-center gap-3">
+                        <div 
+                          onClick={() => setPhotoLightbox(launchForm.photoUrl)}
+                          className="relative group cursor-pointer w-14 h-14 rounded-xl overflow-hidden border border-slate-200 shrink-0 bg-slate-100 shadow-2xs"
+                          title="Click to view full preview"
+                        >
+                          <img
+                            src={launchForm.photoUrl}
+                            alt="Job Card Document"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                            <Eye className="w-4 h-4" />
+                          </div>
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900 text-xs">Physical Job Card Document Attached</p>
+                          <p className="text-[11px] text-slate-500 font-mono truncate max-w-xs sm:max-w-md">
+                            {launchForm.photoUrl.startsWith('data:') ? 'Image uploaded from device (Base64)' : launchForm.photoUrl}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setPhotoLightbox(launchForm.photoUrl)}
+                          className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-blue-200"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Preview</span>
+                        </button>
+                        <label
+                          htmlFor="jobCardPhotoFileInput"
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-slate-200"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>Replace</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setLaunchForm({ ...launchForm, photoUrl: '' })}
+                          className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-rose-200"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>Remove</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Upload Picker State */
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                      <label
+                        htmlFor="jobCardPhotoFileInput"
+                        className="sm:col-span-6 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-blue-50/40 hover:bg-blue-50/80 rounded-xl p-3 flex items-center justify-center gap-2.5 cursor-pointer transition-all text-blue-700 font-bold group shadow-2xs"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-blue-100 group-hover:bg-blue-200 text-blue-700 flex items-center justify-center transition-colors">
+                          <Upload className="w-4 h-4 stroke-[2.5]" />
+                        </div>
+                        <div className="text-left">
+                          <span className="block text-xs font-extrabold text-blue-900">Upload Photo from Device / Camera</span>
+                          <span className="block text-[10px] text-blue-600 font-normal">Click to browse or take snapshot</span>
+                        </div>
+                      </label>
+
+                      <div className="sm:col-span-6 flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20 shadow-2xs">
+                        <ImageIcon className="w-4 h-4 text-slate-400 shrink-0 mr-2" />
+                        <input
+                          type="text"
+                          value={launchForm.photoUrl}
+                          onChange={(e) => setLaunchForm({ ...launchForm, photoUrl: e.target.value })}
+                          className="w-full bg-transparent text-xs text-slate-900 focus:outline-none placeholder:text-slate-400 font-mono"
+                          placeholder="Or paste direct image URL..."
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
 
-                <div className="space-y-2 font-sans">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="file"
-                      id="jobCardPhotoFileInput"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onload = (uploadEvt) => {
-                            const res = uploadEvt.target?.result as string;
-                            if (res) {
-                              setLaunchForm({ ...launchForm, photoUrl: res });
-                            }
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                      className="hidden"
-                    />
-
-                    <label
-                      htmlFor="jobCardPhotoFileInput"
-                      className="flex-1 py-2 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 cursor-pointer transition-all shadow-2xs"
-                    >
-                      <Upload className="w-4 h-4 text-blue-600" />
-                      <span>Upload Photo from Device / Camera</span>
-                    </label>
-
-                    {launchForm.photoUrl && (
-                      <button
-                        type="button"
-                        onClick={() => setLaunchForm({ ...launchForm, photoUrl: '' })}
-                        className="py-2 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-extrabold flex items-center gap-1 cursor-pointer transition-all"
-                      >
-                        <X className="w-4 h-4 text-rose-600" />
-                        <span>Remove</span>
-                      </button>
-                    )}
+                {/* 2. Job Identification & Timeline */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-2 text-slate-400 uppercase font-mono text-[10px] font-black tracking-wider">
+                    <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                    <span>1. Identification & Schedule</span>
                   </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Job Card No. <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2.5 font-mono text-slate-400 font-bold">#</span>
+                        <input
+                          type="text"
+                          required
+                          value={launchForm.jobCardNo}
+                          onChange={(e) => setLaunchForm({ ...launchForm, jobCardNo: e.target.value })}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-7 pr-3 py-2 text-xs font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs"
+                          placeholder="26-27-1731"
+                        />
+                      </div>
+                    </div>
 
-                  <div className="flex gap-2 items-center">
-                    <input
-                      type="text"
-                      value={launchForm.photoUrl}
-                      onChange={(e) => setLaunchForm({ ...launchForm, photoUrl: e.target.value })}
-                      className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:border-amber-500"
-                      placeholder="Or paste image URL directly..."
-                    />
-                    {launchForm.photoUrl && (
-                      <img
-                        src={launchForm.photoUrl}
-                        alt="Job Card Photo Preview"
-                        className="w-9 h-9 rounded-lg object-cover border border-slate-300 shadow-2xs shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => setPhotoLightbox(launchForm.photoUrl)}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Launch Date <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={launchForm.launchDate}
+                        onChange={(e) => setLaunchForm({ ...launchForm, launchDate: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all font-mono shadow-2xs"
                       />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Target Delivery Date <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={launchForm.targetDate}
+                        onChange={(e) => setLaunchForm({ ...launchForm, targetDate: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all font-mono shadow-2xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Customer & Part Code Master */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-2 text-slate-400 uppercase font-mono text-[10px] font-black tracking-wider">
+                    <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>2. Customer & Part Codes</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Customer Code <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={launchForm.customerCode}
+                        onChange={(e) => setLaunchForm({ ...launchForm, customerCode: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs"
+                        placeholder="e.g. CUST-RF045"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Customer Part No. <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={launchForm.customerPartNo}
+                        onChange={(e) => setLaunchForm({ ...launchForm, customerPartNo: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs"
+                        placeholder="EV-900W-WP-TO247"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        R.F.E. Part Code <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          required
+                          value={launchForm.rfePartCode}
+                          onChange={(e) => setLaunchForm({ ...launchForm, rfePartCode: e.target.value })}
+                          className="w-full bg-blue-50/50 border border-blue-200 rounded-xl px-3 py-2 text-xs font-mono font-black text-blue-700 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-2xs"
+                          placeholder="D3625"
+                        />
+                        <span className="absolute right-3 top-2 text-[10px] uppercase font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">RFE</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Production Volume & Parameters */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-2 text-slate-400 uppercase font-mono text-[10px] font-black tracking-wider">
+                    <Box className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>3. Production Volumes & Parameters</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Priority <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={launchForm.priority}
+                        onChange={(e: any) => setLaunchForm({ ...launchForm, priority: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs cursor-pointer"
+                      >
+                        <option value="MOST URGENT">⚡ MOST URGENT</option>
+                        <option value="HIGH">🔥 HIGH</option>
+                        <option value="NORMAL">🟢 NORMAL</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-extrabold text-slate-900 mb-1">
+                        Total PCB Qty <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          required
+                          value={launchForm.totalPcbQty || ''}
+                          onChange={(e) => {
+                            const qty = Number(e.target.value) || 0;
+                            const pnlCount = Math.ceil(qty / 4) || 10;
+                            const calculatedArea = Number((qty * unitPcbAreaSqm).toFixed(2));
+                            setLaunchForm({
+                              ...launchForm,
+                              totalPcbQty: qty,
+                              prodPnlQty: pnlCount,
+                              custPnlQty: qty,
+                              custPnlAreaSqm: calculatedArea,
+                              prodPnlAreaSqm: Number((calculatedArea * 1.1).toFixed(2)),
+                            });
+                          }}
+                          className="w-full bg-amber-50/60 border border-amber-300 rounded-xl pl-3 pr-11 py-2 text-xs font-mono font-black text-slate-950 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs"
+                          placeholder="160"
+                        />
+                        <span className="absolute right-2.5 top-2 text-[10px] font-bold text-amber-800 bg-amber-200/80 px-1.5 py-0.5 rounded">PCBs</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-extrabold text-slate-900 mb-1">
+                        Total PCB Area (Sqm) <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="0.01"
+                          required
+                          value={launchForm.custPnlAreaSqm || ''}
+                          onChange={(e) => {
+                            const area = Number(e.target.value) || 0;
+                            const newUnitArea = launchForm.totalPcbQty > 0 ? area / launchForm.totalPcbQty : 0.28125;
+                            setUnitPcbAreaSqm(newUnitArea);
+                            setLaunchForm({
+                              ...launchForm,
+                              custPnlAreaSqm: area,
+                              prodPnlAreaSqm: Number((area * 1.1).toFixed(2)),
+                            });
+                          }}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-3 pr-9 py-2 text-xs font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs"
+                          placeholder="45"
+                        />
+                        <span className="absolute right-2.5 top-2 text-[10px] font-bold text-slate-500 bg-slate-200/80 px-1.5 py-0.5 rounded">m²</span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md font-mono">
+                        <span>{launchForm.totalPcbQty || 0} × {unitPcbAreaSqm.toFixed(4)} m²</span>
+                        <span className="font-bold text-amber-800">={(Number(launchForm.custPnlAreaSqm) || 0).toFixed(2)} m²</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        Job Flow Route <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={launchForm.jobFlowSelection}
+                        onChange={(e) => setLaunchForm({ ...launchForm, jobFlowSelection: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs cursor-pointer"
+                      >
+                        <option value="PF-01">PF-01 Standard Flow (19 Stages)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5. Production Options: Pre-Launch Lot Splitting & Direct Launch */}
+                <div className="space-y-3 pt-1">
+                  <div className="flex items-center gap-2 text-slate-400 uppercase font-mono text-[10px] font-black tracking-wider">
+                    <Workflow className="w-3.5 h-3.5 text-purple-600" />
+                    <span>4. Production Launch & Lot Splitting</span>
+                  </div>
+
+                  {/* Pre-Launch Sub-Job Card Split Card */}
+                  <div className={`border rounded-2xl p-4 transition-all shadow-2xs ${launchForm.enablePreSplit ? 'bg-amber-50/70 border-amber-300' : 'bg-slate-50/70 border-slate-200'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${launchForm.enablePreSplit ? 'bg-amber-200 text-amber-950' : 'bg-slate-200 text-slate-600'}`}>
+                          <Split className="w-4 h-4 stroke-[2.5]" />
+                        </div>
+                        <div>
+                          <span className="font-extrabold text-slate-950 text-xs block">Pre-Launch Sub-Job Card Lot Splitting</span>
+                          <span className="text-[11px] text-slate-500">Divide order volume into multiple travelers before releasing to floor</span>
+                        </div>
+                      </div>
+
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={launchForm.enablePreSplit}
+                          onChange={(e) => {
+                            const enabled = e.target.checked;
+                            const total = launchForm.prodPnlQty || 40;
+                            const half = Math.floor(total / 2);
+                            setLaunchForm({
+                              ...launchForm,
+                              enablePreSplit: enabled,
+                              customSplits: enabled
+                                ? [
+                                    { subNo: `${launchForm.jobCardNo}-1`, qty: half },
+                                    { subNo: `${launchForm.jobCardNo}-2`, qty: total - half },
+                                  ]
+                                : [],
+                            });
+                          }}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                      </label>
+                    </div>
+
+                    {launchForm.enablePreSplit && (
+                      <div className="space-y-3 pt-3.5 border-t border-amber-200/80 mt-3.5">
+                        {/* Quick Presets */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[10px] text-amber-900 font-extrabold uppercase font-mono">Presets:</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const total = launchForm.prodPnlQty || 40;
+                              const h = Math.floor(total / 2);
+                              setLaunchForm({
+                                ...launchForm,
+                                customSplits: [
+                                  { subNo: `${launchForm.jobCardNo}-1`, qty: h },
+                                  { subNo: `${launchForm.jobCardNo}-2`, qty: total - h },
+                                ],
+                              });
+                            }}
+                            className="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 text-amber-950 text-xs font-bold rounded-lg cursor-pointer transition-colors shadow-2xs border border-amber-300"
+                          >
+                            Split in 2 (50/50)
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const total = launchForm.prodPnlQty || 40;
+                              const part = Math.floor(total / 4);
+                              const rem = total - part * 3;
+                              setLaunchForm({
+                                ...launchForm,
+                                customSplits: [
+                                  { subNo: `${launchForm.jobCardNo}-1`, qty: part },
+                                  { subNo: `${launchForm.jobCardNo}-2`, qty: part },
+                                  { subNo: `${launchForm.jobCardNo}-3`, qty: part },
+                                  { subNo: `${launchForm.jobCardNo}-4`, qty: rem },
+                                ],
+                              });
+                            }}
+                            className="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 text-amber-950 text-xs font-bold rounded-lg cursor-pointer transition-colors shadow-2xs border border-amber-300"
+                          >
+                            Split in 4 Lots
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const count = launchForm.customSplits.length + 1;
+                              setLaunchForm({
+                                ...launchForm,
+                                customSplits: [
+                                  ...launchForm.customSplits,
+                                  { subNo: `${launchForm.jobCardNo}-${count}`, qty: 5 },
+                                ],
+                              });
+                            }}
+                            className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-extrabold rounded-lg cursor-pointer transition-colors shadow-2xs border border-amber-600 flex items-center gap-1"
+                          >
+                            <Plus className="w-3 h-3 stroke-[3]" /> Add Lot
+                          </button>
+                        </div>
+
+                        {/* Sub-Job Cards Items Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {launchForm.customSplits.map((item, idx) => (
+                            <div key={idx} className="flex items-center gap-2 bg-white p-2.5 rounded-xl border border-amber-200 shadow-2xs">
+                              <span className="text-[10px] font-mono font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">#{idx + 1}</span>
+                              <input
+                                type="text"
+                                value={item.subNo}
+                                onChange={(e) => {
+                                  const updated = [...launchForm.customSplits];
+                                  updated[idx].subNo = e.target.value;
+                                  setLaunchForm({ ...launchForm, customSplits: updated });
+                                }}
+                                className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-mono font-bold focus:bg-white focus:outline-none focus:border-amber-500"
+                              />
+                              <div className="flex items-center gap-1 font-mono text-xs">
+                                <input
+                                  type="number"
+                                  value={item.qty}
+                                  onChange={(e) => {
+                                    const updated = [...launchForm.customSplits];
+                                    updated[idx].qty = Number(e.target.value);
+                                    setLaunchForm({ ...launchForm, customSplits: updated });
+                                  }}
+                                  className="w-16 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-blue-700 text-right focus:bg-white focus:outline-none focus:border-amber-500"
+                                />
+                                <span className="text-[10px] text-slate-500 font-sans font-bold">PCB</span>
+                              </div>
+                              {launchForm.customSplits.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = launchForm.customSplits.filter((_, i) => i !== idx);
+                                    setLaunchForm({ ...launchForm, customSplits: updated });
+                                  }}
+                                  className="text-slate-400 hover:text-rose-600 text-xs font-bold p-1 rounded-md hover:bg-rose-50 cursor-pointer transition-colors"
+                                  title="Delete lot"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Sum Validation Indicator */}
+                        {(() => {
+                          const sum = launchForm.customSplits.reduce((acc, curr) => acc + (Number(curr.qty) || 0), 0);
+                          const target = launchForm.prodPnlQty || 40;
+                          const isValid = sum === target;
+                          return (
+                            <div className={`p-2.5 rounded-xl text-xs font-bold flex items-center justify-between shadow-2xs ${isValid ? 'bg-emerald-50 text-emerald-900 border border-emerald-300' : 'bg-rose-50 text-rose-900 border border-rose-300'}`}>
+                              <span className="flex items-center gap-1.5 font-mono">
+                                <span>Sum of Sub-Lots: <strong>{sum}</strong> PCB</span>
+                                <span className="text-slate-400">/</span>
+                                <span>Total Target: <strong>{target}</strong> PCB</span>
+                              </span>
+                              <span>{isValid ? '✓ Split Allocation Balanced' : '⚠️ Must equal Total PCB'}</span>
+                            </div>
+                          );
+                        })()}
+                      </div>
                     )}
                   </div>
-                </div>
-              </div>
 
-              {/* Row 1: Job Card No, Launch Date & Target Date */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Job Card No. *</label>
-                  <input
-                    type="text"
-                    required
-                    value={launchForm.jobCardNo}
-                    onChange={(e) => setLaunchForm({ ...launchForm, jobCardNo: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500"
-                    placeholder="e.g. 26-27-1731"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Launch Date *</label>
-                  <input
-                    type="date"
-                    required
-                    value={launchForm.launchDate}
-                    onChange={(e) => setLaunchForm({ ...launchForm, launchDate: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Target Delivery Date *</label>
-                  <input
-                    type="date"
-                    required
-                    value={launchForm.targetDate}
-                    onChange={(e) => setLaunchForm({ ...launchForm, targetDate: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 font-mono"
-                  />
-                </div>
-              </div>
-
-              {/* Row 2: Customer Code, Customer Part No, RFE Code */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Customer Code *</label>
-                  <input
-                    type="text"
-                    required
-                    value={launchForm.customerCode}
-                    onChange={(e) => setLaunchForm({ ...launchForm, customerCode: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500"
-                    placeholder="CUST-RF045"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Customer Part No. *</label>
-                  <input
-                    type="text"
-                    required
-                    value={launchForm.customerPartNo}
-                    onChange={(e) => setLaunchForm({ ...launchForm, customerPartNo: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500"
-                    placeholder="EV-900W-WP-TO247"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">R.F.E. Part Code *</label>
-                  <input
-                    type="text"
-                    required
-                    value={launchForm.rfePartCode}
-                    onChange={(e) => setLaunchForm({ ...launchForm, rfePartCode: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500"
-                    placeholder="D3625"
-                  />
-                </div>
-              </div>
-
-              {/* Row 3: Priority, Total PCB Qty, Total PCB Area (Sqm), Job Flow Selection */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Priority *</label>
-                  <select
-                    value={launchForm.priority}
-                    onChange={(e: any) => setLaunchForm({ ...launchForm, priority: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500"
-                  >
-                    <option value="MOST URGENT">MOST URGENT</option>
-                    <option value="HIGH">HIGH</option>
-                    <option value="NORMAL">NORMAL</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-extrabold text-slate-900 mb-1">Total PCB Qty *</label>
-                  <input
-                    type="number"
-                    required
-                    value={launchForm.totalPcbQty || ''}
-                    onChange={(e) => {
-                      const qty = Number(e.target.value) || 0;
-                      const pnlCount = Math.ceil(qty / 4) || 10;
-                      const calculatedArea = Number((qty * unitPcbAreaSqm).toFixed(2));
-                      setLaunchForm({
-                        ...launchForm,
-                        totalPcbQty: qty,
-                        prodPnlQty: pnlCount,
-                        custPnlQty: qty,
-                        custPnlAreaSqm: calculatedArea,
-                        prodPnlAreaSqm: Number((calculatedArea * 1.1).toFixed(2)),
-                      });
-                    }}
-                    className="w-full bg-amber-50 border-2 border-amber-400 rounded-xl px-3 py-2 text-xs font-extrabold text-slate-900 focus:outline-none shadow-2xs"
-                    placeholder="160"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-extrabold text-slate-900 mb-1">Total PCB Area (Sqm) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    value={launchForm.custPnlAreaSqm || ''}
-                    onChange={(e) => {
-                      const area = Number(e.target.value) || 0;
-                      const newUnitArea = launchForm.totalPcbQty > 0 ? area / launchForm.totalPcbQty : 0.28125;
-                      setUnitPcbAreaSqm(newUnitArea);
-                      setLaunchForm({
-                        ...launchForm,
-                        custPnlAreaSqm: area,
-                        prodPnlAreaSqm: Number((area * 1.1).toFixed(2)),
-                      });
-                    }}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500"
-                    placeholder="45"
-                  />
-                  <p className="text-[10px] font-semibold text-amber-700 mt-1 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                    Auto-calculated: {launchForm.totalPcbQty || 0} PCBs × {unitPcbAreaSqm.toFixed(4)} Sqm/PCB
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Job Flow Selection *</label>
-                  <select
-                    value={launchForm.jobFlowSelection}
-                    onChange={(e) => setLaunchForm({ ...launchForm, jobFlowSelection: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900"
-                  >
-                    <option value="PF-01">PF-01 Standard Flow (20 Stages)</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Pre-Launch Sub-Job Card Split Builder (PDF Section 3) */}
-              <div className="bg-amber-50/70 border border-amber-200 p-3.5 rounded-xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Split className="w-4 h-4 text-amber-700" />
-                    <span className="font-extrabold text-amber-950 text-xs">Pre-Launch Sub-Job Card Lot Splitting</span>
-                  </div>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={launchForm.enablePreSplit}
-                      onChange={(e) => {
-                        const enabled = e.target.checked;
-                        const total = launchForm.prodPnlQty || 40;
-                        const half = Math.floor(total / 2);
-                        setLaunchForm({
-                          ...launchForm,
-                          enablePreSplit: enabled,
-                          customSplits: enabled
-                            ? [
-                                { subNo: `${launchForm.jobCardNo}-1`, qty: half },
-                                { subNo: `${launchForm.jobCardNo}-2`, qty: total - half },
-                              ]
-                            : [],
-                        });
-                      }}
-                      className="w-4 h-4 text-amber-600 rounded cursor-pointer"
-                    />
-                    <span className="text-[11px] font-bold text-amber-900">Divide into Sub-Job Cards</span>
-                  </label>
-                </div>
-
-                {launchForm.enablePreSplit && (
-                  <div className="space-y-2.5 pt-1">
-                    {/* Quick Preset Buttons */}
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-amber-800 font-bold uppercase font-mono">Quick Presets:</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const total = launchForm.prodPnlQty || 40;
-                          const h = Math.floor(total / 2);
-                          setLaunchForm({
-                            ...launchForm,
-                            customSplits: [
-                              { subNo: `${launchForm.jobCardNo}-1`, qty: h },
-                              { subNo: `${launchForm.jobCardNo}-2`, qty: total - h },
-                            ],
-                          });
-                        }}
-                        className="px-2 py-0.5 bg-amber-200 hover:bg-amber-300 text-amber-950 text-[10px] font-bold rounded cursor-pointer"
-                      >
-                        Split 2 Lots
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const total = launchForm.prodPnlQty || 40;
-                          const part = Math.floor(total / 4);
-                          const rem = total - part * 3;
-                          setLaunchForm({
-                            ...launchForm,
-                            customSplits: [
-                              { subNo: `${launchForm.jobCardNo}-1`, qty: part },
-                              { subNo: `${launchForm.jobCardNo}-2`, qty: part },
-                              { subNo: `${launchForm.jobCardNo}-3`, qty: part },
-                              { subNo: `${launchForm.jobCardNo}-4`, qty: rem },
-                            ],
-                          });
-                        }}
-                        className="px-2 py-0.5 bg-amber-200 hover:bg-amber-300 text-amber-950 text-[10px] font-bold rounded cursor-pointer"
-                      >
-                        Split 4 Lots
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const count = launchForm.customSplits.length + 1;
-                          setLaunchForm({
-                            ...launchForm,
-                            customSplits: [
-                              ...launchForm.customSplits,
-                              { subNo: `${launchForm.jobCardNo}-${count}`, qty: 5 },
-                            ],
-                          });
-                        }}
-                        className="px-2 py-0.5 bg-amber-600 text-white text-[10px] font-bold rounded cursor-pointer"
-                      >
-                        + Add Lot
-                      </button>
-                    </div>
-
-                    {/* Sub-Job Cards Items List */}
-                    <div className="space-y-1.5">
-                      {launchForm.customSplits.map((item, idx) => (
-                        <div key={idx} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-amber-200">
-                          <input
-                            type="text"
-                            value={item.subNo}
-                            onChange={(e) => {
-                              const updated = [...launchForm.customSplits];
-                              updated[idx].subNo = e.target.value;
-                              setLaunchForm({ ...launchForm, customSplits: updated });
-                            }}
-                            className="w-32 bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs font-mono font-bold"
-                          />
-                          <div className="flex items-center gap-1 font-mono text-xs">
-                            <span>Qty:</span>
-                            <input
-                              type="number"
-                              value={item.qty}
-                              onChange={(e) => {
-                                const updated = [...launchForm.customSplits];
-                                updated[idx].qty = Number(e.target.value);
-                                setLaunchForm({ ...launchForm, customSplits: updated });
-                              }}
-                              className="w-20 bg-slate-50 border border-slate-200 rounded px-2 py-1 text-xs font-bold text-blue-700"
-                            />
-                            <span>PCB</span>
-                          </div>
-                          {launchForm.customSplits.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const updated = launchForm.customSplits.filter((_, i) => i !== idx);
-                                setLaunchForm({ ...launchForm, customSplits: updated });
-                              }}
-                              className="text-rose-500 hover:text-rose-700 text-xs font-bold px-1.5 py-0.5 rounded cursor-pointer ml-auto"
-                            >
-                              ✕
-                            </button>
-                          )}
+                  {/* Direct Launch into Stage 1 Production Checkbox Card */}
+                  <div className={`border rounded-2xl p-4 transition-all shadow-2xs ${launchForm.autoLaunch ? 'bg-emerald-50/80 border-emerald-300' : 'bg-slate-50/70 border-slate-200'}`}>
+                    <label className="flex items-center justify-between cursor-pointer">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${launchForm.autoLaunch ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                          <Zap className="w-4 h-4 stroke-[2.5]" />
                         </div>
-                      ))}
-                    </div>
-
-                    {/* Sum Validation Warning */}
-                    {(() => {
-                      const sum = launchForm.customSplits.reduce((acc, curr) => acc + (Number(curr.qty) || 0), 0);
-                      const target = launchForm.prodPnlQty || 40;
-                      const isValid = sum === target;
-                      return (
-                        <div className={`p-2 rounded-lg text-[11px] font-bold flex items-center justify-between ${isValid ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' : 'bg-rose-100 text-rose-900 border border-rose-300'}`}>
-                          <span>Sum of Sub-Lots: {sum} PCB / Total: {target} PCB</span>
-                          <span>{isValid ? '✓ Valid Split' : '⚠️ Must equal Total PCB'}</span>
+                        <div>
+                          <span className="font-extrabold text-slate-950 text-xs block">
+                            Directly Launch into Stage 1 Production (1. SHEARING)
+                          </span>
+                          <span className="text-[11px] text-slate-500">
+                            Instantly mark traveler as IN_PROGRESS and dispatch to cutting shopfloor immediately
+                          </span>
                         </div>
-                      );
-                    })()}
+                      </div>
+                      <input
+                        type="checkbox"
+                        id="autoLaunch"
+                        checked={launchForm.autoLaunch}
+                        onChange={(e) => setLaunchForm({ ...launchForm, autoLaunch: e.target.checked })}
+                        className="w-5 h-5 text-emerald-600 rounded-md border-slate-300 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
+                      />
+                    </label>
                   </div>
-                )}
+                </div>
+
+              </form>
+
+              {/* Modal Footer Actions */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 bg-slate-50 border-t border-slate-200/80 shrink-0">
+                <div className="text-xs text-slate-500 hidden sm:flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span>Ready to dispatch to production</span>
+                </div>
+
+                <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowGenerateModal(false)}
+                    className="px-5 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs transition-all shadow-2xs cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => handleLaunchJobCard(e as any)}
+                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+                  >
+                    {editingCardId ? <CheckCircle2 className="w-4 h-4 text-slate-950 stroke-[2.5]" /> : <Plus className="w-4 h-4 text-slate-950 stroke-[3]" />}
+                    <span>{editingCardId ? 'SAVE CHANGES' : 'LAUNCH JOB'}</span>
+                  </button>
+                </div>
               </div>
 
-              {/* Checkbox: Auto Launch into Production */}
-              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 p-3 rounded-xl">
-                <input
-                  type="checkbox"
-                  id="autoLaunch"
-                  checked={launchForm.autoLaunch}
-                  onChange={(e) => setLaunchForm({ ...launchForm, autoLaunch: e.target.checked })}
-                  className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 cursor-pointer"
-                />
-                <label htmlFor="autoLaunch" className="text-xs font-bold text-emerald-900 cursor-pointer">
-                  Directly Launch into Stage 1 Production (1. SHEARING) immediately
-                </label>
-              </div>
-
-              {/* Form Actions */}
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowGenerateModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  {editingCardId ? <CheckCircle2 className="w-4 h-4 text-slate-950" /> : <Plus className="w-4 h-4 stroke-[3]" />}
-                  <span>{editingCardId ? 'SAVE CHANGES' : 'LAUNCH JOB'}</span>
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
-        </div>
         </Portal>
       )}
 
