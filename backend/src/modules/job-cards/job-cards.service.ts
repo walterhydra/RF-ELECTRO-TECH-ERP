@@ -303,7 +303,13 @@ export class JobCardsService {
                 steps: { include: { stage: true }, orderBy: { stepOrder: 'asc' } },
               },
             },
-            subJobCards: { include: { currentStage: true }, orderBy: { subJobCardNo: 'asc' } },
+            subJobCards: {
+              include: {
+                currentStage: true,
+                movements: { include: { stage: true }, orderBy: { createdAt: 'asc' } },
+              },
+              orderBy: { subJobCardNo: 'asc' },
+            },
           },
         });
       } else {
@@ -317,7 +323,13 @@ export class JobCardsService {
                 steps: { include: { stage: true }, orderBy: { stepOrder: 'asc' } },
               },
             },
-            subJobCards: { include: { currentStage: true }, orderBy: { subJobCardNo: 'asc' } },
+            subJobCards: {
+              include: {
+                currentStage: true,
+                movements: { include: { stage: true }, orderBy: { createdAt: 'asc' } },
+              },
+              orderBy: { subJobCardNo: 'asc' },
+            },
           },
         });
       }
@@ -1362,7 +1374,47 @@ export class JobCardsService {
 
 
 
-  private async getNextProcessStage(currentStage: any): Promise<{ targetNextStageId: string | null; isLastStage: boolean }> {
+  private async getNextProcessStage(currentStage: any, flowSteps?: any[]): Promise<{ targetNextStageId: string | null; isLastStage: boolean }> {
+    // ── STRATEGY 1: Use actual ProcessFlowMaster steps (RELIABLE) ──
+    // flowSteps comes from jobCard.processFlowMaster.steps (already sorted by stepOrder ASC)
+    if (flowSteps && flowSteps.length > 0 && currentStage?.id) {
+      const currentStepIdx = flowSteps.findIndex(
+        (step: any) => step.stageId === currentStage.id || step.stage?.id === currentStage.id,
+      );
+
+      if (currentStepIdx !== -1) {
+        if (currentStepIdx >= flowSteps.length - 1) {
+          return { targetNextStageId: null, isLastStage: true };
+        }
+        const nextStep = flowSteps[currentStepIdx + 1];
+        const nextStageId = nextStep.stageId || nextStep.stage?.id;
+        return {
+          targetNextStageId: nextStageId || null,
+          isLastStage: false,
+        };
+      }
+      // If current stage not found in flow steps, try name matching
+      const currentStageName = String(currentStage?.name || '').trim().toLowerCase();
+      const nameMatchIdx = flowSteps.findIndex(
+        (step: any) => {
+          const stepName = String(step.stage?.name || '').trim().toLowerCase();
+          return stepName === currentStageName ||
+            stepName.replace(/^\d+\.\s*/, '') === currentStageName.replace(/^\d+\.\s*/, '');
+        },
+      );
+      if (nameMatchIdx !== -1) {
+        if (nameMatchIdx >= flowSteps.length - 1) {
+          return { targetNextStageId: null, isLastStage: true };
+        }
+        const nextStep = flowSteps[nameMatchIdx + 1];
+        return {
+          targetNextStageId: nextStep.stageId || nextStep.stage?.id || null,
+          isLastStage: false,
+        };
+      }
+    }
+
+    // ── STRATEGY 2: Fallback to hardcoded PF-01 list (only when flow steps unavailable) ──
     const pfList = [
       '1. SHEARING',
       '2. DRILLING',
@@ -1389,17 +1441,18 @@ export class JobCardsService {
     const currentOrder = currentStage?.defaultOrder || 0;
 
     let currIdx = -1;
-    if (currentOrder >= 1 && currentOrder <= pfList.length) {
+    // Match by name first (more reliable than defaultOrder which can be mismatched)
+    currIdx = pfList.findIndex((s) => s.toLowerCase() === currentStageName.toLowerCase());
+    if (currIdx === -1) {
+      currIdx = pfList.findIndex((s) => {
+        const sClean = s.replace(/^\d+\.\s*/, '').toLowerCase();
+        const cClean = currentStageName.replace(/^\d+\.\s*/, '').toLowerCase();
+        return sClean === cClean;
+      });
+    }
+    // Only use defaultOrder if name matching failed
+    if (currIdx === -1 && currentOrder >= 1 && currentOrder <= pfList.length) {
       currIdx = currentOrder - 1;
-    } else {
-      currIdx = pfList.findIndex((s) => s.toLowerCase() === currentStageName.toLowerCase());
-      if (currIdx === -1) {
-        currIdx = pfList.findIndex((s) => {
-          const sClean = s.replace(/^\d+\.\s*/, '').toLowerCase();
-          const cClean = currentStageName.replace(/^\d+\.\s*/, '').toLowerCase();
-          return sClean === cClean;
-        });
-      }
     }
 
     if (currIdx === -1 || currIdx >= pfList.length - 1) {
@@ -1409,14 +1462,16 @@ export class JobCardsService {
     const nextOrder = currIdx + 2;
     const nextStageName = pfList[currIdx + 1];
 
+    // Use name match first, then defaultOrder — NOT an OR that could match the wrong stage
     let nextStage = await this.prisma.processStage.findFirst({
-      where: {
-        OR: [
-          { defaultOrder: nextOrder },
-          { name: nextStageName },
-        ],
-      },
+      where: { name: nextStageName },
     });
+
+    if (!nextStage) {
+      nextStage = await this.prisma.processStage.findFirst({
+        where: { defaultOrder: nextOrder },
+      });
+    }
 
     if (!nextStage) {
       nextStage = await this.prisma.processStage.create({
@@ -1533,7 +1588,9 @@ export class JobCardsService {
       currentStage = await this.prisma.processStage.findUnique({ where: { id: subCard.currentStageId } });
     }
 
-    const { targetNextStageId, isLastStage } = await this.getNextProcessStage(currentStage);
+    // Pass the actual process flow steps to determine correct next stage
+    const flowSteps = subCard.jobCard?.processFlowMaster?.steps || [];
+    const { targetNextStageId, isLastStage } = await this.getNextProcessStage(currentStage, flowSteps);
 
     const userId = user?.id || user?.sub || user?.userId || subCard.createdById;
     const rejectPcb = Math.max(0, Number(body.rejectPcbQty || body.rejectQty) || 0);
@@ -1699,7 +1756,9 @@ export class JobCardsService {
       currentStage = await this.prisma.processStage.findUnique({ where: { id: subCard.currentStageId } });
     }
 
-    const { targetNextStageId, isLastStage } = await this.getNextProcessStage(currentStage);
+    // Pass the actual process flow steps to determine correct next stage
+    const flowSteps = subCard.jobCard?.processFlowMaster?.steps || [];
+    const { targetNextStageId, isLastStage } = await this.getNextProcessStage(currentStage, flowSteps);
 
     if (!targetNextStageId || isLastStage) {
       throw new BadRequestException('Job is already at the final stage and cannot move further');

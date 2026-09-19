@@ -17,6 +17,7 @@ import {
   ArrowLeft,
   ShieldCheck
 } from 'lucide-react';
+import { getApiBaseUrl } from '@/lib/utils';
 
 interface JobCardPdfData {
   jobCardNo: string;
@@ -41,64 +42,131 @@ interface JobCardPdfData {
   currentStage: string;
   status: string;
   jobFlow: string;
+  stageMovements: { stageName: string; qtyIn: number; passQty: number; rejQty: number }[];
 }
 
 const PF01_STAGES_FULL = [
-  { id: 1, code: 'SH-01', name: '1. SHEARING & CUTTING', department: 'Pre-Production' },
-  { id: 2, code: 'DR-02', name: '2. CNC DRILLING', department: 'Drilling' },
-  { id: 3, code: 'PTH-03', name: '3. DESMEAR & PTH PLATING', department: 'Plating' },
-  { id: 4, code: 'IMG-04', name: '4. DRY FILM / PHOTO IMAGING', department: 'Imaging' },
-  { id: 5, code: 'PAT-05', name: '5. PATTERN PLATING (CU & TIN)', department: 'Plating' },
-  { id: 6, code: 'ETCH-06', name: '6. OUTER ETCHING & STRIPPING', department: 'Etch' },
-  { id: 7, code: 'AOI-07', name: '7. AOI OPTICAL INSPECTION', department: 'Quality' },
-  { id: 8, code: 'SM-08', name: '8. SOLDER MASK PRINTING', department: 'Masking' },
-  { id: 9, code: 'SM-EXP', name: '9. SOLDER MASK EXPOSURE & DEV', department: 'Masking' },
-  { id: 10, code: 'LEG-10', name: '10. LEGEND / SILKSCREEN PRINT', department: 'Legend' },
-  { id: 11, code: 'BAKE-11', name: '11. FINAL CURE / BAKING', department: 'Baking' },
-  { id: 12, code: 'SURF-12', name: '12. SURFACE FINISH (HASL/ENIG)', department: 'Finishing' },
-  { id: 13, code: 'CNC-13', name: '13. CNC ROUTING / V-SCORING', department: 'Routing' },
-  { id: 14, code: 'ETEST-14', name: '14. E-TESTING (FLYING PROBE/FIXTURE)', department: 'Testing' },
-  { id: 15, code: 'FQC-15', name: '15. FINAL QC & DIMENSION CHECK', department: 'Quality' },
-  { id: 16, code: 'MICRO-16', name: '16. MICRO-SECTION & SOLDERABILITY', department: 'Lab' },
-  { id: 17, code: 'WASH-17', name: '17. ULTRASONIC WASHING & DRYING', department: 'Washing' },
-  { id: 18, code: 'PACK-18', name: '18. VACUUM PACKAGING & LABELS', department: 'Packing' },
-  { id: 19, code: 'FGS-19', name: '19. FGS STORE & DESPATCH', department: 'Dispatch' },
+  { id: 1, code: 'SH-01', name: '1. SHEARING', department: 'Pre-Production' },
+  { id: 2, code: 'DR-02', name: '2. DRILLING', department: 'Drilling' },
+  { id: 3, code: 'DRL-QC', name: '3. DRL-QC', department: 'Quality' },
+  { id: 4, code: 'PTH-04', name: '4. PTH', department: 'Plating' },
+  { id: 5, code: 'PTH-QC', name: '5. PTH-QC', department: 'Quality' },
+  { id: 6, code: 'PHT-06', name: '6. PHOTO PRINTING', department: 'Imaging' },
+  { id: 7, code: 'PHT-QC', name: '7. PHOTO-QC', department: 'Quality' },
+  { id: 8, code: 'PAT-08', name: '8. PATTERN PLATING', department: 'Plating' },
+  { id: 9, code: 'ETCH-09', name: '9. ETCHING', department: 'Etch' },
+  { id: 10, code: 'ETH-QC', name: '10. ETCHING-QC', department: 'Quality' },
+  { id: 11, code: 'SM-11', name: '11. SOLDER MASK', department: 'Masking' },
+  { id: 12, code: 'SM-QC', name: '12. SOLDER MASK-QC', department: 'Quality' },
+  { id: 13, code: 'LEG-13', name: '13. LEGEND PRINTING', department: 'Legend' },
+  { id: 14, code: 'HAL-14', name: '14. HAL / ENIG', department: 'Finishing' },
+  { id: 15, code: 'PNC-15', name: '15. PUNCHING / ROUTING', department: 'Routing' },
+  { id: 16, code: 'ETEST-16', name: '16. E-TESTING', department: 'Testing' },
+  { id: 17, code: 'FQC-17', name: '17. FINAL QC', department: 'Quality' },
+  { id: 18, code: 'PACK-18', name: '18. PACKING', department: 'Packing' },
+  { id: 19, code: 'FGS-19', name: '19. DISPATCH', department: 'Dispatch' },
 ];
 
 export default function JobCardPdfPage() {
   const params = useParams();
-  const id = (params?.id as string) || 'jc-1';
+  const id = (params?.id as string) || '';
 
   const [card, setCard] = useState<JobCardPdfData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    // Generate clean job card sheet data matching id or defaults
-    const is30 = id.includes('1730');
-    setCard({
-      jobCardNo: is30 ? '26-27-1730' : '26-27-1729',
-      customerCode: is30 ? 'CUST-RF019' : 'CUST-RF045',
-      customerName: is30 ? 'PowerTech Systems Pvt Ltd' : 'Apex Electronics Ltd',
-      customerPoNo: is30 ? 'PO-2026-003' : 'PO-2026-001',
-      customerPartNo: is30 ? 'PSU-3KW-BOOSTER-REV03' : 'EV-900W-WP-TO247-VORS-25082026',
-      rfePartCode: is30 ? 'D3633' : 'D3625',
-      productName: is30 ? '3KW Booster Power Board' : 'Main Motherboard V2',
-      layers: is30 ? 2 : 4,
-      thickness: '1.6mm FR4 TG150',
-      copperWeight: '1oz / 1oz Outer',
-      solderMask: 'Liquid Photo-Imageable Green',
-      surfaceFinish: 'HASL Lead-Free (RoHS)',
-      panelSize: '450 x 600 mm',
-      qtyPerPanel: is30 ? 4 : 4,
-      prodPnlQty: is30 ? 60 : 40,
-      totalPcbQty: is30 ? 240 : 160,
-      prodPnlAreaSqm: is30 ? 75 : 50,
-      priority: is30 ? 'HIGH' : 'MOST URGENT',
-      targetDate: is30 ? '2026-09-20' : '2026-09-26',
-      currentStage: is30 ? '1. SHEARING' : '2. DRILLING',
-      status: is30 ? 'UNLAUNCHED' : 'IN_PROGRESS',
-      jobFlow: 'PF-01 Standard Double-Sided Flow',
-    });
+    if (!id) return;
+    const API = getApiBaseUrl();
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const headers: any = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+
+    setLoading(true);
+    fetch(`${API}/job-cards/${encodeURIComponent(id)}`, { headers })
+      .then((res) => {
+        if (!res.ok) throw new Error(`Server returned ${res.status}`);
+        return res.json();
+      })
+      .then((j: any) => {
+        const product = j.product || {};
+        const customerPO = j.customerPO || {};
+        const customer = customerPO.customer || {};
+        const topSub = (j.subJobCards && j.subJobCards.length > 0) ? j.subJobCards[0] : null;
+        const pcbQty = j.totalPcbQty || j.custPnlQty || (j.prodPnlQty ? j.prodPnlQty * 4 : 160);
+
+        // Map movement logs to stage data for the route sheet
+        const movements: { stageName: string; qtyIn: number; passQty: number; rejQty: number }[] = [];
+        if (j.subJobCards) {
+          for (const sub of j.subJobCards) {
+            const logs = sub.movements || sub.movementLogs || [];
+            for (const log of logs) {
+              const stageName = log.stage?.name || '';
+              movements.push({
+                stageName,
+                qtyIn: log.qtyReceived || 0,
+                passQty: log.qtyForwarded || 0,
+                rejQty: log.qtyRejected || 0,
+              });
+            }
+          }
+        }
+
+        setCard({
+          jobCardNo: j.jobCardNo || id,
+          customerCode: j.customerCode || customer.code || customer.companyName || 'N/A',
+          customerName: customer.companyName || j.customerCode || 'N/A',
+          customerPoNo: customerPO.poNo || 'N/A',
+          customerPartNo: j.customerPartNo || product.code || 'N/A',
+          rfePartCode: j.rfePartCode || product.specCardNo || 'N/A',
+          productName: product.name || 'N/A',
+          layers: product.layers ?? 2,
+          thickness: product.thicknessMm ? `${product.thicknessMm} mm` : (product.thickness || '1.6 mm'),
+          copperWeight: product.copperWeight || product.copper || '1 oz',
+          solderMask: product.solderMask || 'Liquid Photo-Imageable Green',
+          surfaceFinish: product.surfaceFinish || 'HASL Lead-Free',
+          panelSize: product.panelSize || 'N/A',
+          qtyPerPanel: product.qtyPerPanel || 4,
+          prodPnlQty: j.prodPnlQty || Math.ceil(pcbQty / 4),
+          totalPcbQty: pcbQty,
+          prodPnlAreaSqm: j.prodPnlAreaSqm || j.custPnlAreaSqm || 0,
+          priority: j.priority || 'NORMAL',
+          targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : 'N/A',
+          currentStage: topSub?.currentStage?.name || j.currentStageName || 'N/A',
+          status: j.status || 'CREATED',
+          jobFlow: j.processFlowMaster?.name || 'PF-01',
+          stageMovements: movements,
+        });
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Failed to fetch job card for PDF:', err);
+        setError(`Could not load Job Card "${id}". ${err.message}`);
+        setLoading(false);
+      });
   }, [id]);
+
+  if (loading) return (
+    <div className="min-h-screen bg-slate-200 flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-slate-600 font-semibold">Loading Job Card Data...</p>
+      </div>
+    </div>
+  );
+
+  if (error) return (
+    <div className="min-h-screen bg-slate-200 flex items-center justify-center p-8">
+      <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md text-center">
+        <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+        <h2 className="text-xl font-bold text-slate-900 mb-2">Failed to Load Job Card</h2>
+        <p className="text-slate-500">{error}</p>
+        <button onClick={() => window.history.back()} className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-700 transition-colors">Go Back</button>
+      </div>
+    </div>
+  );
 
   if (!card) return null;
 
@@ -293,7 +361,12 @@ export default function JobCardPdfPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-300">
-                {PF01_STAGES_FULL.map((stg) => (
+                {PF01_STAGES_FULL.map((stg) => {
+                  const movement = card.stageMovements?.find((m) =>
+                    m.stageName.toLowerCase().includes(stg.name.replace(/^\d+\.\s*/, '').toLowerCase()) ||
+                    stg.name.toLowerCase().includes(m.stageName.replace(/^\d+\.\s*/, '').toLowerCase())
+                  );
+                  return (
                   <tr key={stg.id} className="hover:bg-slate-50 odd:bg-white even:bg-slate-50/50">
                     <td className="p-2 border-r border-slate-300 text-center font-bold">{stg.id}</td>
                     <td className="p-2 border-r border-slate-300 font-extrabold text-slate-900">
@@ -301,13 +374,14 @@ export default function JobCardPdfPage() {
                       <span className="text-[9px] text-slate-500 font-normal ml-1">({stg.code})</span>
                     </td>
                     <td className="p-2 border-r border-slate-300 text-slate-700">{stg.department}</td>
-                    <td className="p-2 border-r border-slate-300 text-center font-bold">{stg.id === 1 || stg.id === 2 ? `${card.prodPnlQty}` : ''}</td>
-                    <td className="p-2 border-r border-slate-300 text-center font-bold text-emerald-700"></td>
-                    <td className="p-2 border-r border-slate-300 text-center font-bold text-red-700"></td>
+                    <td className="p-2 border-r border-slate-300 text-center font-bold">{movement?.qtyIn || ''}</td>
+                    <td className="p-2 border-r border-slate-300 text-center font-bold text-emerald-700">{movement?.passQty || ''}</td>
+                    <td className="p-2 border-r border-slate-300 text-center font-bold text-red-700">{movement?.rejQty || ''}</td>
                     <td className="p-2 border-r border-slate-300"></td>
                     <td className="p-2 text-center"></td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

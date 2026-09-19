@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { 
   Layers, 
@@ -167,12 +167,16 @@ interface JobCard {
     customer: { companyName: string };
   };
   product?: {
-    name: string;
-    code: string;
-    specCardNo: string;
-    layers: number;
-    thickness: string;
-    copper: string;
+    name?: string;
+    code?: string;
+    specCardNo?: string;
+    layers?: number;
+    thickness?: string;
+    thicknessMm?: number | string;
+    copper?: string;
+    copperWeight?: string;
+    solderMask?: string;
+    surfaceFinish?: string;
   };
   subJobCards: SubJobCard[];
   isNewlyCreated?: boolean;
@@ -189,112 +193,6 @@ interface OpenPO {
   customer: { companyName: string };
   product: { name: string; code: string; specCardNo: string };
 }
-
-const INITIAL_JOB_CARDS: JobCard[] = [
-  {
-    id: 'jc-1',
-    jobCardNo: '26-27-1729',
-    photoUrl: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=800&auto=format&fit=crop&q=60',
-    customerPartNo: 'EV-900W-WP-TO247-VORS-25082026',
-    rfePartCode: 'D3625',
-    customerCode: 'CUST-RF045',
-    targetDate: '2026-09-26',
-    priority: 'MOST URGENT',
-    prodPnlQty: 40,
-    custPnlQty: 80,
-    totalPcbQty: 160,
-    prodPnlAreaSqm: 50,
-    custPnlAreaSqm: 45,
-    jobFlowSelection: 'PF-01',
-    currentStageIndex: 1,
-    currentStageName: '2. DRILLING',
-    customerPoId: 'po-1',
-    productId: 'prod-1',
-    totalQty: 40,
-    status: 'IN_PROGRESS',
-    qrCodeValue: '26-27-1729-PARENT',
-    createdAt: '2026-09-01T10:00:00Z',
-    launchedAt: '2026-09-02T09:30:00Z',
-    customerPO: {
-      poNo: 'PO-2026-001',
-      orderQty: 40,
-      customer: { companyName: 'Apex Electronics Ltd' },
-    },
-    product: {
-      name: 'Main Motherboard V2',
-      code: 'EV-900W-WP-TO247',
-      specCardNo: 'D3625',
-      layers: 4,
-      thickness: '1.6mm',
-      copper: '1oz',
-    },
-    subJobCards: [
-      {
-        id: 'sub-1',
-        subJobCardNo: '26-27-1729',
-        qty: 35,
-        status: 'IN_PROGRESS',
-        qrCodeValue: '26-27-1729',
-        currentStage: { id: 'stg-3', name: '2. DRILLING' },
-      },
-      {
-        id: 'sub-2',
-        subJobCardNo: '26-27-1729',
-        qty: 5,
-        status: 'IN_PROGRESS',
-        qrCodeValue: '26-27-1729',
-        currentStage: { id: 'stg-2', name: '1. SHEARING' },
-      },
-    ],
-  },
-  {
-    id: 'jc-2',
-    jobCardNo: '26-27-1730',
-    photoUrl: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&auto=format&fit=crop&q=60',
-    customerPartNo: 'PSU-3KW-BOOSTER-REV03',
-    rfePartCode: 'D3633',
-    customerCode: 'CUST-RF019',
-    targetDate: '2026-09-20',
-    priority: 'HIGH',
-    prodPnlQty: 60,
-    custPnlQty: 120,
-    totalPcbQty: 240,
-    prodPnlAreaSqm: 75,
-    custPnlAreaSqm: 68,
-    jobFlowSelection: 'PF-01',
-    currentStageIndex: 0,
-    currentStageName: '1. SHEARING',
-    customerPoId: 'po-3',
-    productId: 'prod-3',
-    totalQty: 60,
-    status: 'UNLAUNCHED',
-    qrCodeValue: '26-27-1730-PARENT',
-    createdAt: '2026-09-03T11:20:00Z',
-    customerPO: {
-      poNo: 'PO-2026-003',
-      orderQty: 60,
-      customer: { companyName: 'Orbit Medical Devices' },
-    },
-    product: {
-      name: 'Power Supply PCB',
-      code: 'PSU-3KW-BOOSTER',
-      specCardNo: 'D3633',
-      layers: 2,
-      thickness: '1.2mm',
-      copper: '2oz',
-    },
-    subJobCards: [
-      {
-        id: 'sub-3',
-        subJobCardNo: '26-27-1730',
-        qty: 60,
-        status: 'UNLAUNCHED',
-        qrCodeValue: '26-27-1730',
-        currentStage: { id: 'stg-1', name: '1. SHEARING' },
-      },
-    ],
-  },
-];
 
 const DEFAULT_OPEN_POS: OpenPO[] = [
   {
@@ -366,7 +264,7 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
   const custName = jobCard.customerPO?.customer?.companyName || `Customer (${jobCard.customerCode})`;
   const prodName = jobCard.product?.name || jobCard.customerPartNo;
   const prodSpecs = jobCard.product
-    ? `${jobCard.product.layers || 4} Layers • ${jobCard.product.thickness || '1.6mm'} • ${jobCard.product.copper || '1oz'}`
+    ? `${jobCard.product.layers || 2} Layer • ${jobCard.product.thicknessMm ? `${jobCard.product.thicknessMm} mm` : (jobCard.product.thickness || '1.6 mm')} • ${jobCard.product.copperWeight || jobCard.product.copper || '1 oz'}`
     : `${jobCard.prodPnlAreaSqm || 50} Sqm • ${jobCard.totalPcbQty || 80} PCB`;
 
   return (
@@ -720,12 +618,12 @@ export default function JobCardsPage() {
   const [incompleteCustomReason, setIncompleteCustomReason] = useState<string>('');
   const [incompleteRemarks, setIncompleteRemarks] = useState<string>('');
 
+  // Track recently deleted IDs to prevent re-appearing during sync polling
+  const recentlyDeletedIds = useRef<Set<string>>(new Set());
+
   // Set client mount state & load initial stored cards
   useEffect(() => {
     setIsMounted(true);
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('erp_deleted_job_card_ids');
-    }
     const stored = getStoredJobCards();
     if (stored !== null) {
       setJobCards(stored);
@@ -781,6 +679,32 @@ export default function JobCardsPage() {
     const targetId = targetCard?.id || id;
     const parentId = (targetCard as any)?.parentJobCardId || targetId;
 
+    // Track all related IDs as "recently deleted" to prevent re-appearing from sync polling
+    const allRelatedIds = new Set([id, cardNo, subCardNo, targetId, parentId, cardNo.replace(/-\d+$/, '')].filter(Boolean));
+    allRelatedIds.forEach((delId) => recentlyDeletedIds.current.add(delId));
+    // Auto-clear after 10 seconds (by then backend should have processed the delete)
+    setTimeout(() => {
+      allRelatedIds.forEach((delId) => recentlyDeletedIds.current.delete(delId));
+    }, 10000);
+
+    // Remove from UI immediately
+    const updated = jobCards.filter(
+      (jc) =>
+        jc.id !== targetId &&
+        jc.id !== id &&
+        jc.jobCardNo !== cardNo &&
+        jc.subJobCardNo !== subCardNo &&
+        (jc as any).parentJobCardId !== parentId &&
+        (jc as any).parentJobCardId !== targetId
+    );
+    setJobCards(updated);
+    saveJobCardsToStorage(updated);
+    setDeleteConfirmCard(null);
+    if (selectedMovementJob?.id === targetId || selectedMovementJob?.jobCardNo === cardNo) {
+      setSelectedMovementJob(null);
+    }
+
+    let backendDeleteSuccess = false;
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       const headers = {
@@ -788,37 +712,31 @@ export default function JobCardsPage() {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
 
-      const idsToDelete = Array.from(
-        new Set([id, cardNo, subCardNo, targetId, parentId, cardNo.replace(/-\d+$/, '')].filter(Boolean))
-      );
+      const idsToDelete = Array.from(allRelatedIds);
 
       for (const delId of idsToDelete) {
-        await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(delId)}`, {
-          method: 'DELETE',
-          headers,
-        }).catch((err) => console.warn('Delete attempt failed:', err));
+        try {
+          const res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(delId)}`, {
+            method: 'DELETE',
+            headers,
+          });
+          if (res.ok || res.status === 404) {
+            backendDeleteSuccess = true;
+          }
+        } catch (err) {
+          console.warn('Delete attempt failed for:', delId, err);
+        }
       }
     } catch (err: any) {
       console.warn('Backend DELETE call failed or offline mode', err);
     } finally {
-      const updated = jobCards.filter(
-        (jc) =>
-          jc.id !== targetId &&
-          jc.id !== id &&
-          jc.jobCardNo !== cardNo &&
-          jc.subJobCardNo !== subCardNo &&
-          (jc as any).parentJobCardId !== parentId &&
-          (jc as any).parentJobCardId !== targetId
-      );
-      setJobCards(updated);
-      saveJobCardsToStorage(updated);
-      showToast('Job Card deleted successfully!', 'success');
-      setDeleteConfirmCard(null);
-      if (selectedMovementJob?.id === targetId || selectedMovementJob?.jobCardNo === cardNo) {
-        setSelectedMovementJob(null);
+      if (backendDeleteSuccess) {
+        showToast('Job Card deleted successfully!', 'success');
+      } else {
+        showToast('Job Card removed locally. Server delete may have failed — card could reappear if server is unreachable.', 'error');
       }
       setIsDeleting(false);
-      // Immediately refetch from backend to confirm multi-device sync state
+      // Refetch from backend to confirm multi-device sync state
       await fetchBackendJobCards();
     }
   };
@@ -977,9 +895,9 @@ export default function JobCardsPage() {
                   jobCardNo: j.jobCardNo,
                   subJobCardNo: sub.subJobCardNo || j.jobCardNo,
                   photoUrl: j.photoUrl || '',
-                  customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
-                  rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
-                  customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
+                  customerPartNo: j.customerPartNo || j.product?.code || '',
+                  rfePartCode: j.rfePartCode || j.product?.specCardNo || '',
+                  customerCode: j.customerCode || j.customerPO?.customer?.code || '',
                   targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
                   priority: j.priority || 'NORMAL',
                   prodPnlQty: Math.ceil(subPcbQty / 4),
@@ -1024,9 +942,9 @@ export default function JobCardsPage() {
               jobCardNo: j.jobCardNo,
               subJobCardNo: j.jobCardNo,
               photoUrl: j.photoUrl || '',
-              customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
-              rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
-              customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
+              customerPartNo: j.customerPartNo || j.product?.code || '',
+              rfePartCode: j.rfePartCode || j.product?.specCardNo || '',
+              customerCode: j.customerCode || j.customerPO?.customer?.code || '',
               targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
               priority: j.priority || 'NORMAL',
               prodPnlQty: Math.ceil(masterPcbQty / 4),
@@ -1057,8 +975,12 @@ export default function JobCardsPage() {
 
 
           // Server Database is 100% Single Source of Truth for Real-Time Multi-Device Sync
-          setJobCards(mapped);
-          saveJobCardsToStorage(mapped);
+          // Filter out any recently deleted IDs to prevent re-appearing during sync
+          const filtered = recentlyDeletedIds.current.size > 0
+            ? mapped.filter((jc) => !recentlyDeletedIds.current.has(jc.id) && !recentlyDeletedIds.current.has(jc.jobCardNo) && !recentlyDeletedIds.current.has(jc.subJobCardNo || ''))
+            : mapped;
+          setJobCards(filtered);
+          saveJobCardsToStorage(filtered);
         }
       } else {
         setServerConnectionState({
@@ -1335,6 +1257,21 @@ export default function JobCardsPage() {
 
     if (existingIndex !== -1) {
       const existing = jobCards[existingIndex];
+      const finalStatus = launchForm.autoLaunch
+        ? 'IN_PROGRESS'
+        : (existing.status && existing.status !== 'UNLAUNCHED' && existing.status !== 'CREATED' ? existing.status : 'UNLAUNCHED');
+
+      const preservedSubCards = (launchForm.enablePreSplit && launchForm.customSplits.length > 0)
+        ? subJobCardsList
+        : (existing.subJobCards && existing.subJobCards.length > 0
+            ? existing.subJobCards.map((s) => ({
+                ...s,
+                totalPcbQty: totalPcb,
+                qty: s.qty || totalPcb,
+                status: finalStatus as any,
+              }))
+            : subJobCardsList);
+
       const updatedJobCard: JobCard = {
         ...existing,
         jobCardNo: jcNo,
@@ -1343,7 +1280,7 @@ export default function JobCardsPage() {
         rfePartCode: launchForm.rfePartCode,
         customerCode: launchForm.customerCode,
         targetDate: launchForm.targetDate,
-        launchedAt: launchIsoDate,
+        launchedAt: existing.launchedAt || (finalStatus === 'IN_PROGRESS' ? launchIsoDate : undefined),
         priority: launchForm.priority,
         totalPcbQty: totalPcb,
         custPnlQty: totalPcb,
@@ -1351,9 +1288,9 @@ export default function JobCardsPage() {
         custPnlAreaSqm: Number(launchForm.custPnlAreaSqm) || 45,
         prodPnlAreaSqm: Number(Number(launchForm.custPnlAreaSqm || 45) * 1.1) || 50,
         jobFlowSelection: launchForm.jobFlowSelection,
-        status: launchForm.autoLaunch ? 'IN_PROGRESS' : existing.status,
-        subJobCards: subJobCardsList,
-        isNewlyCreated: launchForm.autoLaunch ? false : existing.isNewlyCreated,
+        status: finalStatus as any,
+        subJobCards: preservedSubCards,
+        isNewlyCreated: finalStatus === 'UNLAUNCHED',
       };
 
       runWithLoading(`Updating Job Card ${jcNo}...`, async () => {
@@ -1371,9 +1308,11 @@ export default function JobCardsPage() {
         }
 
         setJobCards((prev) => prev.map((j, idx) => (idx === existingIndex ? updatedJobCard : j)));
+        saveJobCardsToStorage(jobCards.map((j, idx) => (idx === existingIndex ? updatedJobCard : j)));
         showToast(`Job Card ${jcNo} updated successfully!`, 'success');
         setShowGenerateModal(false);
         setEditingCardId(null);
+        await fetchBackendJobCards();
       });
       return;
     }
@@ -3560,8 +3499,8 @@ export default function JobCardsPage() {
                   type="submit"
                   className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Plus className="w-4 h-4 stroke-[3]" />
-                  <span>LAUNCH JOB</span>
+                  {editingCardId ? <CheckCircle2 className="w-4 h-4 text-slate-950" /> : <Plus className="w-4 h-4 stroke-[3]" />}
+                  <span>{editingCardId ? 'SAVE CHANGES' : 'LAUNCH JOB'}</span>
                 </button>
               </div>
             </form>

@@ -274,18 +274,34 @@ export class ReportsService {
 
     // 3. Movement logs for rejection & quality stats
     const movementLogs = await this.prisma.stageMovementLog.findMany({
-      include: { stage: { select: { name: true } } }
+      include: {
+        stage: { select: { name: true } },
+        subJobCard: {
+          include: {
+            jobCard: { select: { jobCardNo: true, product: { select: { name: true } } } },
+          },
+        },
+      },
     });
 
     let totalProcessed = 0;
     let totalRejected = 0;
     const stageRejections: Record<string, number> = {};
+    const rejectionByJobCard: Record<string, { jobCardNo: string; productName: string; rejectedQty: number }> = {};
 
     movementLogs.forEach(log => {
       totalProcessed += log.qtyProcessed;
       totalRejected += log.qtyRejected;
       if (log.qtyRejected > 0 && log.stage?.name) {
         stageRejections[log.stage.name] = (stageRejections[log.stage.name] || 0) + log.qtyRejected;
+      }
+      if (log.qtyRejected > 0 && log.subJobCard?.jobCard) {
+        const jcNo = log.subJobCard.jobCard.jobCardNo;
+        const pName = log.subJobCard.jobCard.product?.name || '';
+        if (!rejectionByJobCard[jcNo]) {
+          rejectionByJobCard[jcNo] = { jobCardNo: jcNo, productName: pName, rejectedQty: 0 };
+        }
+        rejectionByJobCard[jcNo].rejectedQty += log.qtyRejected;
       }
     });
 
@@ -295,6 +311,16 @@ export class ReportsService {
       name: stageName,
       Rejections: stageRejections[stageName]
     }));
+
+    const top5RejectionCards = Object.values(rejectionByJobCard)
+      .sort((a, b) => b.rejectedQty - a.rejectedQty)
+      .slice(0, 5);
+
+    // Overdue Tracking
+    const now = new Date();
+    const overdueCards = activeJobCards.filter(jc => jc.targetDate && new Date(jc.targetDate) < now);
+    const overdueCount = overdueCards.length;
+    const overduePcbQty = overdueCards.reduce((acc, jc) => acc + (jc.totalQty || 0), 0);
 
     // 4. Stage Load Summary
     const stages = await this.prisma.processStage.findMany({
@@ -317,6 +343,10 @@ export class ReportsService {
         status
       };
     });
+
+    const top3WipStages = [...stageLoadSummary]
+      .sort((a, b) => b.volume - a.volume)
+      .slice(0, 3);
 
     // 5. Formatted Live Job Cards for Frontend
     const formattedJobs = activeJobCards.map(jc => {
@@ -351,6 +381,10 @@ export class ReportsService {
       rejectionRatePercent: rejectionRate,
       onTimeDeliveryPercent: '98.4%',
       stageLoadSummary: stageLoadSummary.length > 0 ? stageLoadSummary : null,
+      top3WipStages,
+      top5RejectionCards,
+      overdueCount,
+      overduePcbQty,
       liveJobCards: formattedJobs,
       qualityData: qualityData.length > 0 ? qualityData : null,
       upcomingDispatches

@@ -36,6 +36,8 @@ const DEMO_CREDENTIALS = [
   }
 ];
 
+import { getApiBaseUrl } from '@/lib/utils';
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -49,17 +51,39 @@ export default function LoginPage() {
     setActiveRole(role);
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Simulate backend auth delay
-    setTimeout(() => {
-      // In a real app, store JWT and user context
-      localStorage.setItem('isAuthenticated', 'true');
-      localStorage.setItem('userRole', activeRole || 'Super Admin');
-      localStorage.setItem('userEmail', email || 'admin@rfelectro.com');
-      router.push('/dashboard');
-    }, 800);
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.accessToken) {
+          localStorage.setItem('token', data.accessToken);
+          localStorage.setItem('refreshToken', data.refreshToken || '');
+        }
+        localStorage.setItem('isAuthenticated', 'true');
+        localStorage.setItem('userRole', data.user?.role?.name || activeRole || 'Super Admin');
+        localStorage.setItem('userEmail', data.user?.email || email || 'admin@rfelectro.com');
+        if (data.user?.assignedStage?.name) {
+          localStorage.setItem('assignedStage', data.user.assignedStage.name);
+        }
+        router.push('/dashboard');
+        return;
+      }
+    } catch (err) {
+      console.warn('Backend login request error:', err);
+    }
+
+    // Demo fallback for local development / test logins
+    localStorage.setItem('isAuthenticated', 'true');
+    localStorage.setItem('userRole', activeRole || 'Super Admin');
+    localStorage.setItem('userEmail', email || 'admin@rfelectro.com');
+    router.push('/dashboard');
   };
 
   return (
