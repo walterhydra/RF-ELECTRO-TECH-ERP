@@ -135,20 +135,22 @@ export class JobCardsService {
 
           let cleanNo = sub.subJobCardNo;
 
-          // 1. If corrupted by old '-A', '-B' letter logic and parent is different (e.g. parent is 26-27-7151-80 but sub is 26-27-7151-A)
-          if (/-(?:[A-Z]|[A-Z]-[A-Z])$/.test(cleanNo) && !jc.jobCardNo.endsWith(cleanNo.split('-').pop() || '')) {
-            cleanNo = jc.subJobCards.length <= 1 ? jc.jobCardNo : `${jc.jobCardNo}-${subIdx + 1}`;
-          }
-
-          // 2. If single lot, subJobCardNo should match the exact jobCardNo (e.g. 26-27-7151-80)
-          if (jc.subJobCards.length <= 1 && (cleanNo === `${jc.jobCardNo}-1` || cleanNo !== jc.jobCardNo)) {
+          // 1. If single lot: WIP No must match exact parent jobCardNo (e.g. 26-27-7151-80)
+          if (jc.subJobCards.length <= 1) {
             cleanNo = jc.jobCardNo;
-          }
-
-          // 3. Clean subJobCardNo if it has random 3+ digit timestamp suffix e.g. 26-27-1396-167 -> 26-27-1396-2
-          const tsMatch = cleanNo.match(/^(.*)-(\d{3,})$/);
-          if (tsMatch) {
-            cleanNo = `${jc.jobCardNo}-${subIdx + 1}`;
+          } else {
+            // 2. If multiple lots:
+            // Lot 0 (main / remaining lot): keeps exact jc.jobCardNo if not letter-suffixed
+            if (subIdx === 0 && (cleanNo === `${jc.jobCardNo}-1` || cleanNo === jc.jobCardNo || !cleanNo.startsWith(`${jc.jobCardNo}-`))) {
+              cleanNo = jc.jobCardNo;
+            } else if (subIdx > 0) {
+              // Split lots: Must have exact base jobCardNo + letter suffix (e.g. 26-27-7151-80-A, 26-27-7151-80-B)
+              const letter = String.fromCharCode(65 + (subIdx - 1));
+              const suffix = cleanNo.startsWith(`${jc.jobCardNo}-`) ? cleanNo.slice(`${jc.jobCardNo}-`.length).trim() : '';
+              if (!suffix || !/^[A-Z]+$/i.test(suffix)) {
+                cleanNo = `${jc.jobCardNo}-${letter}`;
+              }
+            }
           }
 
           if (sub.totalPcbQty !== subPcbQty || sub.qty !== subPcbQty || sub.subJobCardNo !== cleanNo) {
@@ -1809,18 +1811,36 @@ export class JobCardsService {
           where: { jobCardId: subCard.jobCardId },
           select: { subJobCardNo: true },
         });
-        const parentJobCardNo = (subCard as any).jobCard?.jobCardNo || subCard.subJobCardNo.replace(/-\d+$/, '');
 
-        // Determine next clean sequential sub-lot suffix e.g. -2, -3 instead of random timestamp
-        let maxSuffix = 1;
+        // Exact parent Job Card number is ALWAYS the base (never stripped!)
+        const parentJobCard = subCard.jobCard || (await tx.jobCard.findUnique({
+          where: { id: subCard.jobCardId },
+          select: { jobCardNo: true },
+        }));
+        const baseJobCardNo = parentJobCard?.jobCardNo || subCard.subJobCardNo;
+
+        // Collect existing letter suffixes already used for this base job card (e.g. 26-27-7151-80-A -> 'A')
+        const usedLetters = new Set<string>();
         for (const s of allSubs) {
-          const match = s.subJobCardNo.match(/-(\d+)$/);
-          if (match) {
-            const num = parseInt(match[1], 10);
-            if (num < 100 && num > maxSuffix) maxSuffix = num;
+          if (s.subJobCardNo.startsWith(`${baseJobCardNo}-`)) {
+            const suffix = s.subJobCardNo.slice(`${baseJobCardNo}-`.length).trim();
+            if (/^[A-Z]+$/i.test(suffix)) {
+              usedLetters.add(suffix.toUpperCase());
+            }
           }
         }
-        const nextSubNo = `${parentJobCardNo}-${maxSuffix + 1}`;
+
+        // Determine next available letter: A, B, C, ...
+        let nextLetter = 'A';
+        for (let i = 0; i < 26; i++) {
+          const char = String.fromCharCode(65 + i);
+          if (!usedLetters.has(char)) {
+            nextLetter = char;
+            break;
+          }
+        }
+
+        const nextSubNo = `${baseJobCardNo}-${nextLetter}`;
 
         await tx.subJobCard.create({
           data: {

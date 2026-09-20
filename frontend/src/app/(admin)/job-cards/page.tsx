@@ -911,12 +911,21 @@ export default function JobCardsPage() {
                   subStatusNorm = 'UNLAUNCHED';
                 }
 
-                // If only 1 lot exists, display the exact jobCardNo the user created (e.g. 26-27-7151-80)
-                const finalSubNo = subLots.length <= 1
-                  ? j.jobCardNo
-                  : (sub.subJobCardNo && !sub.subJobCardNo.endsWith('-A') && !sub.subJobCardNo.endsWith('-B')
-                      ? sub.subJobCardNo
-                      : `${j.jobCardNo}-${lotIdx + 1}`);
+                // Determine display subJobCardNo (WIP No.)
+                let finalSubNo = sub.subJobCardNo || j.jobCardNo;
+                if (subLots.length <= 1) {
+                  finalSubNo = j.jobCardNo;
+                } else {
+                  if (lotIdx === 0 && (finalSubNo === `${j.jobCardNo}-1` || finalSubNo === j.jobCardNo || !finalSubNo.startsWith(`${j.jobCardNo}-`))) {
+                    finalSubNo = j.jobCardNo;
+                  } else if (lotIdx > 0) {
+                    const suffix = finalSubNo.startsWith(`${j.jobCardNo}-`) ? finalSubNo.slice(`${j.jobCardNo}-`.length).trim() : '';
+                    if (!suffix || !/^[A-Z]+$/i.test(suffix)) {
+                      const letter = String.fromCharCode(65 + (lotIdx - 1));
+                      finalSubNo = `${j.jobCardNo}-${letter}`;
+                    }
+                  }
+                }
 
                 return {
                   id: sub.id,
@@ -1753,12 +1762,34 @@ export default function JobCardsPage() {
         console.warn('Backend API call failed, using client state update');
       }
 
-      const baseJc = selectedMovementJob.jobCardNo.replace(/-\d+$/, '');
-      const existingSubNo = selectedMovementJob.subJobCardNo || selectedMovementJob.jobCardNo;
-      const matchSuffix = existingSubNo.match(/-(\d+)$/);
-      const currentSuffixNum = matchSuffix ? parseInt(matchSuffix[1], 10) : 1;
-      const movedSubNo = `${baseJc}-${currentSuffixNum + 1}`;
-      const remainingSubNo = existingSubNo.includes('-') ? existingSubNo : `${baseJc}-1`;
+      const baseJc = selectedMovementJob.jobCardNo;
+      const existingSubNo = selectedMovementJob.subJobCardNo || baseJc;
+
+      // Find all existing letter suffixes for this jobCardNo among existing cards
+      const usedLetters = new Set<string>();
+      jobCards
+        .filter((j) => j.jobCardNo === baseJc)
+        .forEach((j) => {
+          const subNo = j.subJobCardNo || '';
+          if (subNo.startsWith(`${baseJc}-`)) {
+            const suffix = subNo.slice(`${baseJc}-`.length).trim();
+            if (/^[A-Z]+$/i.test(suffix)) {
+              usedLetters.add(suffix.toUpperCase());
+            }
+          }
+        });
+
+      let nextLetter = 'A';
+      for (let i = 0; i < 26; i++) {
+        const candidate = String.fromCharCode(65 + i);
+        if (!usedLetters.has(candidate)) {
+          nextLetter = candidate;
+          break;
+        }
+      }
+
+      const movedSubNo = `${baseJc}-${nextLetter}`;
+      const remainingSubNo = existingSubNo;
 
       const movedBatch: JobCard = {
         ...selectedMovementJob,

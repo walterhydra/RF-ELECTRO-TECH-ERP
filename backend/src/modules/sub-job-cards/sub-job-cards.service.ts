@@ -397,12 +397,41 @@ export class SubJobCardsService {
         });
 
         if (nextStep && netForwardedQty > 0) {
-          // Keep identical Job Card Number (No -A, -B suffix per ERP Correction.pdf Point 1)
-          const baseJobCardNo = subCard.jobCard?.jobCardNo || subCard.subJobCardNo.split('-')[0];
+          const parentJobCard = subCard.jobCard || (await tx.jobCard.findUnique({
+            where: { id: subCard.jobCardId },
+            select: { jobCardNo: true },
+          }));
+          const baseJobCardNo = parentJobCard?.jobCardNo || subCard.subJobCardNo;
+
+          const allExistingSubs = await tx.subJobCard.findMany({
+            where: { jobCardId: subCard.jobCardId },
+            select: { subJobCardNo: true },
+          });
+
+          const usedLetters = new Set<string>();
+          for (const s of allExistingSubs) {
+            if (s.subJobCardNo.startsWith(`${baseJobCardNo}-`)) {
+              const suffix = s.subJobCardNo.slice(`${baseJobCardNo}-`.length).trim();
+              if (/^[A-Z]+$/i.test(suffix)) {
+                usedLetters.add(suffix.toUpperCase());
+              }
+            }
+          }
+
+          let nextLetter = 'A';
+          for (let i = 0; i < 26; i++) {
+            const char = String.fromCharCode(65 + i);
+            if (!usedLetters.has(char)) {
+              nextLetter = char;
+              break;
+            }
+          }
+
+          const newSubJobCardNo = `${baseJobCardNo}-${nextLetter}`;
 
           newSubJobCard = await tx.subJobCard.create({
             data: {
-              subJobCardNo: baseJobCardNo,
+              subJobCardNo: newSubJobCardNo,
               jobCardId: subCard.jobCardId,
               parentSubJobCardId: subCard.id,
               currentStageId: nextStep.stageId,
@@ -415,7 +444,7 @@ export class SubJobCardsService {
               qtyHold: 0,
               qtyRejected: 0,
               status: SubJobCardStatus.IN_STAGE,
-              qrCodeValue: `RFE-JC-${baseJobCardNo}-${nextStep.stageId.slice(0, 4)}-${Date.now().toString().slice(-4)}`,
+              qrCodeValue: `RFE-JC-${newSubJobCardNo}-${nextStep.stageId.slice(0, 4)}-${Date.now().toString().slice(-4)}`,
               createdById: userId,
             },
           });
