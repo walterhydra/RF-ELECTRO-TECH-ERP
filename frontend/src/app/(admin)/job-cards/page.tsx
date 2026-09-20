@@ -601,7 +601,7 @@ export default function JobCardsPage() {
   const [showReportDrawer, setShowReportDrawer] = useState(false);
   const [showQrModal, setShowQrModal] = useState<JobCard | null>(null);
   const [deleteConfirmCard, setDeleteConfirmCard] = useState<JobCard | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   const [serverHost, setServerHost] = useState<string>('rf-electro-tech-erp.onrender.com');
   const [photoLightbox, setPhotoLightbox] = useState<string | null>(null);
   const [unitPcbAreaSqm, setUnitPcbAreaSqm] = useState<number>(0.28125);
@@ -668,39 +668,57 @@ export default function JobCardsPage() {
     }, 4000);
   };
 
-  const handleDeleteJobCard = async (id: string) => {
-    if (!id) return;
-    setIsDeleting(true);
-    const targetCard = jobCards.find(
-      (j) => j.id === id || j.jobCardNo === id || j.subJobCardNo === id || (j as any).parentJobCardId === id
-    );
-    const cardNo = targetCard?.jobCardNo || id;
-    const subCardNo = targetCard?.subJobCardNo || id;
-    const targetId = targetCard?.id || id;
-    const parentId = (targetCard as any)?.parentJobCardId || targetId;
+  const handleDeleteJobCard = async (target: JobCard | string) => {
+    if (!target) return;
 
-    // Track all related IDs as "recently deleted" to prevent re-appearing from sync polling
-    const allRelatedIds = new Set([id, cardNo, subCardNo, targetId, parentId, cardNo.replace(/-\d+$/, '')].filter(Boolean));
-    allRelatedIds.forEach((delId) => recentlyDeletedIds.current.add(delId));
-    // Auto-clear after 10 seconds (by then backend should have processed the delete)
+    // Resolve targetCard and target identifiers
+    const targetIdFromParam = typeof target === 'string' ? target : target.id;
+    const targetCard = typeof target === 'object'
+      ? target
+      : jobCards.find(
+          (j) => j.id === targetIdFromParam || j.jobCardNo === targetIdFromParam || j.subJobCardNo === targetIdFromParam
+        );
+
+    const targetId = targetCard?.id || targetIdFromParam;
+    const cardNo = targetCard?.jobCardNo || (typeof target === 'string' ? target : '');
+    const subCardNo = targetCard?.subJobCardNo || '';
+    const parentId = (targetCard as any)?.parentJobCardId;
+
+    // Prevent duplicate or overlapping deletion request for the same card
+    if (deletingCardId && (deletingCardId === targetId || (cardNo && deletingCardId === cardNo))) {
+      return;
+    }
+
+    setDeletingCardId(targetId || cardNo || 'active');
+
+    // Immediately close modal so user does not get confused or double-click
+    setDeleteConfirmCard(null);
+
+    // Track deleted IDs in recentlyDeletedIds to prevent polling sync from re-adding before DB settles
+    const idsToRemember = [targetId, cardNo, subCardNo].filter((x): x is string => Boolean(x && typeof x === 'string' && x.trim()));
+    idsToRemember.forEach((delId) => recentlyDeletedIds.current.add(delId));
     setTimeout(() => {
-      allRelatedIds.forEach((delId) => recentlyDeletedIds.current.delete(delId));
+      idsToRemember.forEach((delId) => recentlyDeletedIds.current.delete(delId));
     }, 10000);
 
-    // Remove from UI immediately
-    const updated = jobCards.filter(
-      (jc) =>
-        jc.id !== targetId &&
-        jc.id !== id &&
-        jc.jobCardNo !== cardNo &&
-        jc.subJobCardNo !== subCardNo &&
-        (jc as any).parentJobCardId !== parentId &&
-        (jc as any).parentJobCardId !== targetId
-    );
+    // Safe positive-retention UI update: Keep every card UNLESS it explicitly matches this target card
+    const targetIdsToDelete = new Set<string>(idsToRemember);
+    const updated = jobCards.filter((jc) => {
+      if (!jc) return false;
+      if (jc.id && targetIdsToDelete.has(jc.id)) return false;
+      if (jc.jobCardNo && targetIdsToDelete.has(jc.jobCardNo)) return false;
+      if (jc.subJobCardNo && targetIdsToDelete.has(jc.subJobCardNo)) return false;
+      if (parentId && typeof parentId === 'string' && (jc as any).parentJobCardId === parentId) return false;
+      return true;
+    });
+
     setJobCards(updated);
     saveJobCardsToStorage(updated);
-    setDeleteConfirmCard(null);
-    if (selectedMovementJob?.id === targetId || selectedMovementJob?.jobCardNo === cardNo) {
+
+    if (selectedMovementJob && (
+      (targetId && selectedMovementJob.id === targetId) ||
+      (cardNo && selectedMovementJob.jobCardNo === cardNo)
+    )) {
       setSelectedMovementJob(null);
     }
 
@@ -712,8 +730,8 @@ export default function JobCardsPage() {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
 
-      // Send single primary DELETE call - backend handles cascading sub-lots in one transaction
-      const primaryDeleteId = cardNo || targetId || id;
+      // Prefer exact jobCardNo or exact UUID
+      const primaryDeleteId = cardNo || targetId;
       const res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(primaryDeleteId)}`, {
         method: 'DELETE',
         headers,
@@ -722,7 +740,7 @@ export default function JobCardsPage() {
       if (res.ok || res.status === 404) {
         backendDeleteSuccess = true;
       } else if (targetId && targetId !== primaryDeleteId) {
-        // Fallback with UUID if jobCardNo didn't match
+        // Fallback with UUID if primary delete was by cardNo
         const fallbackRes = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetId)}`, {
           method: 'DELETE',
           headers,
@@ -734,7 +752,7 @@ export default function JobCardsPage() {
     } catch (err: any) {
       console.warn('Backend DELETE call failed or offline mode', err);
     } finally {
-      setIsDeleting(false);
+      setDeletingCardId(null);
       if (backendDeleteSuccess) {
         showToast('Job Card deleted successfully!', 'success');
       } else {
@@ -871,7 +889,7 @@ export default function JobCardsPage() {
 
             const subLots = Array.isArray(j.subJobCards) ? j.subJobCards : [];
             if (subLots.length > 0) {
-              return subLots.map((sub: any) => {
+              return subLots.map((sub: any, lotIdx: number) => {
                 const subPcbQty = sub.totalPcbQty || sub.qty || masterPcbQty;
                 const subAreaSqm = sub.custPnlAreaSqm || sub.prodPnlAreaSqm || masterAreaSqm;
                 const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
@@ -893,11 +911,18 @@ export default function JobCardsPage() {
                   subStatusNorm = 'UNLAUNCHED';
                 }
 
+                // If only 1 lot exists, display the exact jobCardNo the user created (e.g. 26-27-7151-80)
+                const finalSubNo = subLots.length <= 1
+                  ? j.jobCardNo
+                  : (sub.subJobCardNo && !sub.subJobCardNo.endsWith('-A') && !sub.subJobCardNo.endsWith('-B')
+                      ? sub.subJobCardNo
+                      : `${j.jobCardNo}-${lotIdx + 1}`);
+
                 return {
                   id: sub.id,
                   parentJobCardId: j.id,
                   jobCardNo: j.jobCardNo,
-                  subJobCardNo: sub.subJobCardNo || j.jobCardNo,
+                  subJobCardNo: finalSubNo,
                   photoUrl: j.photoUrl || '',
                   customerPartNo: j.customerPartNo || j.product?.code || '',
                   rfePartCode: j.rfePartCode || j.product?.specCardNo || '',
@@ -3016,10 +3041,15 @@ export default function JobCardsPage() {
                           {isSuperAdmin && (
                             <button
                               onClick={() => setDeleteConfirmCard(jc)}
+                              disabled={Boolean(deletingCardId && (deletingCardId === jc.id || deletingCardId === jc.jobCardNo))}
                               title="Delete Job Card (Super Admin Only)"
-                              className="h-6.5 w-6.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-md inline-flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
+                              className="h-6.5 w-6.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-md inline-flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs disabled:opacity-50"
                             >
-                              <Trash2 className="w-3 h-3" />
+                              {deletingCardId && (deletingCardId === jc.id || deletingCardId === jc.jobCardNo) ? (
+                                <RefreshCw className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3 h-3" />
+                              )}
                             </button>
                           )}
                         </div>
@@ -4596,18 +4626,21 @@ export default function JobCardsPage() {
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   onClick={() => setDeleteConfirmCard(null)}
-                  disabled={isDeleting}
-                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                  disabled={Boolean(deleteConfirmCard && (deletingCardId === deleteConfirmCard.id || deletingCardId === deleteConfirmCard.jobCardNo))}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={() => handleDeleteJobCard(deleteConfirmCard.id)}
-                  disabled={isDeleting}
+                  onClick={() => deleteConfirmCard && handleDeleteJobCard(deleteConfirmCard)}
+                  disabled={Boolean(deleteConfirmCard && (deletingCardId === deleteConfirmCard.id || deletingCardId === deleteConfirmCard.jobCardNo))}
                   className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
-                  {isDeleting ? (
-                    <span>Deleting...</span>
+                  {deleteConfirmCard && (deletingCardId === deleteConfirmCard.id || deletingCardId === deleteConfirmCard.jobCardNo) ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Deleting...</span>
+                    </>
                   ) : (
                     <>
                       <Trash2 className="w-4 h-4" />

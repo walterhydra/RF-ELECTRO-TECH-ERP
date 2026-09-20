@@ -129,44 +129,26 @@ export class JobCardsService {
     for (const jc of jobCards) {
       if (jc.subJobCards && jc.subJobCards.length > 0) {
         const masterPcbQty = jc.totalPcbQty || (jc.custPnlQty && jc.custPnlQty > 50 ? jc.custPnlQty : (jc.prodPnlQty ? jc.prodPnlQty * 4 : 160));
-        const usedLetters = new Set<string>();
 
-        for (const sub of jc.subJobCards) {
+        jc.subJobCards.forEach((sub, subIdx) => {
           const subPcbQty = sub.totalPcbQty || (sub.qty && sub.qty > 50 ? sub.qty : masterPcbQty);
 
-          // Clean subJobCardNo if it has nested hyphens e.g. 26-27-1590-A-A -> 26-27-1590-A
           let cleanNo = sub.subJobCardNo;
-          const parts = sub.subJobCardNo.split('-');
-          if (parts.length > 4 || (parts.length === 4 && /^[A-Z]+$/.test(parts[2]) && /^[A-Z]+$/.test(parts[3]))) {
-            const base = parts.slice(0, 3).join('-');
-            let letter = 'A';
-            for (let i = 0; i < 26; i++) {
-              const l = String.fromCharCode(65 + i);
-              if (!usedLetters.has(l)) {
-                letter = l;
-                break;
-              }
-            }
-            cleanNo = `${base}-${letter}`;
+
+          // 1. If corrupted by old '-A', '-B' letter logic and parent is different (e.g. parent is 26-27-7151-80 but sub is 26-27-7151-A)
+          if (/-(?:[A-Z]|[A-Z]-[A-Z])$/.test(cleanNo) && !jc.jobCardNo.endsWith(cleanNo.split('-').pop() || '')) {
+            cleanNo = jc.subJobCards.length <= 1 ? jc.jobCardNo : `${jc.jobCardNo}-${subIdx + 1}`;
           }
 
-          // Clean subJobCardNo if it has random 3+ digit timestamp suffix e.g. 26-27-1396-167 -> 26-27-1396-2
+          // 2. If single lot, subJobCardNo should match the exact jobCardNo (e.g. 26-27-7151-80)
+          if (jc.subJobCards.length <= 1 && (cleanNo === `${jc.jobCardNo}-1` || cleanNo !== jc.jobCardNo)) {
+            cleanNo = jc.jobCardNo;
+          }
+
+          // 3. Clean subJobCardNo if it has random 3+ digit timestamp suffix e.g. 26-27-1396-167 -> 26-27-1396-2
           const tsMatch = cleanNo.match(/^(.*)-(\d{3,})$/);
           if (tsMatch) {
-            const base = tsMatch[1];
-            let nextIdx = 2;
-            const existingIndices = new Set(
-              jc.subJobCards
-                .map((s) => {
-                  const m = s.subJobCardNo.match(/-(\d+)$/);
-                  return m && parseInt(m[1], 10) < 100 ? parseInt(m[1], 10) : null;
-                })
-                .filter(Boolean),
-            );
-            while (existingIndices.has(nextIdx)) {
-              nextIdx++;
-            }
-            cleanNo = `${base}-${nextIdx}`;
+            cleanNo = `${jc.jobCardNo}-${subIdx + 1}`;
           }
 
           if (sub.totalPcbQty !== subPcbQty || sub.qty !== subPcbQty || sub.subJobCardNo !== cleanNo) {
@@ -186,7 +168,7 @@ export class JobCardsService {
               },
             }).catch(() => {});
           }
-        }
+        });
 
         // Calculate live rejection statistics & logs from stageMovementLog
         const subCardIds = jc.subJobCards.map((s) => s.id);
@@ -875,9 +857,9 @@ export class JobCardsService {
           }
         }
       } else {
-        // Auto create 1 sub job card for full lot
-        const subJobCardNo = `${jobCardNo}-1`;
-        const existingSub = await tx.subJobCard.findFirst({ where: { subJobCardNo } });
+        // Auto create 1 sub job card for full lot (matching exact jobCardNo)
+        const subJobCardNo = jobCardNo;
+        const existingSub = await tx.subJobCard.findFirst({ where: { subJobCardNo, jobCardId: jobCard.id } });
         if (!existingSub) {
           await tx.subJobCard.create({
             data: {
@@ -1294,13 +1276,9 @@ export class JobCardsService {
     }
 
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId);
-    const cleanNo = rawId.replace(/-\d+$/, '').replace(/-[A-Z]+$/i, '').trim();
 
-    // 1. Search for JobCard directly by ID, jobCardNo, or cleanNo
-    const jcOr: any[] = [
-      { jobCardNo: rawId },
-      { jobCardNo: cleanNo },
-    ];
+    // 1. Search for JobCard directly by exact ID or exact jobCardNo
+    const jcOr: any[] = [{ jobCardNo: rawId }];
     if (isUuid) {
       jcOr.push({ id: rawId });
     }
@@ -1310,12 +1288,9 @@ export class JobCardsService {
       include: { subJobCards: true },
     });
 
-    // 2. If not found, search subJobCard table by ID, subJobCardNo, or cleanNo
+    // 2. If not found, search subJobCard table by exact ID or exact subJobCardNo
     if (!jobCard) {
-      const subOr: any[] = [
-        { subJobCardNo: rawId },
-        { subJobCardNo: cleanNo },
-      ];
+      const subOr: any[] = [{ subJobCardNo: rawId }];
       if (isUuid) {
         subOr.push({ id: rawId });
       }
