@@ -159,43 +159,8 @@ export default function JobCardDetailPage() {
           setHistory(await histRes.json());
         }
       } else {
-        // Fallback mock details for seamless mobile QR scan display
-        const displayNo = id.includes('1730') ? '26-27-1730' : '26-27-1729';
-        setJobCard({
-          id: id || 'jc-1',
-          jobCardNo: displayNo,
-          customerPoId: 'po-1',
-          productId: 'prod-1',
-          totalQty: 40,
-          status: 'IN_PROGRESS',
-          qrCodeValue: `${displayNo}-PARENT`,
-          createdAt: new Date().toISOString(),
-          customerPO: {
-            poNo: 'PO-2026-001',
-            orderQty: 40,
-            customer: { companyName: 'Apex Electronics Ltd', code: 'CUST-RF045' },
-          },
-          product: {
-            name: 'Main Motherboard V2',
-            code: 'EV-900W-WP-TO247',
-            specCardNo: 'D3625',
-            layers: 4,
-            thicknessMm: 1.6,
-            copperWeight: '1oz',
-            solderMask: 'Green',
-            surfaceFinish: 'HASL Lead-Free',
-            panelSize: '450x600 mm',
-            qtyPerPanel: 4,
-          },
-          processFlowMaster: {
-            name: 'PF-01 Standard Double-Sided Flow',
-            totalSteps: 19,
-          },
-          subJobCards: [
-            { id: 'sub-1', subJobCardNo: `${displayNo}-A`, qty: 35, status: 'IN_PROGRESS', qrCodeValue: `${displayNo}-A`, currentStage: { id: 'stg-3', name: '2. DRILLING' } },
-            { id: 'sub-2', subJobCardNo: `${displayNo}-B`, qty: 5, status: 'IN_PROGRESS', qrCodeValue: `${displayNo}-B`, currentStage: { id: 'stg-2', name: '1. SHEARING' } },
-          ],
-        });
+        setError('Job Card record not found in system.');
+        setJobCard(null);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load Job Card details');
@@ -445,11 +410,11 @@ export default function JobCardDetailPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Layers & Copper:</span>
-                <span className="font-semibold text-slate-800">{jobCard.product?.layers} Layer(s) • {jobCard.product?.copperWeight || '1oz'} Copper</span>
+                <span className="font-semibold text-slate-800">{jobCard.product?.layers ? `${jobCard.product.layers} Layer(s)` : '—'} • {jobCard.product?.copperWeight || '—'} Copper</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Finish & Mask:</span>
-                <span className="font-semibold text-slate-800">{jobCard.product?.surfaceFinish || 'HASL'} • {jobCard.product?.solderMask || 'Green'} Mask</span>
+                <span className="font-semibold text-slate-800">{jobCard.product?.surfaceFinish || '—'} • {jobCard.product?.solderMask || '—'} Mask</span>
               </div>
             </div>
           </div>

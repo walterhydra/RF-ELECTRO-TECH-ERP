@@ -765,14 +765,66 @@ export class JobCardsService {
     }
 
     let product = await this.prisma.product.findFirst({
-      where: { specCardNo: data.rfePartCode },
+      where: {
+        OR: [
+          ...(data.rfePartCode ? [{ specCardNo: data.rfePartCode }] : []),
+          ...(data.customerPartNo ? [{ code: data.customerPartNo }] : []),
+        ],
+      },
     });
+
+    if (!product && data.rfePartCode) {
+      try {
+        product = await this.prisma.product.create({
+          data: {
+            specCardNo: data.rfePartCode,
+            name: data.customerPartNo || `Part ${data.rfePartCode}`,
+            code: data.customerPartNo || data.rfePartCode,
+            layers: Number(data.layers) || 2,
+            thicknessMm: Number(data.thicknessMm) || 1.6,
+            copperWeight: data.copperWeight || '1oz',
+            surfaceFinish: data.surfaceFinish || 'HASL Lead-Free',
+            solderMask: data.solderMask || 'Green',
+            legend: data.legend || 'White',
+            materialType: data.materialType || 'FR4',
+            pcbSize: data.pcbSize || '100x100mm',
+            processFlowId: processFlow.id,
+            createdById: finalUserId,
+          },
+        });
+      } catch (prodErr: any) {
+        console.warn('Auto-create product for job card failed, falling back:', prodErr?.message);
+        product = deps.product;
+      }
+    } else if (product && (data.layers || data.thicknessMm || data.copperWeight || data.surfaceFinish)) {
+      try {
+        product = await this.prisma.product.update({
+          where: { id: product.id },
+          data: {
+            ...(data.layers ? { layers: Number(data.layers) } : {}),
+            ...(data.thicknessMm ? { thicknessMm: Number(data.thicknessMm) } : {}),
+            ...(data.copperWeight ? { copperWeight: String(data.copperWeight) } : {}),
+            ...(data.surfaceFinish ? { surfaceFinish: String(data.surfaceFinish) } : {}),
+            ...(data.solderMask ? { solderMask: String(data.solderMask) } : {}),
+            ...(data.materialType ? { materialType: String(data.materialType) } : {}),
+          },
+        });
+      } catch (updErr: any) {
+        console.warn('Update product specs failed:', updErr?.message);
+      }
+    }
+
     if (!product) {
       product = deps.product;
     }
 
     let customerPO = await this.prisma.customerPO.findFirst({
-      where: { customerId: customer?.id },
+      where: {
+        OR: [
+          ...(customer?.id ? [{ customerId: customer.id }] : []),
+          ...(data.customerPoNo ? [{ poNo: data.customerPoNo }] : []),
+        ],
+      },
     });
     if (!customerPO) {
       customerPO = deps.customerPO;
@@ -1102,23 +1154,42 @@ export class JobCardsService {
   }
 
   async getTraceabilityHistory(id: string, user: any) {
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const rawId = (id || '').trim();
+    const cleanNo = rawId.replace(/^jc-/, '');
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId);
 
     let jobCard: any = null;
-    try {
-      jobCard = await this.findOne(id);
-    } catch {
-      jobCard = await this.prisma.jobCard.findFirst({
-        where: isUuid ? { OR: [{ id }, { jobCardNo: id }] } : { jobCardNo: id },
+    if (isUuid) {
+      jobCard = await this.prisma.jobCard.findUnique({
+        where: { id: rawId },
         include: { subJobCards: { include: { currentStage: true } } },
-      });
+      }).catch(() => null);
+    }
+    if (!jobCard) {
+      jobCard = await this.prisma.jobCard.findFirst({
+        where: {
+          OR: [
+            { jobCardNo: rawId },
+            { jobCardNo: cleanNo },
+            { jobCardNo: { contains: cleanNo } },
+            ...(isUuid ? [{ id: rawId }] : []),
+          ],
+        },
+        include: { subJobCards: { include: { currentStage: true } } },
+      }).catch(() => null);
     }
 
     if (!jobCard) {
       const subCard = await this.prisma.subJobCard.findFirst({
-        where: isUuid ? { OR: [{ id }, { subJobCardNo: id }] } : { subJobCardNo: id },
+        where: {
+          OR: [
+            { subJobCardNo: rawId },
+            { subJobCardNo: cleanNo },
+            ...(isUuid ? [{ id: rawId }] : []),
+          ],
+        },
         include: { jobCard: { include: { subJobCards: { include: { currentStage: true } } } } },
-      });
+      }).catch(() => null);
       if (subCard && subCard.jobCard) {
         jobCard = subCard.jobCard;
       }
@@ -1133,7 +1204,8 @@ export class JobCardsService {
     let logs = await this.prisma.stageMovementLog.findMany({
       where: {
         OR: [
-          { subJobCardId: { in: subJobCardIds.length > 0 ? subJobCardIds : ['__non_existent__'] } },
+          { subJobCard: { jobCardId: jobCard.id } },
+          ...(subJobCardIds.length > 0 ? [{ subJobCardId: { in: subJobCardIds } }] : []),
           { remarks: { contains: jobCard.jobCardNo } },
         ],
       },
@@ -1149,7 +1221,13 @@ export class JobCardsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    const formattedLogs: any[] = [...logs];
+    const formattedLogs: any[] = logs.map((l) => ({
+      ...l,
+      subJobCard: {
+        ...l.subJobCard,
+        subJobCardNo: jobCard.jobCardNo, // Keep exact same Job Card number
+      },
+    }));
 
     // 1. If Job Card is COMPLETED, prepend a Final Completion Log entry
     if (jobCard.status === JobCardStatus.COMPLETED) {
@@ -1188,23 +1266,17 @@ export class JobCardsService {
 
   private filterLogsForUser(logs: any[], user: any) {
     if (!user) return logs;
-    const roleName = user.roleName || user.role || user.role?.name;
-    const isOperator = roleName === 'PROCESS_OPERATOR' || roleName === 'process_user';
-    const isCustomer = roleName === 'CUSTOMER' || roleName === 'customer';
-
-    let filtered: any[] = logs;
-    if (isOperator && user.assignedStageId) {
-      filtered = logs.filter((l: any) => l.stageId === user.assignedStageId);
-    }
+    const roleName = String(user.roleName || user.role || user.role?.name || '').toUpperCase();
+    const isCustomer = roleName === 'CUSTOMER';
 
     if (isCustomer) {
-      filtered = filtered.map((l: any) => ({
+      return logs.map((l: any) => ({
         ...l,
         createdBy: { id: 'hidden', name: 'Production Floor', email: 'hidden', role: { name: 'Staff' } },
       }));
     }
 
-    return filtered;
+    return logs;
   }
 
   private validateUserStagePermission(user: any, currentStage: any) {
@@ -1819,28 +1891,8 @@ export class JobCardsService {
         }));
         const baseJobCardNo = parentJobCard?.jobCardNo || subCard.subJobCardNo;
 
-        // Collect existing letter suffixes already used for this base job card (e.g. 26-27-7151-80-A -> 'A')
-        const usedLetters = new Set<string>();
-        for (const s of allSubs) {
-          if (s.subJobCardNo.startsWith(`${baseJobCardNo}-`)) {
-            const suffix = s.subJobCardNo.slice(`${baseJobCardNo}-`.length).trim();
-            if (/^[A-Z]+$/i.test(suffix)) {
-              usedLetters.add(suffix.toUpperCase());
-            }
-          }
-        }
-
-        // Determine next available letter: A, B, C, ...
-        let nextLetter = 'A';
-        for (let i = 0; i < 26; i++) {
-          const char = String.fromCharCode(65 + i);
-          if (!usedLetters.has(char)) {
-            nextLetter = char;
-            break;
-          }
-        }
-
-        const nextSubNo = `${baseJobCardNo}-${nextLetter}`;
+        // Keep SAME Job Card number base across all split lots (avoid -A suffix per user requirement)
+        const nextSubNo = `${baseJobCardNo}-lot-${allSubs.length + 1}`;
 
         await tx.subJobCard.create({
           data: {
@@ -1854,7 +1906,7 @@ export class JobCardsService {
             prodPnlAreaSqm: areaToMove,
             status: SubJobCardStatus.IN_STAGE,
             currentStageId: targetNextStageId,
-            qrCodeValue: `RFE-SJC-${nextSubNo}-STAGE-${Date.now().toString().slice(-4)}`,
+            qrCodeValue: `RFE-SJC-${baseJobCardNo}-LOT${allSubs.length + 1}-${Date.now().toString().slice(-4)}`,
             createdById: userId,
           },
         });

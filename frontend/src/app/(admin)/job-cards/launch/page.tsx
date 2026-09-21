@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
@@ -30,20 +30,27 @@ export default function JobCardLaunchPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // Exact PDF Form Defaults
+  // Form Defaults
   const [launchForm, setLaunchForm] = useState({
-    jobCardNo: '26-27-1729',
+    jobCardNo: '',
     photoUrl: '',
-    customerPartNo: 'EV-900W-WP-TO247-VORS-25082026',
-    rfePartCode: 'D3625',
-    customerCode: 'CUST-RF045',
+    customerPartNo: '',
+    rfePartCode: '',
+    customerCode: '',
     launchedAt: new Date().toISOString().split('T')[0],
-    targetDate: '2026-09-08',
-    priority: 'MOST URGENT' as 'MOST URGENT' | 'HIGH' | 'NORMAL',
-    totalPcbQty: 160,
-    prodPnlAreaSqm: 50,
+    targetDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+    priority: 'NORMAL' as 'MOST URGENT' | 'HIGH' | 'NORMAL',
+    totalPcbQty: 0,
+    prodPnlAreaSqm: 0,
     jobFlowSelection: 'PF-01',
   });
+
+  useEffect(() => {
+    setLaunchForm((prev) => ({
+      ...prev,
+      jobCardNo: `26-27-${Math.floor(1000 + Math.random() * 9000)}`,
+    }));
+  }, []);
 
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [unitPcbAreaSqm, setUnitPcbAreaSqm] = useState<number>(0.28125);
@@ -312,7 +319,7 @@ export default function JobCardLaunchPage() {
                     value={launchForm.customerPartNo}
                     onChange={(e) => setLaunchForm({ ...launchForm, customerPartNo: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 font-bold text-white focus:outline-none focus:border-amber-400"
-                    placeholder="EV-900W-WP-TO247-VORS-25082026"
+                    placeholder="Customer Part Number"
                   />
                 </div>
 
@@ -324,7 +331,7 @@ export default function JobCardLaunchPage() {
                     value={launchForm.rfePartCode}
                     onChange={(e) => setLaunchForm({ ...launchForm, rfePartCode: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-400"
-                    placeholder="D3625"
+                    placeholder="R.F.E. Part Code"
                   />
                 </div>
 
@@ -336,7 +343,7 @@ export default function JobCardLaunchPage() {
                     value={launchForm.customerCode}
                     onChange={(e) => setLaunchForm({ ...launchForm, customerCode: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 font-bold text-white focus:outline-none focus:border-amber-400"
-                    placeholder="CUST-RF045"
+                    placeholder="e.g. CUST-001"
                   />
                 </div>
               </div>

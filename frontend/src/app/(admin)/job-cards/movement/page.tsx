@@ -71,46 +71,6 @@ interface JobCard {
   createdAt: string;
 }
 
-const SAMPLE_ACTIVE_JOBS: JobCard[] = [
-  {
-    id: 'jc-1',
-    jobCardNo: '26-27-1729',
-    customerPartNo: 'EV-900W-WP-TO247-VORS-25082026',
-    rfePartCode: 'D3625',
-    customerCode: 'CUST-RF045',
-    targetDate: '2026-09-08',
-    priority: 'MOST URGENT',
-    prodPnlQty: 40,
-    custPnlQty: 80,
-    totalPcbQty: 160,
-    prodPnlAreaSqm: 50,
-    custPnlAreaSqm: 45,
-    currentStageIndex: 1,
-    currentStageName: '2. DRILLING',
-    status: 'IN_PROGRESS',
-    photoUrl: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=800&auto=format&fit=crop&q=60',
-    createdAt: '2026-09-01T10:00:00Z',
-  },
-  {
-    id: 'jc-2',
-    jobCardNo: '26-27-1730',
-    customerPartNo: 'PSU-3KW-BOOSTER-REV03',
-    rfePartCode: 'D3633',
-    customerCode: 'CUST-RF019',
-    targetDate: '2026-09-20',
-    priority: 'HIGH',
-    prodPnlQty: 60,
-    custPnlQty: 120,
-    totalPcbQty: 240,
-    prodPnlAreaSqm: 75,
-    custPnlAreaSqm: 68,
-    currentStageIndex: 0,
-    currentStageName: '1. SHEARING',
-    status: 'IN_PROGRESS',
-    photoUrl: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&auto=format&fit=crop&q=60',
-    createdAt: '2026-09-03T11:20:00Z',
-  },
-];
 
 const LOCAL_STORAGE_CARDS_KEY = 'rf_electro_job_cards_v3';
 
@@ -203,10 +163,10 @@ export default function JobMovementUpdatePage() {
                 return {
                   id: sub.id,
                   jobCardNo: sub.subJobCardNo || j.jobCardNo,
-                  customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
-                  rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
-                  customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
-                  targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
+                  customerPartNo: j.customerPartNo || j.product?.code || '—',
+                  rfePartCode: j.rfePartCode || j.product?.specCardNo || '—',
+                  customerCode: j.customerCode || j.customerPO?.customer?.code || '—',
+                  targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '—',
                   priority: j.priority || 'NORMAL',
                   prodPnlQty: Math.ceil(subPcbQty / 4),
                   custPnlQty: subPcbQty,
@@ -228,10 +188,10 @@ export default function JobMovementUpdatePage() {
             return [{
               id: j.id,
               jobCardNo: j.jobCardNo,
-              customerPartNo: j.customerPartNo || j.product?.code || 'EV-900W-WP-TO247',
-              rfePartCode: j.rfePartCode || j.product?.specCardNo || 'D3625',
-              customerCode: j.customerCode || j.customerPO?.customer?.code || 'CUST-RF045',
-              targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
+              customerPartNo: j.customerPartNo || j.product?.code || '—',
+              rfePartCode: j.rfePartCode || j.product?.specCardNo || '—',
+              customerCode: j.customerCode || j.customerPO?.customer?.code || '—',
+              targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '—',
               priority: j.priority || 'NORMAL',
               prodPnlQty: Math.ceil(masterPcbQty / 4),
               custPnlQty: masterPcbQty,

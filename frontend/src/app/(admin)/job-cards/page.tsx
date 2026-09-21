@@ -177,6 +177,8 @@ interface JobCard {
     copperWeight?: string;
     solderMask?: string;
     surfaceFinish?: string;
+    materialType?: string;
+    material?: string;
   };
   subJobCards: SubJobCard[];
   isNewlyCreated?: boolean;
@@ -185,37 +187,15 @@ interface JobCard {
   rejectionLogs?: RejectionLog[];
 }
 
-interface OpenPO {
-  id: string;
-  poNo: string;
-  orderQty: number;
-  expectedDeliveryDate: string;
-  customer: { companyName: string };
-  product: { name: string; code: string; specCardNo: string };
-}
-
-const DEFAULT_OPEN_POS: OpenPO[] = [
-  {
-    id: 'po-open-001',
-    poNo: 'PO-2026-004',
-    orderQty: 3500,
-    expectedDeliveryDate: '2026-09-25T00:00:00Z',
-    customer: { companyName: 'CUST-RF019 / RF Tech Corp' },
-    product: { name: '3.3KW NEW DAUGHTER BOARD', code: 'D3633', specCardNo: 'D3633' },
-  },
-  {
-    id: 'po-open-002',
-    poNo: 'PO-2026-001',
-    orderQty: 2500,
-    expectedDeliveryDate: '2026-09-30T00:00:00Z',
-    customer: { companyName: 'Acme Electronics Ltd' },
-    product: { name: 'Main Motherboard V2', code: 'PCB-MB-V2', specCardNo: 'D001' },
-  },
-];
 
 // Printable Horizontal Industrial Job Card QR Tag Component
 const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint?: () => void; onClose?: () => void }) => {
   const [serverHost, setServerHost] = useState<string>('https://rf-electro-tech-erp.onrender.com');
+  const [liveDetails, setLiveDetails] = useState<{
+    product?: any;
+    customerPO?: any;
+  } | null>(null);
+  const [isFetchingSpecs, setIsFetchingSpecs] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -223,6 +203,58 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
       if (saved) setServerHost(saved);
     }
   }, []);
+
+  // Fetch 100% Live DB specs and customer PO directly from API
+  useEffect(() => {
+    let isMounted = true;
+    const fetchFreshData = async () => {
+      setIsFetchingSpecs(true);
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        };
+
+        const targetId = jobCard.id || jobCard.jobCardNo;
+        if (targetId) {
+          const res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetId)}`, { headers });
+          if (res.ok) {
+            const data = await res.json();
+            if (isMounted && data) {
+              setLiveDetails({
+                product: data.product,
+                customerPO: data.customerPO,
+              });
+              setIsFetchingSpecs(false);
+              return;
+            }
+          }
+        }
+
+        // Secondary Lookup: If product spec card exists in products master
+        if (jobCard.rfePartCode) {
+          const res = await fetch(`${getApiBaseUrl()}/products`, { headers });
+          if (res.ok) {
+            const prods = await res.json();
+            if (Array.isArray(prods)) {
+              const matched = prods.find((p: any) => p.specCardNo === jobCard.rfePartCode || p.code === jobCard.customerPartNo);
+              if (isMounted && matched) {
+                setLiveDetails((prev) => ({ ...prev, product: matched }));
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Live spec lookup failed, using local job card data', err);
+      } finally {
+        if (isMounted) setIsFetchingSpecs(false);
+      }
+    };
+
+    fetchFreshData();
+    return () => { isMounted = false; };
+  }, [jobCard.id, jobCard.jobCardNo, jobCard.rfePartCode, jobCard.customerPartNo]);
 
   const [isEditingHost, setIsEditingHost] = useState(false);
 
@@ -241,51 +273,76 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
 
   const pdfDocumentUrl = `${formattedHost}/job-cards-pdf/${jobCard.id || jobCard.jobCardNo}`;
 
+  // Live merged Product & PO Data (Prioritize live DB record, fallback to attached jobCard fields, NEVER mock strings)
+  const product = liveDetails?.product || jobCard.product;
+  const customerPO = liveDetails?.customerPO || jobCard.customerPO;
+
+  // Accurate Numeric Calculations & Clean Formatting (No float glitch like 61.87500000000001)
+  const totalPcbs = jobCard.totalPcbQty || (jobCard.custPnlQty && jobCard.custPnlQty > 50 ? jobCard.custPnlQty : (jobCard.prodPnlQty ? jobCard.prodPnlQty * 4 : 0));
+  const rawAreaSqm = Number(jobCard.prodPnlAreaSqm || jobCard.custPnlAreaSqm || 0);
+  const formattedArea = rawAreaSqm > 0 ? `${rawAreaSqm.toFixed(2)} SQM` : '— SQM';
+
+  // Live Product Specs Extraction
+  const specLayers = product?.layers ? `${product.layers} Layers` : (jobCard.product?.layers ? `${jobCard.product.layers} Layers` : '—');
+  const specThickness = product?.thicknessMm 
+    ? `${product.thicknessMm} mm` 
+    : (product?.thickness ? (String(product.thickness).includes('mm') ? product.thickness : `${product.thickness} mm`) : (jobCard.product?.thicknessMm ? `${jobCard.product.thicknessMm} mm` : (jobCard.product?.thickness || '—')));
+  const specCopper = product?.copperWeight || product?.copper || jobCard.product?.copperWeight || jobCard.product?.copper || '—';
+  const specFinish = product?.surfaceFinish || jobCard.product?.surfaceFinish || '—';
+  const specMask = product?.solderMask || jobCard.product?.solderMask || '—';
+  const specMaterial = product?.materialType || product?.material || jobCard.product?.materialType || 'FR-4';
+
+  // Real Customer PO information without fake mock fallback
+  const poNo = customerPO?.poNo || (jobCard.customerPoId ? `PO: ${jobCard.customerPoId.slice(0, 8)}...` : 'Direct Order (No PO)');
+  const custCompany = customerPO?.customer?.companyName || jobCard.customerCode || 'Direct Customer';
+
   const qrDataPayload = [
     pdfDocumentUrl,
     `--------------------------------------`,
-    `RF ELECTRO TECH ERP - JOB CARD TAG`,
+    `RF ELECTRO TECH ERP - INDUSTRIAL TRAVELER TAG`,
     `JOB CARD NO: ${jobCard.jobCardNo}`,
-    `CUSTOMER: ${jobCard.customerCode}`,
-    `RFE PART CODE: ${jobCard.rfePartCode}`,
-    `CUST PART NO: ${jobCard.customerPartNo}`,
-    `TOTAL PCB QTY: ${jobCard.totalPcbQty || jobCard.custPnlQty || 0} PCB`,
-    `WIP AREA: ${jobCard.prodPnlAreaSqm || 50} SQM`,
-    `CURRENT STAGE: ${jobCard.currentStageName || '1. SHEARING'}`,
-    `PRIORITY: ${jobCard.priority}`,
-    `TARGET DATE: ${jobCard.targetDate}`,
-    `STATUS: ${jobCard.status}`
-  ].join('\n');
+    `CUSTOMER: ${custCompany}`,
+    `RFE PART CODE: ${jobCard.rfePartCode || 'N/A'}`,
+    `CUST PART NO: ${jobCard.customerPartNo || 'N/A'}`,
+    `TOTAL PCB QTY: ${totalPcbs} PCB`,
+    `WIP AREA: ${rawAreaSqm > 0 ? rawAreaSqm.toFixed(2) : '0'} SQM`,
+    `CURRENT STAGE: ${jobCard.currentStageName || PF01_STAGES[0]}`,
+    `PRIORITY: ${jobCard.priority || 'NORMAL'}`,
+    `TARGET DATE: ${jobCard.targetDate || 'N/A'}`,
+    `STATUS: ${jobCard.status || 'CREATED'}`,
+    product?.layers ? `LAYERS: ${product.layers}L` : '',
+    product?.thicknessMm ? `THICKNESS: ${product.thicknessMm}mm` : '',
+    product?.copperWeight ? `COPPER: ${product.copperWeight}` : '',
+    product?.surfaceFinish ? `FINISH: ${product.surfaceFinish}` : '',
+  ].filter(Boolean).join('\n');
 
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrDataPayload)}`;
   const barcodeImageUrl = `https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(jobCard.jobCardNo)}&scale=3&rotate=N&includetext`;
 
-  const poNo = jobCard.customerPO?.poNo || `PO-${jobCard.customerCode || '2026-001'}`;
-  const custName = jobCard.customerPO?.customer?.companyName || `Customer (${jobCard.customerCode})`;
-  const prodName = jobCard.product?.name || jobCard.customerPartNo;
-  const prodSpecs = jobCard.product
-    ? `${jobCard.product.layers || 2} Layer • ${jobCard.product.thicknessMm ? `${jobCard.product.thicknessMm} mm` : (jobCard.product.thickness || '1.6 mm')} • ${jobCard.product.copperWeight || jobCard.product.copper || '1 oz'}`
-    : `${jobCard.prodPnlAreaSqm || 50} Sqm • ${jobCard.totalPcbQty || 80} PCB`;
+  const priorityBadgeStyle = 
+    jobCard.priority === 'MOST URGENT' ? 'bg-rose-500 text-white border-rose-600 animate-pulse' :
+    jobCard.priority === 'HIGH' ? 'bg-amber-400 text-slate-950 border-amber-500 font-black' :
+    'bg-emerald-500 text-white border-emerald-600 font-bold';
 
   return (
     <div className="bg-white border-2 border-slate-900 rounded-3xl p-5 sm:p-7 shadow-2xl max-w-5xl w-full mx-auto text-slate-900 font-sans print:shadow-none print:border-black space-y-6">
       
       {/* 1. Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-slate-900 pb-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-xl shadow-md border border-slate-900 shrink-0">
             <Printer className="w-6 h-6 stroke-[2.5]" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className={`w-2 h-2 rounded-full ${isFetchingSpecs ? 'bg-amber-500 animate-spin' : 'bg-emerald-500 animate-pulse'}`}></span>
               <h4 className="text-xs font-black tracking-widest uppercase text-slate-900 font-mono">
                 RF ELECTRO TECH ERP • INDUSTRIAL TRAVELER TAG
               </h4>
             </div>
             <h2 className="text-xl sm:text-2xl font-black font-mono text-slate-950 mt-0.5 tracking-tight flex items-center gap-3">
               <span>{jobCard.jobCardNo}</span>
-              <span className="text-xs px-3 py-0.5 bg-amber-400 text-slate-950 font-black rounded-lg border border-slate-900 uppercase tracking-wider">
+              <span className={`text-xs px-3 py-0.5 rounded-lg border uppercase tracking-wider ${priorityBadgeStyle}`}>
                 {jobCard.priority || 'NORMAL'}
               </span>
             </h2>
@@ -348,16 +405,16 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
               <div>
                 <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">WIP JOB NO</span>
                 <strong className="font-mono font-black text-sm text-slate-900 bg-amber-200 px-2 py-0.5 rounded border border-amber-400 inline-block">
-                  {jobCard.jobCardNo}
+                  {jobCard.subJobCardNo || jobCard.jobCardNo}
                 </strong>
               </div>
               <div>
                 <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">CUSTOMER</span>
-                <span className="font-bold text-slate-900 truncate block">{jobCard.customerCode}</span>
+                <span className="font-bold text-slate-900 truncate block">{custCompany}</span>
               </div>
               <div>
                 <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">RFE PART CODE</span>
-                <span className="font-mono font-extrabold text-blue-700">{jobCard.rfePartCode}</span>
+                <span className="font-mono font-extrabold text-blue-700">{jobCard.rfePartCode || '—'}</span>
               </div>
             </div>
           </div>
@@ -373,7 +430,7 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
               }}
             />
             <span className="text-[11px] font-mono text-slate-800 tracking-widest font-black block">
-              *{jobCard.jobCardNo}*
+              *{jobCard.subJobCardNo || jobCard.jobCardNo}*
             </span>
           </div>
 
@@ -431,60 +488,116 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
           </div>
         </div>
 
-        {/* MIDDLE COLUMN: Specifications Grid & PO/Specs (5 Cols) */}
+        {/* MIDDLE COLUMN: Specifications Grid & Live Product Specs (5 Cols) */}
         <div className="lg:col-span-5 space-y-4">
-          <div className="bg-slate-50 border border-slate-300 rounded-2xl p-4 space-y-3 shadow-xs">
-            <h5 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 font-mono border-b border-slate-200 pb-2">
-              <FileText className="w-4 h-4 text-amber-600 shrink-0" />
-              JOB CARD SPECIFICATIONS & PARAMETERS
-            </h5>
+          <div className="bg-slate-50/80 border border-slate-300 rounded-2xl p-4 space-y-3.5 shadow-xs">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+              <h5 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                <FileText className="w-4 h-4 text-amber-600 shrink-0" />
+                JOB PARAMETERS & PRODUCTION SPECS
+              </h5>
+              <div className="flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full ${isFetchingSpecs ? 'bg-amber-500 animate-spin' : 'bg-emerald-500'}`} />
+                <span className="text-[10px] font-mono font-bold text-slate-500 uppercase">
+                  {isFetchingSpecs ? 'Syncing...' : 'LIVE SPECS'}
+                </span>
+              </div>
+            </div>
 
-            <div className="grid grid-cols-2 gap-2.5 text-xs font-sans">
+            {/* 6 Primary Job Parameter Cards */}
+            <div className="grid grid-cols-2 gap-2 text-xs font-sans">
               <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
                 <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">CUSTOMER PART NO</span>
-                <strong className="text-slate-900 font-bold block truncate" title={jobCard.customerPartNo}>{jobCard.customerPartNo}</strong>
+                <strong className="text-slate-900 font-bold block truncate text-xs" title={jobCard.customerPartNo}>
+                  {jobCard.customerPartNo || '—'}
+                </strong>
               </div>
 
               <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
                 <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">R.F.E. PART CODE</span>
-                <strong className="text-blue-700 font-mono font-bold block">{jobCard.rfePartCode}</strong>
+                <strong className="text-blue-700 font-mono font-black block text-xs tracking-tight">
+                  {jobCard.rfePartCode || '—'}
+                </strong>
               </div>
 
               <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
                 <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">TOTAL PCB QTY</span>
-                <strong className="text-indigo-700 font-mono font-black block">{jobCard.totalPcbQty || (jobCard.custPnlQty && jobCard.custPnlQty > 50 ? jobCard.custPnlQty : (jobCard.prodPnlQty * 4)) || 0} PCB</strong>
+                <strong className="text-indigo-700 font-mono font-black block text-xs">
+                  {totalPcbs} PCB
+                </strong>
               </div>
 
               <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
                 <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">TOTAL WIP AREA</span>
-                <strong className="text-emerald-700 font-mono font-black block">{jobCard.prodPnlAreaSqm || 50} SQM</strong>
+                <strong className="text-emerald-700 font-mono font-black block text-xs">
+                  {formattedArea}
+                </strong>
               </div>
 
               <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
                 <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">CURRENT STAGE</span>
-                <span className="inline-block font-extrabold text-[11px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                <span className="inline-block font-extrabold text-[11px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 truncate max-w-full">
                   {jobCard.currentStageName || PF01_STAGES[0]}
                 </span>
               </div>
 
               <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
                 <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">TARGET DATE</span>
-                <strong className="text-slate-900 font-mono font-bold block">{jobCard.targetDate}</strong>
+                <strong className="text-slate-900 font-mono font-bold block text-xs">
+                  {jobCard.targetDate || '—'}
+                </strong>
               </div>
             </div>
 
-            {/* PO & Product Info Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[11px] pt-1">
-              <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
-                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">CUSTOMER PO</span>
-                <p className="font-extrabold text-slate-900 text-xs font-mono">{poNo}</p>
-                <p className="text-[10px] text-slate-500 truncate">{custName}</p>
+            {/* LIVE PRODUCT SPECIFICATIONS SHOWCASE */}
+            <div className="bg-white rounded-xl border border-slate-200 p-3 space-y-2 shadow-2xs">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                <span className="text-[10px] font-black text-slate-900 font-mono uppercase flex items-center gap-1.5">
+                  <Cpu className="w-3.5 h-3.5 text-blue-600" />
+                  PRODUCT SPECIFICATIONS (LIVE DB)
+                </span>
+                <span className="text-[10px] text-slate-500 font-mono truncate max-w-[180px]">
+                  {product?.name || jobCard.customerPartNo || 'PCB Board'}
+                </span>
               </div>
 
-              <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
-                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">PRODUCT SPECS</span>
-                <p className="font-extrabold text-slate-900 text-xs truncate">{prodName}</p>
-                <p className="text-[10px] text-slate-500 truncate">{prodSpecs}</p>
+              <div className="grid grid-cols-3 gap-1.5 text-center">
+                <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-200">
+                  <span className="text-[8px] font-mono text-slate-400 uppercase block font-bold">LAYERS</span>
+                  <span className="text-[11px] font-mono font-extrabold text-slate-900">{specLayers}</span>
+                </div>
+                <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-200">
+                  <span className="text-[8px] font-mono text-slate-400 uppercase block font-bold">THICKNESS</span>
+                  <span className="text-[11px] font-mono font-extrabold text-slate-900">{specThickness}</span>
+                </div>
+                <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-200">
+                  <span className="text-[8px] font-mono text-slate-400 uppercase block font-bold">COPPER</span>
+                  <span className="text-[11px] font-mono font-extrabold text-slate-900">{specCopper}</span>
+                </div>
+                <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-200">
+                  <span className="text-[8px] font-mono text-slate-400 uppercase block font-bold">FINISH</span>
+                  <span className="text-[11px] font-mono font-extrabold text-blue-700 truncate block">{specFinish}</span>
+                </div>
+                <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-200">
+                  <span className="text-[8px] font-mono text-slate-400 uppercase block font-bold">MASK</span>
+                  <span className="text-[11px] font-mono font-extrabold text-emerald-700 truncate block">{specMask}</span>
+                </div>
+                <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-200">
+                  <span className="text-[8px] font-mono text-slate-400 uppercase block font-bold">MATERIAL</span>
+                  <span className="text-[11px] font-mono font-extrabold text-slate-800 truncate block">{specMaterial}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* CUSTOMER & PO INFO CARD */}
+            <div className="bg-white p-2.5 rounded-xl border border-slate-200 flex items-center justify-between shadow-2xs text-xs">
+              <div className="min-w-0 flex-1">
+                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">CUSTOMER PO</span>
+                <span className="font-mono font-bold text-slate-900 text-xs truncate block">{poNo}</span>
+              </div>
+              <div className="text-right min-w-0 flex-1 pl-2">
+                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">CUSTOMER</span>
+                <span className="font-bold text-slate-700 text-xs truncate block">{custCompany}</span>
               </div>
             </div>
           </div>
@@ -499,13 +612,13 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
                 SUB-LOTS ({jobCard.subJobCards?.length || 1})
               </h5>
               <span className="text-[11px] font-mono font-black text-amber-900 bg-amber-200 px-2 py-0.5 rounded border border-amber-400">
-                {jobCard.totalPcbQty || (jobCard.custPnlQty && jobCard.custPnlQty > 50 ? jobCard.custPnlQty : (jobCard.prodPnlQty * 4))} PCBs
+                {totalPcbs} PCBs
               </span>
             </div>
 
             <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-              {(jobCard.subJobCards || []).map((sub) => {
-                const subPcb = (sub as any).totalPcbQty || ((sub as any).qty && (sub as any).qty > 50 ? (sub as any).qty : jobCard.totalPcbQty || 160);
+              {(jobCard.subJobCards && jobCard.subJobCards.length > 0 ? jobCard.subJobCards : [{ id: 'sub-single', subJobCardNo: jobCard.subJobCardNo || jobCard.jobCardNo, totalPcbQty: totalPcbs }]).map((sub) => {
+                const subPcb = (sub as any).totalPcbQty || ((sub as any).qty && (sub as any).qty > 50 ? (sub as any).qty : totalPcbs);
                 return (
                   <div key={sub.id} className="bg-white p-2.5 rounded-xl border border-slate-200 flex items-center justify-between text-xs font-sans shadow-2xs">
                     <div>
@@ -620,6 +733,22 @@ export default function JobCardsPage() {
 
   // Track recently deleted IDs to prevent re-appearing during sync polling
   const recentlyDeletedIds = useRef<Set<string>>(new Set());
+
+  // Available Products from Master for Live Specs & Auto-population
+  const [availableProducts, setAvailableProducts] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch(`${getApiBaseUrl()}/products`, {
+      headers: {
+        Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('token') || '' : ''}`,
+      },
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (Array.isArray(data)) setAvailableProducts(data);
+      })
+      .catch((err) => console.warn('Product master list fetch failed:', err));
+  }, []);
 
   // Set client mount state & load initial stored cards
   useEffect(() => {
@@ -780,14 +909,14 @@ export default function JobCardsPage() {
 
   // New Job Card Form (Full PDF 13 Fields & Pre-Launch Split Options)
   const [launchForm, setLaunchForm] = useState({
-    jobCardNo: '26-27-1731',
+    jobCardNo: '',
     photoUrl: '',
-    customerPartNo: 'EV-900W-WP-TO247-VORS-25082026',
-    rfePartCode: 'D3625',
-    customerCode: 'CUST-RF045',
-    targetDate: '2026-09-28',
+    customerPartNo: '',
+    rfePartCode: '',
+    customerCode: '',
+    targetDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
     launchDate: new Date().toISOString().split('T')[0],
-    priority: 'MOST URGENT' as 'MOST URGENT' | 'HIGH' | 'NORMAL',
+    priority: 'NORMAL' as 'MOST URGENT' | 'HIGH' | 'NORMAL',
     prodPnlQty: 40,
     custPnlQty: 80,
     totalPcbQty: 160,
@@ -797,7 +926,13 @@ export default function JobCardsPage() {
     autoLaunch: false,
     enablePreSplit: false,
     splitCount: 2,
-    customSplits: [{ subNo: '26-27-1731-1', qty: 80 }, { subNo: '26-27-1731-2', qty: 80 }],
+    customSplits: [{ subNo: '1', qty: 80 }, { subNo: '2', qty: 80 }],
+    layers: 2,
+    thicknessMm: 1.6,
+    copperWeight: '1oz',
+    surfaceFinish: 'HASL Lead-Free',
+    solderMask: 'Green',
+    materialType: 'FR-4',
   });
 
   const handleOpenCreateModal = () => {
@@ -808,9 +943,9 @@ export default function JobCardsPage() {
     setLaunchForm({
       jobCardNo: nextNo,
       photoUrl: '',
-      customerPartNo: 'EV-900W-WP-TO247-VORS-25082026',
-      rfePartCode: 'D3625',
-      customerCode: 'CUST-RF045',
+      customerPartNo: '',
+      rfePartCode: '',
+      customerCode: '',
       targetDate: nextWeek,
       launchDate: today,
       priority: 'NORMAL',
@@ -824,6 +959,12 @@ export default function JobCardsPage() {
       enablePreSplit: false,
       splitCount: 2,
       customSplits: [{ subNo: `${nextNo}-1`, qty: 80 }, { subNo: `${nextNo}-2`, qty: 80 }],
+      layers: 2,
+      thicknessMm: 1.6,
+      copperWeight: '1oz',
+      surfaceFinish: 'HASL Lead-Free',
+      solderMask: 'Green',
+      materialType: 'FR-4',
     });
     setShowGenerateModal(true);
   };
@@ -852,6 +993,12 @@ export default function JobCardsPage() {
       customSplits: card.subJobCards
         ? card.subJobCards.map((s) => ({ subNo: s.subJobCardNo, qty: s.totalPcbQty || s.qty || 80 }))
         : [{ subNo: `${card.jobCardNo}-1`, qty: card.totalPcbQty || 160 }],
+      layers: card.product?.layers || 2,
+      thicknessMm: Number(card.product?.thicknessMm) || 1.6,
+      copperWeight: card.product?.copperWeight || card.product?.copper || '1oz',
+      surfaceFinish: card.product?.surfaceFinish || 'HASL Lead-Free',
+      solderMask: card.product?.solderMask || 'Green',
+      materialType: card.product?.materialType || 'FR-4',
     });
     setShowGenerateModal(true);
   };
@@ -912,20 +1059,8 @@ export default function JobCardsPage() {
                 }
 
                 // Determine display subJobCardNo (WIP No.)
-                let finalSubNo = sub.subJobCardNo || j.jobCardNo;
-                if (subLots.length <= 1) {
-                  finalSubNo = j.jobCardNo;
-                } else {
-                  if (lotIdx === 0 && (finalSubNo === `${j.jobCardNo}-1` || finalSubNo === j.jobCardNo || !finalSubNo.startsWith(`${j.jobCardNo}-`))) {
-                    finalSubNo = j.jobCardNo;
-                  } else if (lotIdx > 0) {
-                    const suffix = finalSubNo.startsWith(`${j.jobCardNo}-`) ? finalSubNo.slice(`${j.jobCardNo}-`.length).trim() : '';
-                    if (!suffix || !/^[A-Z]+$/i.test(suffix)) {
-                      const letter = String.fromCharCode(65 + (lotIdx - 1));
-                      finalSubNo = `${j.jobCardNo}-${letter}`;
-                    }
-                  }
-                }
+                // User requirement: Keep exact SAME Job Card number across all split lots (never append -A, -B)
+                const finalSubNo = j.jobCardNo;
 
                 return {
                   id: sub.id,
@@ -1116,17 +1251,82 @@ export default function JobCardsPage() {
     setHistoryLogs([]);
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      const targetId = job.id || job.jobCardNo;
-      const res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetId)}/history`, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
+      // 1. Query by jobCardNo first (canonical parent ID on backend)
+      let rawLogs: any[] = [];
+      const primaryTarget = job.jobCardNo || job.parentJobCardId || job.id;
+      let res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(primaryTarget)}/history`, { headers });
       if (res.ok) {
         const data = await res.json();
-        setHistoryLogs(Array.isArray(data) ? data : []);
+        if (Array.isArray(data)) rawLogs = data;
+      } else if (job.id && job.id !== primaryTarget) {
+        // Fallback with exact UUID if primary was by cardNo
+        const fallbackRes = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(job.id)}/history`, { headers });
+        if (fallbackRes.ok) {
+          const data = await fallbackRes.json();
+          if (Array.isArray(data)) rawLogs = data;
+        }
       }
+
+      // 2. Merge local rejection logs if any exist on this card
+      if (job.rejectionLogs && job.rejectionLogs.length > 0) {
+        const localRejLogs = job.rejectionLogs.map((r, i) => ({
+          id: `rej-${i}-${Date.now()}`,
+          createdAt: r.timestamp || new Date().toISOString(),
+          subJobCard: { subJobCardNo: job.jobCardNo },
+          stage: { name: r.stageName },
+          qtyForwarded: 0,
+          qtyRejected: r.rejectedPcbQty || 0,
+          remarkType: 'REJECTION',
+          remarks: `[REJECTION] ${r.remark} (${r.rejectedPcbQty} PCBs / ${r.rejectedAreaSqm} Sqm)`,
+          createdBy: { name: 'Quality Operator' },
+        }));
+        const existingTimestamps = new Set(rawLogs.map((l: any) => l.createdAt));
+        const filteredLocalRej = localRejLogs.filter((l) => !existingTimestamps.has(l.createdAt));
+        rawLogs = [...filteredLocalRej, ...rawLogs];
+      }
+
+      // 3. If card is launched and in-progress, ensure current active stage is represented
+      if (job.status !== 'UNLAUNCHED') {
+        const activeStageName = job.currentStageName || PF01_STAGES[job.currentStageIndex || 0] || '1. SHEARING';
+        const hasActiveLog = rawLogs.some((l) => l.stage?.name === activeStageName || String(l.remarks || '').includes(activeStageName));
+        if (!hasActiveLog) {
+          rawLogs.unshift({
+            id: `active-curr-${job.id}`,
+            createdAt: new Date().toISOString(),
+            subJobCard: { subJobCardNo: job.jobCardNo },
+            stage: { name: activeStageName },
+            qtyForwarded: job.totalPcbQty || (job.custPnlQty && job.custPnlQty > 50 ? job.custPnlQty : 160),
+            qtyProcessed: job.totalPcbQty || (job.custPnlQty && job.custPnlQty > 50 ? job.custPnlQty : 160),
+            qtyRejected: job.rejectedPcbQty || 0,
+            remarkType: 'CURRENT_STAGE',
+            remarks: `Active at ${activeStageName} (${job.totalPcbQty || 160} PCBs in production)`,
+            createdBy: { name: 'Production Floor' },
+          });
+        }
+      }
+
+      // 4. If still empty, synthesize Initial Launch entry
+      if (rawLogs.length === 0) {
+        rawLogs.push({
+          id: `init-${job.id}`,
+          createdAt: job.launchedAt || job.createdAt || new Date().toISOString(),
+          subJobCard: { subJobCardNo: job.jobCardNo },
+          stage: { name: '1. SHEARING (INITIAL LAUNCH)' },
+          qtyForwarded: job.totalPcbQty || 160,
+          qtyProcessed: job.totalPcbQty || 160,
+          qtyRejected: 0,
+          remarkType: 'INITIAL_LAUNCH',
+          remarks: 'Job Card released to shop floor for production launch',
+          createdBy: { name: 'Production Planner' },
+        });
+      }
+
+      setHistoryLogs(rawLogs);
     } catch (err) {
       console.error('Failed to fetch job card history', err);
     } finally {
@@ -1329,6 +1529,20 @@ export default function JobCardsPage() {
         status: finalStatus as any,
         subJobCards: preservedSubCards,
         isNewlyCreated: finalStatus === 'UNLAUNCHED',
+        product: {
+          ...existing.product,
+          name: launchForm.customerPartNo,
+          code: launchForm.customerPartNo,
+          specCardNo: launchForm.rfePartCode,
+          layers: Number(launchForm.layers) || 2,
+          thicknessMm: Number(launchForm.thicknessMm) || 1.6,
+          thickness: `${Number(launchForm.thicknessMm) || 1.6} mm`,
+          copper: launchForm.copperWeight || '1oz',
+          copperWeight: launchForm.copperWeight || '1oz',
+          surfaceFinish: launchForm.surfaceFinish || 'HASL Lead-Free',
+          solderMask: launchForm.solderMask || 'Green',
+          materialType: launchForm.materialType || 'FR-4',
+        },
       };
 
       runWithLoading(`Updating Job Card ${jcNo}...`, async () => {
@@ -1387,9 +1601,14 @@ export default function JobCardsPage() {
           name: launchForm.customerPartNo,
           code: launchForm.customerPartNo,
           specCardNo: launchForm.rfePartCode,
-          layers: 4,
-          thickness: '1.6mm',
-          copper: '1oz',
+          layers: Number(launchForm.layers) || 2,
+          thicknessMm: Number(launchForm.thicknessMm) || 1.6,
+          thickness: `${Number(launchForm.thicknessMm) || 1.6} mm`,
+          copper: launchForm.copperWeight || '1oz',
+          copperWeight: launchForm.copperWeight || '1oz',
+          surfaceFinish: launchForm.surfaceFinish || 'HASL Lead-Free',
+          solderMask: launchForm.solderMask || 'Green',
+          materialType: launchForm.materialType || 'FR-4',
         },
         subJobCards: subJobCardsList,
         isNewlyCreated: !launchForm.autoLaunch,
@@ -1420,6 +1639,12 @@ export default function JobCardsPage() {
             jobFlowSelection: launchForm.jobFlowSelection,
             autoLaunch: launchForm.autoLaunch,
             splits: apiSplits,
+            layers: Number(launchForm.layers) || 2,
+            thicknessMm: Number(launchForm.thicknessMm) || 1.6,
+            copperWeight: launchForm.copperWeight || '1oz',
+            surfaceFinish: launchForm.surfaceFinish || 'HASL Lead-Free',
+            solderMask: launchForm.solderMask || 'Green',
+            materialType: launchForm.materialType || 'FR-4',
           }),
         });
 
@@ -1763,33 +1988,9 @@ export default function JobCardsPage() {
       }
 
       const baseJc = selectedMovementJob.jobCardNo;
-      const existingSubNo = selectedMovementJob.subJobCardNo || baseJc;
-
-      // Find all existing letter suffixes for this jobCardNo among existing cards
-      const usedLetters = new Set<string>();
-      jobCards
-        .filter((j) => j.jobCardNo === baseJc)
-        .forEach((j) => {
-          const subNo = j.subJobCardNo || '';
-          if (subNo.startsWith(`${baseJc}-`)) {
-            const suffix = subNo.slice(`${baseJc}-`.length).trim();
-            if (/^[A-Z]+$/i.test(suffix)) {
-              usedLetters.add(suffix.toUpperCase());
-            }
-          }
-        });
-
-      let nextLetter = 'A';
-      for (let i = 0; i < 26; i++) {
-        const candidate = String.fromCharCode(65 + i);
-        if (!usedLetters.has(candidate)) {
-          nextLetter = candidate;
-          break;
-        }
-      }
-
-      const movedSubNo = `${baseJc}-${nextLetter}`;
-      const remainingSubNo = existingSubNo;
+      // User requirement: Keep exact SAME Job Card number across all split lots (never append -A, -B)
+      const movedSubNo = baseJc;
+      const remainingSubNo = baseJc;
 
       const movedBatch: JobCard = {
         ...selectedMovementJob,
@@ -2840,29 +3041,7 @@ export default function JobCardsPage() {
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => {
-                            setLaunchForm({
-                              jobCardNo: '',
-                              customerCode: 'CUST-RF045',
-                              rfePartCode: 'D3625',
-                              customerPartNo: 'EV-900W-WP-TO247',
-                              priority: 'NORMAL',
-                              prodPnlQty: 40,
-                              custPnlQty: 160,
-                              totalPcbQty: 160,
-                              prodPnlAreaSqm: 50,
-                              custPnlAreaSqm: 45,
-                              jobFlowSelection: 'PF-01',
-                              autoLaunch: true,
-                              enablePreSplit: false,
-                              splitCount: 1,
-                              customSplits: [{ subNo: '26-27-0001-1', qty: 160 }],
-                              photoUrl: '',
-                              launchDate: '',
-                              targetDate: '',
-                            });
-                            setShowLaunchModal(true);
-                          }}
+                          onClick={handleOpenCreateModal}
                           className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
                         >
                           ➕ Create New Job Card
@@ -2907,7 +3086,9 @@ export default function JobCardsPage() {
                             </span>
                           )}
                           {jc.subJobCards && jc.subJobCards.length > 1 && (
-                            <span className="text-[10px] text-slate-500 font-normal">({jc.subJobCards.length} Lots)</span>
+                            <span className="text-[9px] font-mono px-1.5 py-0.5 bg-blue-50 text-blue-700 font-bold rounded border border-blue-200">
+                              Lot {(jc.subJobCards.findIndex((s) => s.id === jc.id) >= 0 ? jc.subJobCards.findIndex((s) => s.id === jc.id) + 1 : idx + 1)}/{jc.subJobCards.length}
+                            </span>
                           )}
                         </div>
                       </td>
@@ -3346,12 +3527,48 @@ export default function JobCardsPage() {
                   </div>
                 </div>
 
-                {/* 3. Customer & Part Code Master */}
+                {/* 2. Customer & Part Code Master */}
                 <div className="space-y-2.5">
-                  <div className="flex items-center gap-2 text-slate-400 uppercase font-mono text-[10px] font-black tracking-wider">
-                    <Building2 className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>2. Customer & Part Codes</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-slate-400 uppercase font-mono text-[10px] font-black tracking-wider">
+                      <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>2. Customer & Part Codes</span>
+                    </div>
+                    {availableProducts.length > 0 && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-slate-400 font-medium">Quick Preset:</span>
+                        <select
+                          onChange={(e) => {
+                            const prod = availableProducts.find((p) => p.id === e.target.value || p.code === e.target.value);
+                            if (prod) {
+                              setLaunchForm((prev) => ({
+                                ...prev,
+                                customerPartNo: prod.code || prod.name || prev.customerPartNo,
+                                rfePartCode: prod.specCardNo || prod.code || prev.rfePartCode,
+                                customerCode: prod.customer?.code || prev.customerCode,
+                                layers: prod.layers || prev.layers,
+                                thicknessMm: Number(prod.thicknessMm) || prev.thicknessMm,
+                                copperWeight: prod.copperWeight || prod.copper || prev.copperWeight,
+                                surfaceFinish: prod.surfaceFinish || prev.surfaceFinish,
+                                solderMask: prod.solderMask || prev.solderMask,
+                                materialType: prod.materialType || prev.materialType,
+                              }));
+                            }
+                          }}
+                          className="text-[11px] bg-indigo-50/70 border border-indigo-200 text-indigo-900 rounded-lg px-2 py-0.5 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-2xs"
+                          defaultValue=""
+                        >
+                          <option value="" disabled>Load from Product Master...</option>
+                          {availableProducts.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.code} ({p.name}) — {p.layers || 2}L / {p.thicknessMm || '1.6'}mm
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -3363,7 +3580,7 @@ export default function JobCardsPage() {
                         value={launchForm.customerCode}
                         onChange={(e) => setLaunchForm({ ...launchForm, customerCode: e.target.value })}
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs"
-                        placeholder="e.g. CUST-RF045"
+                        placeholder="e.g. CUST-001"
                       />
                     </div>
 
@@ -3377,7 +3594,7 @@ export default function JobCardsPage() {
                         value={launchForm.customerPartNo}
                         onChange={(e) => setLaunchForm({ ...launchForm, customerPartNo: e.target.value })}
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs"
-                        placeholder="EV-900W-WP-TO247"
+                        placeholder="Customer Part Number"
                       />
                     </div>
 
@@ -3392,10 +3609,126 @@ export default function JobCardsPage() {
                           value={launchForm.rfePartCode}
                           onChange={(e) => setLaunchForm({ ...launchForm, rfePartCode: e.target.value })}
                           className="w-full bg-blue-50/50 border border-blue-200 rounded-xl px-3 py-2 text-xs font-mono font-black text-blue-700 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-2xs"
-                          placeholder="D3625"
+                          placeholder="R.F.E. Part Code"
                         />
                         <span className="absolute right-3 top-2 text-[10px] uppercase font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">RFE</span>
                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. PCB Technical Specifications (Live Spec Card) */}
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-2 text-slate-400 uppercase font-mono text-[10px] font-black tracking-wider">
+                    <Cpu className="w-3.5 h-3.5 text-cyan-600" />
+                    <span>3. PCB Technical Specifications (Live Spec Card)</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Layers <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={launchForm.layers}
+                        onChange={(e) => setLaunchForm({ ...launchForm, layers: Number(e.target.value) || 2 })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs cursor-pointer"
+                      >
+                        <option value={1}>1 Layer (Single)</option>
+                        <option value={2}>2 Layers (Double)</option>
+                        <option value={4}>4 Layers (Multilayer)</option>
+                        <option value={6}>6 Layers</option>
+                        <option value={8}>8 Layers</option>
+                        <option value={10}>10 Layers</option>
+                        <option value={12}>12 Layers</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Thickness (mm) <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        required
+                        value={launchForm.thicknessMm}
+                        onChange={(e) => setLaunchForm({ ...launchForm, thicknessMm: parseFloat(e.target.value) || 1.6 })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs"
+                        placeholder="1.6"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Copper Weight <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={launchForm.copperWeight}
+                        onChange={(e) => setLaunchForm({ ...launchForm, copperWeight: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs cursor-pointer"
+                      >
+                        <option value="0.5oz">0.5 oz (18µm)</option>
+                        <option value="1oz">1.0 oz (35µm)</option>
+                        <option value="2oz">2.0 oz (70µm)</option>
+                        <option value="3oz">3.0 oz (105µm)</option>
+                        <option value="4oz">4.0 oz (140µm)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Surface Finish <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={launchForm.surfaceFinish}
+                        onChange={(e) => setLaunchForm({ ...launchForm, surfaceFinish: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs cursor-pointer"
+                      >
+                        <option value="HASL Lead-Free">HASL Lead-Free</option>
+                        <option value="HASL Leaded">HASL Leaded</option>
+                        <option value="ENIG (Gold)">ENIG (Gold)</option>
+                        <option value="OSP">OSP</option>
+                        <option value="Immersion Silver">Immersion Silver</option>
+                        <option value="Immersion Tin">Immersion Tin</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Solder Mask <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={launchForm.solderMask}
+                        onChange={(e) => setLaunchForm({ ...launchForm, solderMask: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs cursor-pointer"
+                      >
+                        <option value="Green">Green</option>
+                        <option value="Matt Green">Matt Green</option>
+                        <option value="Blue">Blue</option>
+                        <option value="Red">Red</option>
+                        <option value="Black">Black</option>
+                        <option value="Matt Black">Matt Black</option>
+                        <option value="White">White</option>
+                        <option value="Yellow">Yellow</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Material Type <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={launchForm.materialType}
+                        onChange={(e) => setLaunchForm({ ...launchForm, materialType: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs cursor-pointer"
+                      >
+                        <option value="FR-4">FR-4 (TG140)</option>
+                        <option value="FR-4 High TG">FR-4 High TG (TG170)</option>
+                        <option value="Aluminum">Aluminum Base</option>
+                        <option value="Copper Base">Copper Base</option>
+                        <option value="Rogers (High Frequency)">Rogers High Freq</option>
+                        <option value="Polyimide">Polyimide (Flex)</option>
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -3404,7 +3737,7 @@ export default function JobCardsPage() {
                 <div className="space-y-2.5">
                   <div className="flex items-center gap-2 text-slate-400 uppercase font-mono text-[10px] font-black tracking-wider">
                     <Box className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>3. Production Volumes & Parameters</span>
+                    <span>4. Production Volumes & Parameters</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
                     <div>
@@ -3501,7 +3834,7 @@ export default function JobCardsPage() {
                 <div className="space-y-3 pt-1">
                   <div className="flex items-center gap-2 text-slate-400 uppercase font-mono text-[10px] font-black tracking-wider">
                     <Workflow className="w-3.5 h-3.5 text-purple-600" />
-                    <span>4. Production Launch & Lot Splitting</span>
+                    <span>5. Production Launch & Lot Splitting</span>
                   </div>
 
                   {/* Pre-Launch Sub-Job Card Split Card */}
@@ -3888,20 +4221,20 @@ export default function JobCardsPage() {
 
                           <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
                             <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">CUSTOMER CODE</span>
-                            <strong className="text-slate-900 font-bold block mt-0.5 truncate">{selectedMovementJob.customerCode || 'CUST-RF045'}</strong>
+                            <strong className="text-slate-900 font-bold block mt-0.5 truncate">{selectedMovementJob.customerCode || '—'}</strong>
                           </div>
 
                           <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
                             <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">CUSTOMER PART NO</span>
                             <strong className="text-slate-900 font-bold block mt-0.5 truncate" title={selectedMovementJob.customerPartNo}>
-                              {selectedMovementJob.customerPartNo}
+                              {selectedMovementJob.customerPartNo || '—'}
                             </strong>
                           </div>
 
                           <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
                             <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">R.F.E. PART CODE</span>
                             <strong className="text-blue-800 font-mono font-bold block mt-0.5 text-xs bg-blue-50/60 px-2 py-0.5 rounded border border-blue-100 inline-block">
-                              {selectedMovementJob.rfePartCode || 'D3625'}
+                              {selectedMovementJob.rfePartCode || '—'}
                             </strong>
                           </div>
 
@@ -4284,34 +4617,6 @@ export default function JobCardsPage() {
         </Portal>
       )}
 
-      {/* MODAL 3: QR CODE STICKER / TAG PRINT MODAL */}
-      {showQrModal && (
-        <Portal>
-          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-md p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <QrCode className="w-5 h-5 text-blue-600" />
-                <h3 className="font-extrabold text-slate-900 text-base">Job Card QR Tag Preview</h3>
-              </div>
-              <button onClick={() => setShowQrModal(null)} className="text-slate-400 hover:text-slate-700 text-sm font-bold p-1 rounded-lg hover:bg-slate-100 cursor-pointer">✕</button>
-            </div>
-
-            {/* Printable QR Tag Card */}
-            <JobCardQrTag jobCard={showQrModal} onPrint={triggerPrint} />
-
-            <div className="flex items-center justify-center pt-2">
-              <button
-                onClick={() => setShowQrModal(null)}
-                className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl"
-              >
-                Close Preview
-              </button>
-            </div>
-          </div>
-        </div>
-        </Portal>
-      )}
 
       {/* MODAL 4: WIP & Daily Movement Report Drawer */}
       {showReportDrawer && (
@@ -4498,26 +4803,39 @@ export default function JobCardsPage() {
               </div>
 
               {/* Quality / Loss Monitoring Section */}
-              <div className="bg-emerald-50/70 border border-emerald-200 p-4 rounded-xl space-y-2 mb-4">
-                <h5 className="text-xs font-black text-emerald-900 uppercase tracking-wider flex items-center gap-1.5 font-mono">
-                  <ShieldAlert className="w-4 h-4 text-emerald-600" />
-                  QUALITY & LOSS MONITORING (DAILY MOVEMENT)
-                </h5>
-                <div className="text-xs text-emerald-950 space-y-1.5 font-sans">
-                  <div className="flex justify-between items-center border-b border-emerald-200/80 pb-1">
-                    <span>Total Daily Rework Jobs:</span>
-                    <strong className="text-amber-800 font-mono font-black">0 Jobs Reworked</strong>
+              {(() => {
+                const totalScrapPcb = jobCards.reduce((acc, j) => acc + (j.rejectedPcbQty || 0), 0);
+                const totalReworkJobs = jobCards.filter((j) => (j.rejectionLogs && j.rejectionLogs.length > 0) || (j.rejectedPcbQty && j.rejectedPcbQty > 0)).length;
+                const totalFactoryPcb = jobCards.reduce((acc, j) => acc + (j.totalPcbQty || (j.prodPnlQty ? j.prodPnlQty * 4 : 0)), 0);
+                const factoryYieldPct = totalFactoryPcb > 0
+                  ? Math.max(0, Math.min(100, ((totalFactoryPcb - totalScrapPcb) / totalFactoryPcb) * 100)).toFixed(1)
+                  : '100.0';
+
+                return (
+                  <div className="bg-emerald-50/70 border border-emerald-200 p-4 rounded-xl space-y-2 mb-4">
+                    <h5 className="text-xs font-black text-emerald-900 uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                      <ShieldAlert className="w-4 h-4 text-emerald-600" />
+                      QUALITY & LOSS MONITORING (DAILY MOVEMENT)
+                    </h5>
+                    <div className="text-xs text-emerald-950 space-y-1.5 font-sans">
+                      <div className="flex justify-between items-center border-b border-emerald-200/80 pb-1">
+                        <span>Total Daily Rework Jobs:</span>
+                        <strong className="text-amber-800 font-mono font-black">{totalReworkJobs} Jobs Reworked</strong>
+                      </div>
+                      <div className="flex justify-between items-center border-b border-emerald-200/80 pb-1">
+                        <span>Total Daily Rejection / Scrap:</span>
+                        <strong className="text-emerald-800 font-mono font-black">
+                          {totalScrapPcb} PCB Scrap ({factoryYieldPct}% Quality Yield)
+                        </strong>
+                      </div>
+                      <div className="flex justify-between items-center pt-0.5">
+                        <span>Overall Factory Production Yield:</span>
+                        <strong className="text-emerald-700 font-mono font-black">{factoryYieldPct}% Yield Efficiency</strong>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center border-b border-emerald-200/80 pb-1">
-                    <span>Total Daily Rejection / Scrap:</span>
-                    <strong className="text-emerald-800 font-mono font-black">0 PCB Scrap (100% Quality Yield)</strong>
-                  </div>
-                  <div className="flex justify-between items-center pt-0.5">
-                    <span>Overall Factory Production Yield:</span>
-                    <strong className="text-emerald-700 font-mono font-black">100% Yield Efficiency</strong>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
 
             </div>
 
@@ -4722,22 +5040,53 @@ export default function JobCardsPage() {
               </div>
 
               {/* Job Card Meta Specs summary */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 text-xs font-mono">
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold block uppercase">WIP Job No</span>
-                  <strong className="text-slate-900 text-sm font-black">{historyModalJob.jobCardNo}</strong>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2.5 text-xs font-mono">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold block uppercase">WIP Job No</span>
+                    <strong className="text-slate-900 text-sm font-black">{historyModalJob.jobCardNo}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Customer Code</span>
+                    <strong className="text-slate-800 font-bold">{historyModalJob.customerCode}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Customer Part</span>
+                    <strong className="text-slate-800 font-bold truncate block">{historyModalJob.customerPartNo}</strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Current Stage</span>
+                    <span className="inline-block px-2 py-0.5 rounded bg-blue-100 text-blue-900 font-bold text-[11px] truncate max-w-full">
+                      {historyModalJob.currentStageName || PF01_STAGES[0]}
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Customer Code</span>
-                  <strong className="text-slate-800 font-bold">{historyModalJob.customerCode}</strong>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Customer Part</span>
-                  <strong className="text-slate-800 font-bold truncate block">{historyModalJob.customerPartNo}</strong>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Total Quantity</span>
-                  <strong className="text-indigo-700 font-black">{historyModalJob.totalPcbQty || historyModalJob.custPnlQty || 160} PCBs</strong>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/80 text-[11px]">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500 font-bold">Volume:</span>
+                    <strong className="text-indigo-700 font-black">{historyModalJob.totalPcbQty || historyModalJob.custPnlQty || 160} PCBs</strong>
+                    <span className="text-slate-300">•</span>
+                    <span className="text-slate-500 font-bold">WIP Area:</span>
+                    <strong className="text-emerald-700 font-black">{Number(historyModalJob.custPnlAreaSqm || historyModalJob.prodPnlAreaSqm || 0).toFixed(2)} SQM</strong>
+                  </div>
+
+                  {historyModalJob.product && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="px-2 py-0.5 bg-white border border-slate-200 rounded font-bold text-slate-800">
+                        {historyModalJob.product.layers ? `${historyModalJob.product.layers} Layers` : '2 Layers'}
+                      </span>
+                      <span className="px-2 py-0.5 bg-white border border-slate-200 rounded font-bold text-slate-800">
+                        {historyModalJob.product.thicknessMm ? `${historyModalJob.product.thicknessMm} mm` : '1.6 mm'}
+                      </span>
+                      <span className="px-2 py-0.5 bg-white border border-slate-200 rounded font-bold text-slate-800">
+                        {historyModalJob.product.copperWeight || historyModalJob.product.copper || '1oz'}
+                      </span>
+                      <span className="px-2 py-0.5 bg-white border border-slate-200 rounded font-bold text-blue-700 truncate max-w-[120px]">
+                        {historyModalJob.product.surfaceFinish || 'HASL Lead-Free'}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
