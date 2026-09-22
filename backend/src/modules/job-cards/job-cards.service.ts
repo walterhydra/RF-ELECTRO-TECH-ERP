@@ -564,28 +564,29 @@ export class JobCardsService {
       throw new BadRequestException('System initialization error: Could not find or create default User account.');
     }
 
-    // Ensure standard 19 process stages exist matching PF01_STAGES
+    // Ensure standard 20 process stages exist matching PF-OI Standard Flow
     let stages = await this.prisma.processStage.findMany({ orderBy: { defaultOrder: 'asc' } });
     const defaultStageList = [
-      { name: '1. SHEARING', code: 'SHR', order: 1 },
-      { name: '2. DRILLING', code: 'DRL', order: 2 },
-      { name: '3. DRL-QC', code: 'DRL-QC', order: 3 },
-      { name: '4. PTH', code: 'PTH', order: 4 },
-      { name: '5. PTH-QC', code: 'PTH-QC', order: 5 },
-      { name: '6. PHOTO PRINTING', code: 'PHOTO', order: 6 },
-      { name: '7. PHOTO-QC', code: 'PHOTO-QC', order: 7 },
-      { name: '8. PATTERN PLATING', code: 'PLT', order: 8 },
-      { name: '9. ETCHING', code: 'ETC', order: 9 },
-      { name: '10. ETCHING-QC', code: 'ETC-QC', order: 10 },
-      { name: '11. SOLDER MASK', code: 'SM', order: 11 },
-      { name: '12. SOLDER MASK-QC', code: 'SM-QC', order: 12 },
-      { name: '13. LEGEND PRINTING', code: 'LGD', order: 13 },
-      { name: '14. HAL / ENIG', code: 'HAL', order: 14 },
-      { name: '15. PUNCHING / ROUTING', code: 'RTE', order: 15 },
-      { name: '16. E-TESTING', code: 'BBT', order: 16 },
-      { name: '17. FINAL QC', code: 'FQC', order: 17 },
-      { name: '18. PACKING', code: 'PKG', order: 18 },
-      { name: '19. DISPATCH', code: 'DSP', order: 19 },
+      { name: '1. SHEARING',       code: 'SHR',      order: 1  },
+      { name: '2. DRILLING',       code: 'DRL',      order: 2  },
+      { name: '3. DRL-QC',         code: 'DRL-QC',   order: 3  },
+      { name: '4. DML',            code: 'DML',      order: 4  },
+      { name: '5. PTH',            code: 'PTH',      order: 5  },
+      { name: '6. PTH-QC',         code: 'PTH-QC',   order: 6  },
+      { name: '7. PLATING',        code: 'PLT',      order: 7  },
+      { name: '8. ETCHING',        code: 'ETC',      order: 8  },
+      { name: '9. PREMASK-QC/AOI', code: 'PM-QC',    order: 9  },
+      { name: '10. PISM',          code: 'PISM',     order: 10 },
+      { name: '11. PISM-QC',       code: 'PISM-QC',  order: 11 },
+      { name: '12. HASL',          code: 'HASL',     order: 12 },
+      { name: '13. HASL-QC',       code: 'HASL-QC',  order: 13 },
+      { name: '14. LEGEND PRINT',  code: 'LGD',      order: 14 },
+      { name: '15. ROUTING',       code: 'RTE',      order: 15 },
+      { name: '16. VG',            code: 'VG',       order: 16 },
+      { name: '17. BBT',           code: 'BBT',      order: 17 },
+      { name: '18. FQC (AI)',       code: 'FQC',      order: 18 },
+      { name: '19. PDI-AQL',       code: 'PDI',      order: 19 },
+      { name: '20. PACKING',       code: 'PKG',      order: 20 },
     ];
 
     for (const item of defaultStageList) {
@@ -1527,27 +1528,28 @@ export class JobCardsService {
       }
     }
 
-    // ── STRATEGY 2: Fallback to hardcoded PF-01 list (only when flow steps unavailable) ──
+    // ── STRATEGY 2: Fallback to hardcoded PF-OI 20-stage list (only when flow steps unavailable) ──
     const pfList = [
       '1. SHEARING',
       '2. DRILLING',
       '3. DRL-QC',
-      '4. PTH',
-      '5. PTH-QC',
-      '6. PHOTO PRINTING',
-      '7. PHOTO-QC',
-      '8. PATTERN PLATING',
-      '9. ETCHING',
-      '10. ETCHING-QC',
-      '11. SOLDER MASK',
-      '12. SOLDER MASK-QC',
-      '13. LEGEND PRINTING',
-      '14. HAL / ENIG',
-      '15. PUNCHING / ROUTING',
-      '16. E-TESTING',
-      '17. FINAL QC',
-      '18. PACKING',
-      '19. DISPATCH',
+      '4. DML',
+      '5. PTH',
+      '6. PTH-QC',
+      '7. PLATING',
+      '8. ETCHING',
+      '9. PREMASK-QC/AOI',
+      '10. PISM',
+      '11. PISM-QC',
+      '12. HASL',
+      '13. HASL-QC',
+      '14. LEGEND PRINT',
+      '15. ROUTING',
+      '16. VG',
+      '17. BBT',
+      '18. FQC (AI)',
+      '19. PDI-AQL',
+      '20. PACKING',
     ];
 
     const currentStageName = String(currentStage?.name || '').trim();
