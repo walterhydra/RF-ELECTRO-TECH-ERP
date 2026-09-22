@@ -2434,7 +2434,7 @@ export default function JobCardsPage() {
       const stageDisplay = isUnlaunched
         ? `Pending Launch (1. SHEARING)`
         : isCompleted
-        ? `19. PACKING (DONE)`
+        ? `20. PACKING (DONE)`
         : j.currentStageName || PF01_STAGES[0];
 
       const priorityClass =

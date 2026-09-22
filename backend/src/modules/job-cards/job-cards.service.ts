@@ -213,16 +213,16 @@ export class JobCardsService {
           (jc as any).currentStageName = topSub.currentStage.name;
           (jc as any).currentStageIndex = Math.max(0, (topSub.currentStage.defaultOrder || 1) - 1);
         } else if (jc.status === JobCardStatus.COMPLETED) {
-          (jc as any).currentStageName = '19. DISPATCH';
-          (jc as any).currentStageIndex = 18;
+          (jc as any).currentStageName = '20. PACKING';
+          (jc as any).currentStageIndex = 19;
         } else {
           (jc as any).currentStageName = '1. SHEARING';
           (jc as any).currentStageIndex = 0;
         }
       } else {
         if (jc.status === JobCardStatus.COMPLETED) {
-          (jc as any).currentStageName = '19. DISPATCH';
-          (jc as any).currentStageIndex = 18;
+          (jc as any).currentStageName = '20. PACKING';
+          (jc as any).currentStageIndex = 19;
         } else {
           (jc as any).currentStageName = '1. SHEARING';
           (jc as any).currentStageIndex = 0;
