@@ -565,7 +565,6 @@ export class JobCardsService {
     }
 
     // Ensure standard 20 process stages exist matching PF-OI Standard Flow
-    let stages = await this.prisma.processStage.findMany({ orderBy: { defaultOrder: 'asc' } });
     const defaultStageList = [
       { name: '1. SHEARING',       code: 'SHR',      order: 1  },
       { name: '2. DRILLING',       code: 'DRL',      order: 2  },
@@ -589,97 +588,152 @@ export class JobCardsService {
       { name: '20. PACKING',       code: 'PKG',      order: 20 },
     ];
 
-    for (const item of defaultStageList) {
-      const existingByName = stages.find((s) => s.name.toLowerCase() === item.name.toLowerCase());
-      if (existingByName) {
-        if (existingByName.defaultOrder !== item.order || existingByName.code !== item.code || existingByName.name !== item.name) {
-          await this.prisma.processStage.update({
-            where: { id: existingByName.id },
-            data: { name: item.name, defaultOrder: item.order, code: item.code },
-          }).catch(() => {});
-        }
-      } else {
-        const existingByOrder = stages.find((s) => s.defaultOrder === item.order);
-        if (existingByOrder) {
-          await this.prisma.processStage.update({
-            where: { id: existingByOrder.id },
-            data: { name: item.name, defaultOrder: item.order, code: item.code },
-          }).catch(() => {});
-        } else {
-          await this.prisma.processStage.create({
-            data: {
-              code: item.code,
-              name: item.name,
-              defaultOrder: item.order,
-              description: `${item.name} Stage`,
-            },
-          }).catch(() => {});
-        }
-      }
-    }
+    try {
+      let stages = await this.prisma.processStage.findMany({ orderBy: { defaultOrder: 'asc' } }).catch(() => []);
 
-    // ── Cleanup: delete obsolete stage records no longer in the canonical list ──
-    // (e.g. old PTH, PHOTO PRINTING, PATTERN PLATING, SOLDER MASK, DISPATCH, etc.)
-    const canonicalNames = defaultStageList.map((s) => s.name.toLowerCase());
-    const canonicalCodes = defaultStageList.map((s) => s.code.toLowerCase());
-    const allCurrentStages = await this.prisma.processStage.findMany({});
-    for (const stg of allCurrentStages) {
-      const nameMatch = canonicalNames.includes(stg.name.toLowerCase());
-      const codeMatch = canonicalCodes.includes(stg.code.toLowerCase());
-      if (!nameMatch && !codeMatch) {
-        // Find replacement canonical stage with the same order number
-        const replacementStage = await this.prisma.processStage.findFirst({
-          where: { defaultOrder: stg.defaultOrder, id: { not: stg.id } },
+      for (const item of defaultStageList) {
+        const itemCodeLower = (item.code || '').toLowerCase().trim();
+        const itemNameLower = (item.name || '').toLowerCase().trim();
+        const cleanItemName = (item.name || '').replace(/^\d+[\.\s\-]+/, '').trim().toLowerCase();
+
+        // Safe search without throwing on null name/code
+        const existing = stages.find((s) => {
+          const sName = (s?.name || '').toLowerCase().trim();
+          const sCode = (s?.code || '').toLowerCase().trim();
+          const sCleanName = sName.replace(/^\d+[\.\s\-]+/, '').trim();
+          return (sCode && sCode === itemCodeLower) || (sName && sName === itemNameLower) || (sCleanName && sCleanName === cleanItemName);
         });
 
-        if (replacementStage) {
-          await this.prisma.subJobCard.updateMany({
-            where: { currentStageId: stg.id },
-            data: { currentStageId: replacementStage.id },
-          }).catch(() => {});
-          await this.prisma.processFlowStep.updateMany({
-            where: { stageId: stg.id },
-            data: { stageId: replacementStage.id },
-          }).catch(() => {});
-          await this.prisma.stageMovementLog.updateMany({
-            where: { stageId: stg.id },
-            data: { stageId: replacementStage.id },
-          }).catch(() => {});
+        if (existing) {
+          if (existing.defaultOrder !== item.order || existing.code !== item.code || existing.name !== item.name) {
+            try {
+              await this.prisma.processStage.update({
+                where: { id: existing.id },
+                data: { name: item.name, defaultOrder: item.order, code: item.code },
+              });
+            } catch {
+              try {
+                await this.prisma.processStage.update({
+                  where: { id: existing.id },
+                  data: { name: item.name, defaultOrder: item.order },
+                });
+              } catch {}
+            }
+          }
         } else {
-          // Remove any flow steps referencing this obsolete stage before delete
-          await this.prisma.processFlowStep.deleteMany({
-            where: { stageId: stg.id },
-          }).catch(() => {});
+          const existingByOrder = stages.find((s) => s.defaultOrder === item.order);
+          if (existingByOrder) {
+            try {
+              await this.prisma.processStage.update({
+                where: { id: existingByOrder.id },
+                data: { name: item.name, defaultOrder: item.order, code: item.code },
+              });
+            } catch {
+              try {
+                await this.prisma.processStage.update({
+                  where: { id: existingByOrder.id },
+                  data: { name: item.name, defaultOrder: item.order },
+                });
+              } catch {}
+            }
+          } else {
+            try {
+              await this.prisma.processStage.create({
+                data: {
+                  code: item.code,
+                  name: item.name,
+                  defaultOrder: item.order,
+                  description: `${item.name} Stage`,
+                },
+              });
+            } catch {
+              try {
+                await this.prisma.processStage.create({
+                  data: {
+                    code: `${item.code}_${Date.now().toString().slice(-4)}`,
+                    name: item.name,
+                    defaultOrder: item.order,
+                    description: `${item.name} Stage`,
+                  },
+                });
+              } catch {}
+            }
+          }
         }
-
-        // Safe to delete now
-        await this.prisma.processStage.delete({ where: { id: stg.id } }).catch(() => {});
       }
+
+      // ── Cleanup: delete obsolete stage records no longer in the canonical list ──
+      const canonicalNames = defaultStageList.map((s) => (s.name || '').toLowerCase().trim());
+      const canonicalCleanNames = defaultStageList.map((s) => (s.name || '').replace(/^\d+[\.\s\-]+/, '').trim().toLowerCase());
+      const canonicalCodes = defaultStageList.map((s) => (s.code || '').toLowerCase().trim());
+      const allCurrentStages = await this.prisma.processStage.findMany({}).catch(() => []);
+
+      for (const stg of allCurrentStages) {
+        const stgName = (stg?.name || '').toLowerCase().trim();
+        const stgCleanName = stgName.replace(/^\d+[\.\s\-]+/, '').trim();
+        const stgCode = (stg?.code || '').toLowerCase().trim();
+
+        const nameMatch = canonicalNames.includes(stgName) || (stgCleanName && canonicalCleanNames.includes(stgCleanName));
+        const codeMatch = Boolean(stgCode && canonicalCodes.includes(stgCode));
+
+        if (!nameMatch && !codeMatch) {
+          const replacementStage = await this.prisma.processStage.findFirst({
+            where: { defaultOrder: stg.defaultOrder, id: { not: stg.id } },
+          }).catch(() => null);
+
+          if (replacementStage) {
+            await this.prisma.subJobCard.updateMany({
+              where: { currentStageId: stg.id },
+              data: { currentStageId: replacementStage.id },
+            }).catch(() => {});
+            await this.prisma.processFlowStep.updateMany({
+              where: { stageId: stg.id },
+              data: { stageId: replacementStage.id },
+            }).catch(() => {});
+            await this.prisma.stageMovementLog.updateMany({
+              where: { stageId: stg.id },
+              data: { stageId: replacementStage.id },
+            }).catch(() => {});
+          } else {
+            await this.prisma.processFlowStep.deleteMany({
+              where: { stageId: stg.id },
+            }).catch(() => {});
+          }
+
+          await this.prisma.processStage.delete({ where: { id: stg.id } }).catch(() => {});
+        }
+      }
+    } catch (err: any) {
+      console.warn(`Stage synchronization warning in ensureDependencies: ${err?.message || err}`);
     }
 
-    stages = await this.prisma.processStage.findMany({ orderBy: { defaultOrder: 'asc' } });
+    let stages = await this.prisma.processStage.findMany({ orderBy: { defaultOrder: 'asc' } }).catch(() => []);
 
     let processFlow = await this.prisma.processFlowMaster.findFirst({
       where: { isActive: true },
       include: { steps: { orderBy: { stepOrder: 'asc' } } },
-    });
+    }).catch(() => null);
 
     // Always create or ensure flow master exists
     if (!processFlow) {
-      processFlow = await this.prisma.processFlowMaster.create({
-        data: {
-          name: 'PF-01 Standard Flow',
-          totalSteps: stages.length,
-          createdById: defaultUser.id,
-        },
-        include: { steps: { orderBy: { stepOrder: 'asc' } } },
-      });
+      try {
+        processFlow = await this.prisma.processFlowMaster.create({
+          data: {
+            name: 'PF-01 Standard Flow',
+            totalSteps: stages.length || 20,
+            createdById: defaultUser.id,
+          },
+          include: { steps: { orderBy: { stepOrder: 'asc' } } },
+        });
+      } catch {
+        processFlow = await this.prisma.processFlowMaster.findFirst({
+          include: { steps: { orderBy: { stepOrder: 'asc' } } },
+        }).catch(() => null);
+      }
     }
 
     // ── ALWAYS sync processFlowMaster steps to exactly match the 20 canonical stages ──
-    // This fixes the critical bug where old 19-step flows caused early COMPLETED
-    if (stages.length > 0) {
-      // Upsert all canonical steps in correct order
+    if (processFlow && stages.length > 0) {
       for (let i = 0; i < stages.length; i++) {
         await this.prisma.processFlowStep.upsert({
           where: {
@@ -697,7 +751,6 @@ export class JobCardsService {
         }).catch(() => {});
       }
 
-      // Delete any extra steps beyond canonical count (e.g. leftover step 20 from old 19-step flow)
       await this.prisma.processFlowStep.deleteMany({
         where: {
           processFlowMasterId: processFlow.id,
@@ -705,7 +758,6 @@ export class JobCardsService {
         },
       }).catch(() => {});
 
-      // Ensure totalSteps is always accurate
       await this.prisma.processFlowMaster.update({
         where: { id: processFlow.id },
         data: { totalSteps: stages.length },
@@ -714,7 +766,7 @@ export class JobCardsService {
       processFlow = await this.prisma.processFlowMaster.findUnique({
         where: { id: processFlow.id },
         include: { steps: { orderBy: { stepOrder: 'asc' } } },
-      }) || processFlow;
+      }).catch(() => null) || processFlow;
     }
 
     let customer = await this.prisma.customer.findFirst();
