@@ -312,8 +312,8 @@ export default function JobMovementUpdatePage() {
     const effectiveReason = rejectionReasonInput || remarksText || (actualRejected > 0 ? `${actualRejected} PCB(s) rejected at ${selectedJob.currentStageName}` : 'Stage Movement');
 
     const currentIndex = PF01_STAGES.indexOf(selectedJob.currentStageName);
-    const nextIndex = Math.min(currentIndex + 1, PF01_STAGES.length - 1);
-    const nextStageName = PF01_STAGES[nextIndex];
+    const nextIndex = currentIndex + 1;
+    const nextStageName = PF01_STAGES[nextIndex] || '20. PACKING';
 
     // 1. INSTANT OPTIMISTIC UI & LOCAL STORAGE UPDATE (0ms)
     let updatedList: JobCard[] = [];
@@ -335,7 +335,7 @@ export default function JobMovementUpdatePage() {
           prodPnlAreaSqm: mergedArea,
           custPnlAreaSqm: mergedArea,
           rejectedPcbQty: (target.rejectedPcbQty || 0) + actualRejected,
-          status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
+          status: 'IN_PROGRESS',
         };
         updatedList = otherItems.map((j, idx) => (idx === existingNextIdx ? mergedCard : j));
       } else {
@@ -351,7 +351,7 @@ export default function JobMovementUpdatePage() {
                 prodPnlAreaSqm: nextStageSqm,
                 custPnlAreaSqm: nextStageSqm,
                 rejectedPcbQty: (j.rejectedPcbQty || 0) + actualRejected,
-                status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
+                status: nextIndex >= PF01_STAGES.length ? 'COMPLETED' : 'IN_PROGRESS',
               }
             : j
         );

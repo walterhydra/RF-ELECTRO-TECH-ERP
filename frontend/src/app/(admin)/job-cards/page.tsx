@@ -1746,8 +1746,27 @@ export default function JobCardsPage() {
       : normalizeStageIndex(card.currentStageName);
 
     const nextIndex = currentIdx + 1;
+    // Already at PACKING (last stage) → mark COMPLETED
     if (nextIndex >= PF01_STAGES.length) {
-      showToast('Job Card has already reached the final PACKING stage!', 'info');
+      void (async () => {
+        try {
+          const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+          const id = encodeURIComponent(card.id || card.subJobCardNo || card.jobCardNo);
+          await fetch(`${getApiBaseUrl()}/job-cards/${id}/move-stage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify({ status: 'COMPLETED', jobCardNo: card.jobCardNo }),
+          });
+        } catch (_) {}
+      })();
+      setJobCards((prev) => {
+        const updated: JobCard[] = prev.map((j) =>
+          j.id === card.id ? { ...j, status: 'COMPLETED' as const, currentStageName: '20. PACKING', currentStageIndex: 19 } : j
+        );
+        saveJobCardsToStorage(updated);
+        return updated;
+      });
+      showToast(`✅ Job Card ${card.jobCardNo} COMPLETED — all 20 stages done!`, 'success');
       return;
     }
 
@@ -1785,7 +1804,7 @@ export default function JobCardsPage() {
                 ...j,
                 currentStageIndex: nextIndex,
                 currentStageName: nextStage,
-                status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
+                status: 'IN_PROGRESS',
                 isNewlyCreated: false,
               }
             : j
@@ -1883,8 +1902,28 @@ export default function JobCardsPage() {
       : normalizeStageIndex(selectedMovementJob.currentStageName);
 
     const nextIndex = currentIdx + 1;
+    // Already at PACKING (last stage) → mark COMPLETED
     if (nextIndex >= PF01_STAGES.length) {
-      showToast('Job has already reached the final PACKING stage!', 'info');
+      void (async () => {
+        try {
+          const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+          const id = encodeURIComponent(selectedMovementJob.id || selectedMovementJob.subJobCardNo || selectedMovementJob.jobCardNo);
+          await fetch(`${getApiBaseUrl()}/job-cards/${id}/move-stage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+            body: JSON.stringify({ status: 'COMPLETED', jobCardNo: selectedMovementJob.jobCardNo }),
+          });
+        } catch (_) {}
+      })();
+      setJobCards((prev) => {
+        const updated: JobCard[] = prev.map((j) =>
+          j.id === selectedMovementJob.id ? { ...j, status: 'COMPLETED' as const, currentStageName: '20. PACKING', currentStageIndex: 19 } : j
+        );
+        saveJobCardsToStorage(updated);
+        return updated;
+      });
+      showToast(`✅ Job Card ${selectedMovementJob.jobCardNo} COMPLETED — all 20 stages done!`, 'success');
+      setSelectedMovementJob(null);
       return;
     }
 
@@ -1929,7 +1968,7 @@ export default function JobCardsPage() {
           rejectedPcbQty: (target.rejectedPcbQty || 0) + updatedRejectedPcbQty,
           rejectedAreaSqm: Number(((target.rejectedAreaSqm || 0) + updatedRejectedAreaSqm).toFixed(2)),
           rejectionLogs: [...(target.rejectionLogs || []), ...newRejectionLogs],
-          status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
+          status: 'IN_PROGRESS',
         };
         updatedList = otherItems.map((j, idx) => (idx === existingNextIdx ? mergedCard : j));
       } else {
@@ -1947,7 +1986,7 @@ export default function JobCardsPage() {
                 rejectedPcbQty: updatedRejectedPcbQty,
                 rejectedAreaSqm: updatedRejectedAreaSqm,
                 rejectionLogs: newRejectionLogs,
-                status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
+                status: 'IN_PROGRESS',
                 isNewlyCreated: false,
               }
             : j

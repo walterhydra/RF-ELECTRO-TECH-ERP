@@ -1855,10 +1855,14 @@ export class JobCardsService {
             where: { id: subCard.id },
           });
         } else {
+          // Find the PACKING stage to keep it set (so UI shows '20. PACKING')
+          const packingStage = await tx.processStage.findFirst({
+            where: { OR: [{ name: '20. PACKING' }, { code: 'PKG' }, { defaultOrder: 20 }] },
+          });
           await tx.subJobCard.update({
             where: { id: subCard.id },
             data: {
-              currentStageId: null,
+              currentStageId: packingStage?.id ?? subCard.currentStageId,
               status: SubJobCardStatus.COMPLETED,
               qty: movedPcb,
               totalPcbQty: movedPcb,
