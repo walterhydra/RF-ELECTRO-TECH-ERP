@@ -278,8 +278,13 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
   const customerPO = liveDetails?.customerPO || jobCard.customerPO;
 
   // Accurate Numeric Calculations & Clean Formatting (No float glitch like 61.87500000000001)
+  // Accurate Numeric Calculations & Clean Formatting (Prioritize customer net area, never gross trimmed area)
   const totalPcbs = jobCard.totalPcbQty || (jobCard.custPnlQty && jobCard.custPnlQty > 50 ? jobCard.custPnlQty : (jobCard.prodPnlQty ? jobCard.prodPnlQty * 4 : 0));
-  const rawAreaSqm = Number(jobCard.prodPnlAreaSqm || jobCard.custPnlAreaSqm || 0);
+  const rawAreaSqm = Number(
+    jobCard.custPnlAreaSqm || 
+    (jobCard.totalPcbQty && jobCard.prodPnlAreaSqm ? (jobCard.prodPnlAreaSqm / 1.1) : jobCard.prodPnlAreaSqm) || 
+    0
+  );
   const formattedArea = rawAreaSqm > 0 ? `${rawAreaSqm.toFixed(2)} SQM` : '— SQM';
 
   // Live Product Specs Extraction
@@ -292,16 +297,12 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
   const specMask = product?.solderMask || jobCard.product?.solderMask || '—';
   const specMaterial = product?.materialType || product?.material || jobCard.product?.materialType || 'FR-4';
 
-  // Real Customer PO information without fake mock fallback
-  const poNo = customerPO?.poNo || (jobCard.customerPoId ? `PO: ${jobCard.customerPoId.slice(0, 8)}...` : 'Direct Order (No PO)');
-  const custCompany = customerPO?.customer?.companyName || jobCard.customerCode || 'Direct Customer';
-
   const qrDataPayload = [
     pdfDocumentUrl,
     `--------------------------------------`,
     `RF ELECTRO TECH ERP - INDUSTRIAL TRAVELER TAG`,
     `JOB CARD NO: ${jobCard.jobCardNo}`,
-    `CUSTOMER: ${custCompany}`,
+    `CUSTOMER CODE: ${jobCard.customerCode || 'DIRECT'}`,
     `RFE PART CODE: ${jobCard.rfePartCode || 'N/A'}`,
     `CUST PART NO: ${jobCard.customerPartNo || 'N/A'}`,
     `TOTAL PCB QTY: ${totalPcbs} PCB`,
@@ -330,7 +331,7 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
       {/* 1. Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-slate-900 pb-4">
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-xl shadow-md border border-slate-900 shrink-0">
+          <div className="w-12 h-12 rounded-2xl bg-slate-950 text-amber-400 flex items-center justify-center font-black text-xl shadow-md border border-slate-900 shrink-0">
             <Printer className="w-6 h-6 stroke-[2.5]" />
           </div>
           <div>
@@ -354,9 +355,9 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
           <Link
             href={`/job-cards-pdf/${jobCard.id || jobCard.jobCardNo}`}
             target="_blank"
-            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-sm border border-amber-600 transition-all cursor-pointer"
+            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-slate-300 transition-all cursor-pointer"
           >
-            <FileText className="w-4 h-4 stroke-[2.5]" />
+            <FileText className="w-4 h-4 stroke-[2]" />
             <span>Open PDF Report ↗</span>
           </Link>
 
@@ -385,11 +386,11 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-sans">
         
         {/* LEFT COLUMN: Barcode & QR Code Box (4 Cols) */}
-        <div className="lg:col-span-4 bg-slate-50 border border-slate-300 rounded-2xl p-4 space-y-4 shadow-xs">
+        <div className="lg:col-span-4 bg-slate-50/80 border border-slate-200 rounded-2xl p-4 space-y-3.5 shadow-2xs">
           
-          <div className="flex items-center gap-4 bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+          <div className="flex items-center gap-3.5 bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
             {/* Scannable QR Code */}
-            <div className="w-32 h-32 bg-white p-1.5 border border-slate-300 rounded-xl shrink-0 flex items-center justify-center shadow-xs overflow-hidden">
+            <div className="w-28 h-28 bg-white p-1.5 border border-slate-200 rounded-xl shrink-0 flex items-center justify-center shadow-2xs overflow-hidden">
               <img
                 src={qrImageUrl}
                 alt={`QR Code for ${jobCard.jobCardNo}`}
@@ -401,20 +402,20 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
             </div>
 
             {/* QR Quick Details */}
-            <div className="space-y-2 text-xs min-w-0 flex-1">
+            <div className="space-y-2 text-xs min-w-0 flex-1 font-mono">
               <div>
-                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">WIP JOB NO</span>
-                <strong className="font-mono font-black text-sm text-slate-900 bg-amber-200 px-2 py-0.5 rounded border border-amber-400 inline-block">
+                <span className="text-[9px] text-slate-400 uppercase block font-bold">WIP JOB NO</span>
+                <strong className="font-mono font-black text-sm text-slate-950 bg-slate-100 px-2.5 py-0.5 rounded-md border border-slate-300 inline-block">
                   {jobCard.subJobCardNo || jobCard.jobCardNo}
                 </strong>
               </div>
               <div>
-                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">CUSTOMER</span>
-                <span className="font-bold text-slate-900 truncate block">{custCompany}</span>
+                <span className="text-[9px] text-slate-400 uppercase block font-bold">CUSTOMER CODE</span>
+                <span className="font-bold text-slate-900 truncate block text-xs">{jobCard.customerCode || '—'}</span>
               </div>
               <div>
-                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">RFE PART CODE</span>
-                <span className="font-mono font-extrabold text-blue-700">{jobCard.rfePartCode || '—'}</span>
+                <span className="text-[9px] text-slate-400 uppercase block font-bold">RFE PART CODE</span>
+                <span className="font-mono font-extrabold text-blue-700 text-xs truncate block">{jobCard.rfePartCode || '—'}</span>
               </div>
             </div>
           </div>
@@ -424,7 +425,7 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
             <img
               src={barcodeImageUrl}
               alt={`Barcode for ${jobCard.jobCardNo}`}
-              className="w-full h-11 object-contain mx-auto"
+              className="w-full h-10 object-contain mx-auto"
               onError={(e) => {
                 (e.currentTarget as HTMLImageElement).style.display = 'none';
               }}
@@ -435,71 +436,49 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
           </div>
 
           {/* Real Scan Notice */}
-          <div className="bg-emerald-50 border border-emerald-200 p-2.5 rounded-xl text-center">
-            <p className="text-[10px] font-extrabold text-emerald-900 flex items-center justify-center gap-1.5">
+          <div className="bg-emerald-50/80 border border-emerald-200/80 p-2.5 rounded-xl text-center">
+            <p className="text-[10px] font-extrabold text-emerald-900 flex items-center justify-center gap-1.5 font-mono">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              REAL SCANNABLE QR & BARCODE TAG
+              SCANNABLE TRAVELER TAG
             </p>
-            <p className="text-[9px] text-emerald-700 mt-0.5">Scan with any scanner or mobile camera for live stage tracking</p>
+            <p className="text-[9px] text-emerald-700 mt-0.5">Scan with camera or 2D scanner for live floor tracking</p>
           </div>
 
-          {/* Mobile Tunnel URL Switcher */}
-          <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-left text-xs font-sans print:hidden space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold text-blue-900 uppercase font-mono">
-                📱 Scan Target URL:
-              </span>
-              <button
-                onClick={() => setIsEditingHost(!isEditingHost)}
-                className="text-[10px] text-blue-700 font-bold underline cursor-pointer hover:text-blue-900"
-              >
-                {isEditingHost ? 'Close' : 'Change Mode'}
-              </button>
-            </div>
-            {isEditingHost ? (
-              <div className="mt-2 space-y-1.5">
-                <button
-                  type="button"
-                  onClick={() => handleSaveHost('https://rf-electro-tech-erp.onrender.com')}
-                  className="w-full px-2 py-1 bg-emerald-600 text-white rounded text-[10px] font-bold text-left cursor-pointer flex items-center justify-between"
-                >
-                  <span>🌐 Public World URL (5G/4G Anywhere)</span>
-                  <span className="font-mono text-[9px] opacity-80">onrender.com</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSaveHost('http://10.88.142.200:3000')}
-                  className="w-full px-2 py-1 bg-blue-600 text-white rounded text-[10px] font-bold text-left cursor-pointer flex items-center justify-between"
-                >
-                  <span>📶 Wi-Fi LAN IP</span>
-                  <span className="font-mono text-[9px] opacity-80">10.88.142.200</span>
-                </button>
-                <input
-                  type="text"
-                  value={serverHost}
-                  onChange={(e) => handleSaveHost(e.target.value)}
-                  placeholder="Custom domain..."
-                  className="w-full text-xs font-mono bg-white border border-blue-300 rounded px-2 py-1 text-slate-900 focus:outline-none"
-                />
-              </div>
-            ) : (
-              <p className="text-[11px] font-mono font-bold text-blue-900 truncate">{formattedHost}</p>
-            )}
+          {/* Compact Scan Target Link */}
+          <div className="text-[10px] font-mono text-slate-400 flex items-center justify-between px-1 print:hidden">
+            <span className="truncate max-w-[200px]">URL: {formattedHost}</span>
+            <button
+              onClick={() => setIsEditingHost(!isEditingHost)}
+              className="text-slate-600 hover:text-slate-900 underline cursor-pointer ml-1 shrink-0"
+            >
+              {isEditingHost ? 'Close' : 'Config'}
+            </button>
           </div>
+          {isEditingHost && (
+            <div className="p-2 bg-white border border-slate-200 rounded-xl space-y-1.5 shadow-xs print:hidden">
+              <input
+                type="text"
+                value={serverHost}
+                onChange={(e) => handleSaveHost(e.target.value)}
+                placeholder="Custom server URL..."
+                className="w-full text-[11px] font-mono bg-slate-50 border border-slate-300 rounded px-2 py-1 text-slate-900 focus:outline-none"
+              />
+            </div>
+          )}
         </div>
 
         {/* MIDDLE COLUMN: Specifications Grid & Live Product Specs (5 Cols) */}
-        <div className="lg:col-span-5 space-y-4">
-          <div className="bg-slate-50/80 border border-slate-300 rounded-2xl p-4 space-y-3.5 shadow-xs">
+        <div className="lg:col-span-5 space-y-3.5">
+          <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-4 space-y-3.5 shadow-2xs">
             <div className="flex items-center justify-between border-b border-slate-200 pb-2">
               <h5 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 font-mono">
-                <FileText className="w-4 h-4 text-amber-600 shrink-0" />
+                <FileText className="w-4 h-4 text-slate-700 shrink-0" />
                 JOB PARAMETERS & PRODUCTION SPECS
               </h5>
               <div className="flex items-center gap-1.5">
                 <span className={`w-2 h-2 rounded-full ${isFetchingSpecs ? 'bg-amber-500 animate-spin' : 'bg-emerald-500'}`} />
                 <span className="text-[10px] font-mono font-bold text-slate-500 uppercase">
-                  {isFetchingSpecs ? 'Syncing...' : 'LIVE SPECS'}
+                  {isFetchingSpecs ? 'Syncing...' : 'LIVE'}
                 </span>
               </div>
             </div>
@@ -536,7 +515,7 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
 
               <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
                 <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">CURRENT STAGE</span>
-                <span className="inline-block font-extrabold text-[11px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 truncate max-w-full">
+                <span className="inline-block font-extrabold text-[11px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 truncate max-w-full font-mono">
                   {jobCard.currentStageName || PF01_STAGES[0]}
                 </span>
               </div>
@@ -551,13 +530,13 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
 
             {/* LIVE PRODUCT SPECIFICATIONS SHOWCASE */}
             <div className="bg-white rounded-xl border border-slate-200 p-3 space-y-2 shadow-2xs">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-                <span className="text-[10px] font-black text-slate-900 font-mono uppercase flex items-center gap-1.5">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 gap-2">
+                <span className="text-[10px] font-black text-slate-800 font-mono uppercase flex items-center gap-1.5 shrink-0">
                   <Cpu className="w-3.5 h-3.5 text-blue-600" />
-                  PRODUCT SPECIFICATIONS (LIVE DB)
+                  PRODUCT SPECIFICATIONS
                 </span>
-                <span className="text-[10px] text-slate-500 font-mono truncate max-w-[180px]">
-                  {product?.name || jobCard.customerPartNo || 'PCB Board'}
+                <span className="text-[10px] text-slate-500 font-mono truncate max-w-[180px] text-right">
+                  {product?.name || jobCard.customerPartNo || 'Standard PCB'}
                 </span>
               </div>
 
@@ -588,41 +567,29 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
                 </div>
               </div>
             </div>
-
-            {/* CUSTOMER & PO INFO CARD */}
-            <div className="bg-white p-2.5 rounded-xl border border-slate-200 flex items-center justify-between shadow-2xs text-xs">
-              <div className="min-w-0 flex-1">
-                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">CUSTOMER PO</span>
-                <span className="font-mono font-bold text-slate-900 text-xs truncate block">{poNo}</span>
-              </div>
-              <div className="text-right min-w-0 flex-1 pl-2">
-                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">CUSTOMER</span>
-                <span className="font-bold text-slate-700 text-xs truncate block">{custCompany}</span>
-              </div>
-            </div>
           </div>
         </div>
 
-        {/* RIGHT COLUMN: Sub-Job Lots Breakdown & Actions (3 Cols) */}
-        <div className="lg:col-span-3 space-y-4 flex flex-col justify-between self-stretch">
-          <div className="bg-amber-50/80 border border-amber-300/80 rounded-2xl p-4 space-y-3 shadow-xs">
-            <div className="flex items-center justify-between border-b border-amber-200 pb-2">
-              <h5 className="text-xs font-black text-amber-950 uppercase tracking-wider font-mono flex items-center gap-1">
-                <Split className="w-3.5 h-3.5 text-amber-700" />
+        {/* RIGHT COLUMN: Sub-Job Lots Breakdown & Info (3 Cols) */}
+        <div className="lg:col-span-3 space-y-3.5 flex flex-col justify-between self-stretch">
+          <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-4 space-y-3 shadow-2xs">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+              <h5 className="text-xs font-black text-slate-900 uppercase tracking-wider font-mono flex items-center gap-1">
+                <Split className="w-3.5 h-3.5 text-slate-700" />
                 SUB-LOTS ({jobCard.subJobCards?.length || 1})
               </h5>
-              <span className="text-[11px] font-mono font-black text-amber-900 bg-amber-200 px-2 py-0.5 rounded border border-amber-400">
+              <span className="text-[11px] font-mono font-black text-slate-900 bg-slate-200 px-2 py-0.5 rounded border border-slate-300">
                 {totalPcbs} PCBs
               </span>
             </div>
 
-            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
               {(jobCard.subJobCards && jobCard.subJobCards.length > 0 ? jobCard.subJobCards : [{ id: 'sub-single', subJobCardNo: jobCard.subJobCardNo || jobCard.jobCardNo, totalPcbQty: totalPcbs }]).map((sub) => {
                 const subPcb = (sub as any).totalPcbQty || ((sub as any).qty && (sub as any).qty > 50 ? (sub as any).qty : totalPcbs);
                 return (
                   <div key={sub.id} className="bg-white p-2.5 rounded-xl border border-slate-200 flex items-center justify-between text-xs font-sans shadow-2xs">
                     <div>
-                      <span className="font-mono font-black text-slate-950 bg-amber-100 px-2 py-0.5 rounded text-[11px] border border-amber-300 block">
+                      <span className="font-mono font-black text-slate-950 bg-slate-100 px-2 py-0.5 rounded text-[11px] border border-slate-300 block">
                         {sub.subJobCardNo}
                       </span>
                     </div>
@@ -635,25 +602,15 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="space-y-2.5 pt-2">
-            {onPrint && (
-              <button
-                onClick={onPrint}
-                className="w-full py-3 bg-slate-950 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer active:scale-95 border border-slate-900"
-              >
-                <Printer className="w-4 h-4 text-amber-400" />
-                <span>PRINT STICKER TAG</span>
-              </button>
-            )}
-
+          {/* Clean footer action */}
+          <div className="pt-2">
             <Link
               href={`/job-cards-pdf/${jobCard.id || jobCard.jobCardNo}`}
               target="_blank"
-              className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm border border-amber-600 transition-all cursor-pointer"
+              className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
             >
-              <FileText className="w-4 h-4 stroke-[2.5]" />
-              <span>OPEN JOB CARD PDF ↗</span>
+              <FileText className="w-4 h-4 stroke-[2]" />
+              <span>OPEN FULL JOB CARD PDF ↗</span>
             </Link>
           </div>
         </div>
@@ -3505,7 +3462,7 @@ export default function JobCardsPage() {
       {showGenerateModal && (
         <Portal>
           <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-[9999] flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-            <div className="bg-white border border-slate-200/90 rounded-3xl w-full max-w-4xl shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900 flex flex-col max-h-[92vh] overflow-hidden my-auto">
+            <div className="bg-white border border-slate-200/90 rounded-3xl w-full max-w-5xl shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900 flex flex-col max-h-[92vh] overflow-hidden my-auto">
               
               {/* Modal Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80 shrink-0">
@@ -3811,18 +3768,18 @@ export default function JobCardsPage() {
                     <Cpu className="w-3.5 h-3.5 text-cyan-600" />
                     <span>3. PCB Technical Specifications (Live Spec Card)</span>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
                         Layers <span className="text-rose-500">*</span>
                       </label>
                       <select
                         value={launchForm.layers}
                         onChange={(e) => setLaunchForm({ ...launchForm, layers: Number(e.target.value) || 2 })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs cursor-pointer"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs cursor-pointer"
                       >
-                        <option value={1}>1 Layer (Single)</option>
-                        <option value={2}>2 Layers (Double)</option>
+                        <option value={1}>1 Layer (Single Sided)</option>
+                        <option value={2}>2 Layers (Double Sided)</option>
                         <option value={4}>4 Layers (Multilayer)</option>
                         <option value={6}>6 Layers</option>
                         <option value={8}>8 Layers</option>
@@ -3832,7 +3789,7 @@ export default function JobCardsPage() {
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
                         Thickness (mm) <span className="text-rose-500">*</span>
                       </label>
                       <input
@@ -3841,19 +3798,19 @@ export default function JobCardsPage() {
                         required
                         value={launchForm.thicknessMm}
                         onChange={(e) => setLaunchForm({ ...launchForm, thicknessMm: parseFloat(e.target.value) || 1.6 })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 text-xs font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs"
                         placeholder="1.6"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
                         Copper Weight <span className="text-rose-500">*</span>
                       </label>
                       <select
                         value={launchForm.copperWeight}
                         onChange={(e) => setLaunchForm({ ...launchForm, copperWeight: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs cursor-pointer"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs cursor-pointer"
                       >
                         <option value="0.5oz">0.5 oz (18µm)</option>
                         <option value="1oz">1.0 oz (35µm)</option>
@@ -3864,13 +3821,13 @@ export default function JobCardsPage() {
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
                         Surface Finish <span className="text-rose-500">*</span>
                       </label>
                       <select
                         value={launchForm.surfaceFinish}
                         onChange={(e) => setLaunchForm({ ...launchForm, surfaceFinish: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs cursor-pointer"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs cursor-pointer"
                       >
                         <option value="HASL Lead-Free">HASL Lead-Free</option>
                         <option value="HASL Leaded">HASL Leaded</option>
@@ -3882,13 +3839,13 @@ export default function JobCardsPage() {
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
                         Solder Mask <span className="text-rose-500">*</span>
                       </label>
                       <select
                         value={launchForm.solderMask}
                         onChange={(e) => setLaunchForm({ ...launchForm, solderMask: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs cursor-pointer"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs cursor-pointer"
                       >
                         <option value="Green">Green</option>
                         <option value="Matt Green">Matt Green</option>
@@ -3902,13 +3859,13 @@ export default function JobCardsPage() {
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
                         Material Type <span className="text-rose-500">*</span>
                       </label>
                       <select
                         value={launchForm.materialType}
                         onChange={(e) => setLaunchForm({ ...launchForm, materialType: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs cursor-pointer"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs cursor-pointer"
                       >
                         <option value="FR-4">FR-4 (TG140)</option>
                         <option value="FR-4 High TG">FR-4 High TG (TG170)</option>
@@ -4012,7 +3969,7 @@ export default function JobCardsPage() {
                         onChange={(e) => setLaunchForm({ ...launchForm, jobFlowSelection: e.target.value })}
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs cursor-pointer"
                       >
-                        <option value="PF-01">PF-01 Standard Flow (19 Stages)</option>
+                        <option value="PF-01">PF-01 Standard Flow (20 Stages)</option>
                       </select>
                     </div>
                   </div>

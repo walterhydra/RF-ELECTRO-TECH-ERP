@@ -756,10 +756,40 @@ export class JobCardsService {
       processFlow = deps.processFlow;
     }
 
-    // Find or fallback customer & product
-    let customer = await this.prisma.customer.findFirst({
-      where: { code: data.customerCode },
-    });
+    // Find or create customer based on customerCode
+    let customer: any = null;
+    if (data.customerCode && String(data.customerCode).trim()) {
+      const code = String(data.customerCode).trim();
+      customer = await this.prisma.customer.findFirst({
+        where: {
+          OR: [
+            { code: code },
+            { companyName: code },
+          ],
+        },
+      });
+
+      if (!customer) {
+        try {
+          customer = await this.prisma.customer.create({
+            data: {
+              code: code,
+              companyName: data.customerName || code,
+              contactPerson: code,
+              email: `${code.toLowerCase().replace(/[^a-z0-9]/g, '') || 'client'}@customer.com`,
+              isActive: true,
+            },
+          });
+        } catch {
+          customer = await this.prisma.customer.findFirst({
+            where: {
+              OR: [{ code: code }, { companyName: code }],
+            },
+          });
+        }
+      }
+    }
+
     if (!customer) {
       customer = deps.customer;
     }
@@ -818,14 +848,34 @@ export class JobCardsService {
       product = deps.product;
     }
 
-    let customerPO = await this.prisma.customerPO.findFirst({
-      where: {
-        OR: [
-          ...(customer?.id ? [{ customerId: customer.id }] : []),
-          ...(data.customerPoNo ? [{ poNo: data.customerPoNo }] : []),
-        ],
-      },
-    });
+    let customerPO: any = null;
+    if (data.customerPoNo && String(data.customerPoNo).trim()) {
+      customerPO = await this.prisma.customerPO.findFirst({
+        where: { poNo: String(data.customerPoNo).trim() },
+      });
+    }
+
+    if (!customerPO && customer && customer.id !== deps.customer?.id) {
+      const generatedPoNo = data.customerPoNo || `PO-${customer.code || customer.companyName}-${jobCardNo.replace(/[^0-9]/g, '').slice(-4) || '001'}`;
+      try {
+        customerPO = await this.prisma.customerPO.create({
+          data: {
+            poNo: generatedPoNo,
+            customerId: customer.id,
+            productId: product ? product.id : deps.product.id,
+            orderQty: Number(data.totalPcbQty) || 100,
+            poDate: new Date(),
+            expectedDeliveryDate: data.targetDate ? new Date(data.targetDate) : new Date(Date.now() + 7 * 86400000),
+            createdById: finalUserId,
+          },
+        });
+      } catch {
+        customerPO = await this.prisma.customerPO.findFirst({
+          where: { customerId: customer.id },
+        });
+      }
+    }
+
     if (!customerPO) {
       customerPO = deps.customerPO;
     }

@@ -186,7 +186,7 @@ export default function JobCardLaunchPage() {
               </div>
 
               <span className="px-3 py-1 bg-amber-400/20 text-amber-300 font-mono font-extrabold text-xs rounded-xl border border-amber-400/30">
-                FLOW: PF-01 (19 STAGES)
+                FLOW: PF-01 (20 STAGES)
               </span>
             </div>
 
@@ -416,7 +416,7 @@ export default function JobCardLaunchPage() {
                     onChange={(e) => setLaunchForm({ ...launchForm, jobFlowSelection: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 font-bold text-white"
                   >
-                    <option value="PF-01">PF-01 Standard PCB Flow (19 Stages)</option>
+                    <option value="PF-01">PF-01 Standard PCB Flow (20 Stages)</option>
                   </select>
                 </div>
               </div>
