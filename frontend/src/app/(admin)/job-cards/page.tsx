@@ -5332,294 +5332,337 @@ export default function JobCardsPage() {
       {/* MODAL 7: JOB CARD TRACEABILITY & STAGE MOVEMENT HISTORY TIMELINE */}
       {historyModalJob && (
         <Portal>
-          <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 overflow-y-auto font-sans text-slate-900">
-            <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-4xl p-5 sm:p-7 space-y-5 shadow-2xl animate-in fade-in zoom-in-95 duration-200 my-8">
-              {/* Modal Header */}
-              <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-bold shrink-0 shadow-md">
-                    <History className="w-5 h-5 stroke-[2.5]" />
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[10000] flex items-center justify-center p-3 sm:p-5 overflow-hidden font-sans text-slate-900">
+            <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-5xl max-h-[95vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+
+              {/* ── Fixed Header ── */}
+              <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white shrink-0 rounded-t-3xl">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-purple-600/20 border border-purple-500/40 flex items-center justify-center shrink-0">
+                    <History className="w-5 h-5 text-purple-300 stroke-[2.5]" />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-extrabold text-slate-950 text-lg">
-                        Job Card Traceability & Stage Movement History
-                      </h3>
-                      <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-300 font-mono">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-black text-white text-base sm:text-lg tracking-tight">Stage Movement History</h3>
+                      <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono">
                         {historyModalJob.jobCardNo}
                       </span>
+                      {historyModalJob.rejectedPcbQty && historyModalJob.rejectedPcbQty > 0 ? (
+                        <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-black bg-rose-600/30 text-rose-300 border border-rose-500/40 font-mono flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" />
+                          {historyModalJob.rejectedPcbQty} Rejected
+                        </span>
+                      ) : null}
                     </div>
-                    <p className="text-xs text-slate-500 font-medium mt-0.5">
-                      Chronological movement logs, stage transfers, operator timestamps & PCB rejections
+                    <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                      Traceability • Stage Transfers • Operator Timestamps • Quality Rejections
                     </p>
                   </div>
                 </div>
                 <button
-                  onClick={() => {
-                    setHistoryModalJob(null);
-                    setHistoryLogs([]);
-                  }}
-                  className="text-slate-400 hover:text-slate-700 text-base font-bold p-2 rounded-xl hover:bg-slate-100 cursor-pointer transition-all"
-                >
-                  ✕
-                </button>
+                  onClick={() => { setHistoryModalJob(null); setHistoryLogs([]); }}
+                  className="text-slate-400 hover:text-white text-sm font-bold p-2 rounded-xl hover:bg-slate-800 cursor-pointer transition-all shrink-0 border border-slate-800 w-9 h-9 flex items-center justify-center"
+                >✕</button>
               </div>
 
-              {/* Job Card Meta Specs summary */}
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2.5 text-xs font-mono">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block uppercase">WIP Job No</span>
-                    <strong className="text-slate-900 text-sm font-black">{historyModalJob.jobCardNo}</strong>
+              {/* ── Scrollable Body ── */}
+              <div className="flex-1 overflow-y-auto">
+
+                {/* Job Card Meta Strip */}
+                <div className="px-5 py-3.5 bg-slate-50 border-b border-slate-200 text-xs font-mono">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">WIP Job No</span>
+                      <strong className="text-slate-900 text-sm font-black">{historyModalJob.jobCardNo}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Customer Code</span>
+                      <strong className="text-slate-800 font-bold">{historyModalJob.customerCode || '—'}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Customer Part</span>
+                      <strong className="text-slate-800 font-bold truncate block" title={historyModalJob.customerPartNo}>{historyModalJob.customerPartNo || '—'}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Current Stage</span>
+                      <span className="inline-block px-2 py-0.5 rounded bg-blue-100 text-blue-900 font-bold text-[11px] border border-blue-200">
+                        {historyModalJob.currentStageName || PF01_STAGES[0]}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Customer Code</span>
-                    <strong className="text-slate-800 font-bold">{historyModalJob.customerCode}</strong>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Customer Part</span>
-                    <strong className="text-slate-800 font-bold truncate block">{historyModalJob.customerPartNo}</strong>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 font-bold block uppercase">Current Stage</span>
-                    <span className="inline-block px-2 py-0.5 rounded bg-blue-100 text-blue-900 font-bold text-[11px] truncate max-w-full">
-                      {historyModalJob.currentStageName || PF01_STAGES[0]}
+                  <div className="flex flex-wrap items-center gap-3 pt-2.5 mt-2.5 border-t border-slate-200 text-[11px]">
+                    <span className="text-slate-500 font-bold">Volume:
+                      <strong className="text-indigo-700 font-black ml-1">{historyModalJob.totalPcbQty || historyModalJob.custPnlQty || 160} PCBs</strong>
                     </span>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/80 text-[11px]">
-                  <div className="flex items-center gap-2">
-                    <span className="text-slate-500 font-bold">Volume:</span>
-                    <strong className="text-indigo-700 font-black">{historyModalJob.totalPcbQty || historyModalJob.custPnlQty || 160} PCBs</strong>
                     <span className="text-slate-300">•</span>
-                    <span className="text-slate-500 font-bold">WIP Area:</span>
-                    <strong className="text-emerald-700 font-black">{Number(historyModalJob.custPnlAreaSqm || historyModalJob.prodPnlAreaSqm || 0).toFixed(2)} SQM</strong>
-                  </div>
-
-                  {historyModalJob.product && (
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="px-2 py-0.5 bg-white border border-slate-200 rounded font-bold text-slate-800">
-                        {historyModalJob.product.layers ? `${historyModalJob.product.layers} Layers` : '2 Layers'}
-                      </span>
-                      <span className="px-2 py-0.5 bg-white border border-slate-200 rounded font-bold text-slate-800">
-                        {historyModalJob.product.thicknessMm ? `${historyModalJob.product.thicknessMm} mm` : '1.6 mm'}
-                      </span>
-                      <span className="px-2 py-0.5 bg-white border border-slate-200 rounded font-bold text-slate-800">
-                        {historyModalJob.product.copperWeight || historyModalJob.product.copper || '1oz'}
-                      </span>
-                      <span className="px-2 py-0.5 bg-white border border-slate-200 rounded font-bold text-blue-700 truncate max-w-[120px]">
-                        {historyModalJob.product.surfaceFinish || 'HASL Lead-Free'}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Defect / Quality Rejection Stage Summary Breakdown */}
-              {(() => {
-                const defectLogs = historyLogs.filter((l: any) => (l.qtyRejected || 0) > 0 || String(l.remarkType || '').includes('REJECT'));
-                const hasRejections = defectLogs.length > 0 || Boolean(historyModalJob.rejectedPcbQty && historyModalJob.rejectedPcbQty > 0);
-                if (!hasRejections) return null;
-
-                const totalDefectPcb = defectLogs.reduce((acc: number, curr: any) => acc + (curr.qtyRejected || 0), 0) || historyModalJob.rejectedPcbQty || 0;
-
-                // Group by defect stage
-                const stageMap = new Map<string, { stageName: string; count: number; remarks: string[] }>();
-                defectLogs.forEach((dl: any) => {
-                  const sName = dl.stage?.name || dl.stageName || 'Process Stage';
-                  const prev = stageMap.get(sName);
-                  if (prev) {
-                    prev.count += (dl.qtyRejected || 0);
-                    if (dl.remarks) prev.remarks.push(dl.remarks);
-                  } else {
-                    stageMap.set(sName, { stageName: sName, count: dl.qtyRejected || 0, remarks: dl.remarks ? [dl.remarks] : [] });
-                  }
-                });
-
-                return (
-                  <div className="bg-rose-50 border-2 border-rose-300 p-4 rounded-2xl space-y-2.5 font-sans shadow-xs">
-                    <div className="flex items-center justify-between border-b border-rose-200 pb-2">
-                      <div className="flex items-center gap-2">
-                        <AlertCircle className="w-4.5 h-4.5 text-rose-600 shrink-0" />
-                        <span className="font-black text-rose-950 text-xs uppercase tracking-wider font-mono">
-                          Defect Stages Breakdown ({totalDefectPcb} Total Defective PCBs)
+                    <span className="text-slate-500 font-bold">WIP Area:
+                      <strong className="text-emerald-700 font-black ml-1">{Number(historyModalJob.custPnlAreaSqm || historyModalJob.prodPnlAreaSqm || 0).toFixed(2)} SQM</strong>
+                    </span>
+                    {historyModalJob.product && (
+                      <>
+                        <span className="text-slate-300">•</span>
+                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded font-bold text-slate-700">
+                          {historyModalJob.product.layers ? `${historyModalJob.product.layers} Layers` : '2 Layers'}
                         </span>
-                      </div>
-                      <span className="px-2.5 py-0.5 rounded-lg text-xs font-black font-mono bg-rose-600 text-white shadow-2xs">
-                        ⚠️ Quality Defect(s) Detected
-                      </span>
-                    </div>
+                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded font-bold text-slate-700">
+                          {historyModalJob.product.thicknessMm ? `${historyModalJob.product.thicknessMm} mm` : '1.6 mm'}
+                        </span>
+                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded font-bold text-slate-700">
+                          {historyModalJob.product.copperWeight || '1oz'}
+                        </span>
+                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded font-bold text-blue-700 truncate max-w-[140px]">
+                          {historyModalJob.product.surfaceFinish || 'HASL Lead-Free'}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1">
-                      {Array.from(stageMap.values()).map((ds, dIdx) => (
-                        <div key={dIdx} className="bg-white p-3 rounded-xl border border-rose-200 shadow-2xs flex items-center justify-between">
-                          <div>
-                            <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">Defect Occurred At</span>
-                            <strong className="text-rose-950 font-mono font-black text-xs block">{ds.stageName}</strong>
-                            {ds.remarks.length > 0 && (
-                              <span className="text-[10px] text-slate-500 font-sans block truncate max-w-[170px]" title={ds.remarks.join(', ')}>
-                                {ds.remarks[0]}
-                              </span>
-                            )}
+                <div className="p-5 space-y-5">
+
+                  {/* ── SECTION 1: REJECTION ANALYTICS ── */}
+                  {(() => {
+                    const defectLogs = historyLogs.filter((l: any) => (l.qtyRejected || 0) > 0 || String(l.remarkType || '').toUpperCase().includes('REJECT'));
+                    const totalRejFromLogs = defectLogs.reduce((acc: number, l: any) => acc + (l.qtyRejected || 0), 0);
+                    const totalRejPcb = totalRejFromLogs || historyModalJob.rejectedPcbQty || 0;
+                    const totalRejArea = historyModalJob.rejectedAreaSqm || 0;
+                    const hasRejections = totalRejPcb > 0 || defectLogs.length > 0;
+                    if (!hasRejections) return null;
+
+                    const stageMap = new Map<string, { stageName: string; count: number; area: number; remarks: string[]; timestamps: string[] }>();
+                    defectLogs.forEach((dl: any) => {
+                      const sName = dl.stage?.name || dl.stageName || 'Process Stage';
+                      const prev = stageMap.get(sName);
+                      if (prev) {
+                        prev.count += (dl.qtyRejected || 0);
+                        prev.area += (dl.areaRejected || 0);
+                        if (dl.remarks) prev.remarks.push(dl.remarks);
+                        if (dl.createdAt) prev.timestamps.push(dl.createdAt);
+                      } else {
+                        stageMap.set(sName, { stageName: sName, count: dl.qtyRejected || 0, area: dl.areaRejected || 0, remarks: dl.remarks ? [dl.remarks] : [], timestamps: dl.createdAt ? [dl.createdAt] : [] });
+                      }
+                    });
+                    if (historyModalJob.rejectionLogs && historyModalJob.rejectionLogs.length > 0) {
+                      historyModalJob.rejectionLogs.forEach((r) => {
+                        const sName = r.stageName || 'Process Stage';
+                        if (!stageMap.has(sName)) {
+                          stageMap.set(sName, { stageName: sName, count: r.rejectedPcbQty || 0, area: r.rejectedAreaSqm || 0, remarks: r.remark ? [r.remark] : [], timestamps: r.timestamp ? [r.timestamp] : [] });
+                        }
+                      });
+                    }
+                    const stageEntries = Array.from(stageMap.values());
+
+                    return (
+                      <div className="bg-gradient-to-br from-rose-50 via-rose-50/80 to-pink-50/60 border-2 border-rose-200 rounded-2xl overflow-hidden shadow-sm">
+                        <div className="flex items-center justify-between px-4 py-3 bg-rose-600 text-white">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center">
+                              <AlertCircle className="w-4 h-4 text-white" />
+                            </div>
+                            <div>
+                              <span className="font-black text-white text-xs uppercase tracking-widest block">Quality Rejection Analytics</span>
+                              <span className="text-[10px] text-rose-200 font-medium">Stage-wise defect breakdown for this Job Card</span>
+                            </div>
                           </div>
-                          <span className="font-mono font-black text-rose-700 bg-rose-50 px-2 py-1 rounded-lg border border-rose-200 text-xs shrink-0 shadow-2xs">
-                            ⚠️ {ds.count} PCBs
+                          <div className="text-right">
+                            <span className="font-black font-mono text-white text-lg block">{totalRejPcb}</span>
+                            <span className="text-[10px] text-rose-200 font-bold uppercase">Total Rejected PCBs</span>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-0 border-b border-rose-200">
+                          <div className="p-3.5 text-center border-r border-rose-200">
+                            <span className="text-[10px] text-rose-500 font-mono uppercase font-bold block">Total Scrap PCBs</span>
+                            <strong className="text-rose-800 font-black text-xl font-mono block mt-0.5">{totalRejPcb}</strong>
+                            <span className="text-[10px] text-rose-500 font-mono">Units</span>
+                          </div>
+                          <div className="p-3.5 text-center border-r border-rose-200">
+                            <span className="text-[10px] text-rose-500 font-mono uppercase font-bold block">Affected Area</span>
+                            <strong className="text-rose-800 font-black text-xl font-mono block mt-0.5">{Number(totalRejArea).toFixed(2)}</strong>
+                            <span className="text-[10px] text-rose-500 font-mono">Sqm</span>
+                          </div>
+                          <div className="p-3.5 text-center">
+                            <span className="text-[10px] text-rose-500 font-mono uppercase font-bold block">Defect Stages</span>
+                            <strong className="text-rose-800 font-black text-xl font-mono block mt-0.5">{stageEntries.length}</strong>
+                            <span className="text-[10px] text-rose-500 font-mono">Stages</span>
+                          </div>
+                        </div>
+                        <div className="p-4 space-y-2.5">
+                          <span className="text-[10px] text-rose-600 font-mono uppercase font-black tracking-wider block">Stage-Wise Defect Occurrence</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {stageEntries.map((ds, dIdx) => (
+                              <div key={dIdx} className="bg-white border border-rose-200 rounded-xl p-3 shadow-xs hover:border-rose-400 transition-all">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <span className="text-[9px] text-slate-400 font-mono uppercase font-bold block">Defect Occurred At</span>
+                                    <strong className="text-rose-900 font-mono font-black text-xs block mt-0.5 leading-tight">{ds.stageName}</strong>
+                                    {ds.remarks.length > 0 && (
+                                      <span className="text-[10px] text-slate-500 font-sans block mt-1 leading-snug" title={ds.remarks.join(' | ')}>
+                                        {ds.remarks[0].replace(/^\[REJECTION\]\s*/, '').replace(/^\[DEFECT.*?\]\s*/, '').slice(0, 80)}
+                                      </span>
+                                    )}
+                                    {ds.timestamps.length > 0 && (
+                                      <span className="text-[9px] text-slate-400 font-mono block mt-1">
+                                        {new Date(ds.timestamps[0]).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    <span className="font-mono font-black text-rose-700 bg-rose-50 px-2.5 py-1.5 rounded-lg border border-rose-200 text-sm block">⚠️ {ds.count}</span>
+                                    <span className="text-[9px] text-rose-500 font-mono font-bold block mt-0.5">PCBs</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* ── SECTION 2: CHRONOLOGICAL STAGE MOVEMENT LOGS ── */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-xl bg-purple-100 flex items-center justify-center">
+                          <Clock className="w-4 h-4 text-purple-600" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider font-mono">Chronological Stage Movement Logs</h4>
+                          <span className="text-[10px] text-slate-400 font-medium">
+                            {isHistoryLoading ? 'Loading...' : `${historyLogs.length} record${historyLogs.length !== 1 ? 's' : ''} from database`}
                           </span>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Timeline Logs Container */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5 font-mono">
-                    <Clock className="w-4 h-4 text-purple-600" />
-                    <span>Chronological Stage Movement Logs ({historyLogs.length})</span>
-                  </h4>
-                  {historyLogs.length > 0 && (
-                    <button
-                      onClick={() => {
-                        let csvContent = "data:text/csv;charset=utf-8,Timestamp,Job Card No,Sub Lot,Stage,Qty Forwarded,Qty Rejected,Remarks,Operator\n";
-                        historyLogs.forEach((l: any) => {
-                          const dateStr = l.createdAt ? new Date(l.createdAt).toLocaleString('en-GB') : '-';
-                          const stageName = l.stage?.name || l.stageName || '-';
-                          const subNo = l.subJobCard?.subJobCardNo || historyModalJob.jobCardNo;
-                          const remarkStr = `"${(l.remarks || '').replace(/"/g, '""')}"`;
-                          const userStr = `"${l.createdBy?.name || 'Operator'}"`;
-                          csvContent += `${dateStr},${historyModalJob.jobCardNo},${subNo},${stageName},${l.qtyForwarded || 0},${l.qtyRejected || 0},${remarkStr},${userStr}\n`;
-                        });
-                        const encodedUri = encodeURI(csvContent);
-                        const link = document.createElement("a");
-                        link.setAttribute("href", encodedUri);
-                        link.setAttribute("download", `traceability_history_${historyModalJob.jobCardNo}_${new Date().toISOString().split('T')[0]}.csv`);
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                      }}
-                      className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-purple-200 cursor-pointer shadow-2xs"
-                    >
-                      <Download className="w-3.5 h-3.5 text-purple-600" />
-                      <span>Export History CSV</span>
-                    </button>
-                  )}
-                </div>
-
-                {isHistoryLoading ? (
-                  <div className="py-12 text-center text-xs text-slate-500 font-mono flex flex-col items-center justify-center gap-2">
-                    <RefreshCw className="w-5 h-5 text-purple-600 animate-spin" />
-                    <span>Loading stage movement traceability records from database...</span>
-                  </div>
-                ) : historyLogs.length === 0 ? (
-                  <div className="py-10 text-center text-xs text-slate-400 font-mono bg-slate-50 rounded-2xl border border-slate-200/80 p-4">
-                    <p className="font-sans font-semibold text-slate-600 text-sm">No stage movement logs recorded yet for this Job Card.</p>
-                    <p className="text-[11px] text-slate-400 mt-1">Logs will appear automatically whenever an operator advances a stage or logs rejections.</p>
-                  </div>
-                ) : (
-                  <div className="max-h-[50vh] overflow-y-auto pr-1 space-y-3">
-                    {historyLogs.map((log: any, idx: number) => {
-                      const dateObj = log.createdAt ? new Date(log.createdAt) : null;
-                      const formattedDate = dateObj ? dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
-                      const formattedTime = dateObj ? dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
-                      const isRejection = (log.qtyRejected || 0) > 0 || String(log.remarkType || '').includes('REJECT');
-                      const logStageName = log.stage?.name || log.stageName || 'Process Stage';
-
-                      return (
-                        <div
-                          key={log.id || idx}
-                          className={`p-3.5 rounded-2xl border text-xs font-sans transition-all space-y-2 ${
-                            isRejection
-                              ? 'bg-rose-50/90 border-2 border-rose-300 shadow-sm ring-1 ring-rose-200'
-                              : 'bg-slate-50/90 border-slate-200/90 hover:bg-slate-100/80'
-                          }`}
+                      </div>
+                      {historyLogs.length > 0 && (
+                        <button
+                          onClick={() => {
+                            let csvContent = "data:text/csv;charset=utf-8,Timestamp,Job Card No,Sub Lot,Stage,Qty Forwarded,Qty Rejected,Remarks,Operator\n";
+                            historyLogs.forEach((l: any) => {
+                              const dateStr = l.createdAt ? new Date(l.createdAt).toLocaleString('en-GB') : '-';
+                              const stageName = l.stage?.name || l.stageName || '-';
+                              const subNo = l.subJobCard?.subJobCardNo || historyModalJob.jobCardNo;
+                              const remarkStr = `"${(l.remarks || '').replace(/"/g, '""')}"`;
+                              const userStr = `"${l.createdBy?.name || 'Operator'}"`;
+                              csvContent += `${dateStr},${historyModalJob.jobCardNo},${subNo},${stageName},${l.qtyForwarded || 0},${l.qtyRejected || 0},${remarkStr},${userStr}\n`;
+                            });
+                            const encodedUri = encodeURI(csvContent);
+                            const link = document.createElement("a");
+                            link.setAttribute("href", encodedUri);
+                            link.setAttribute("download", `history_${historyModalJob.jobCardNo}_${new Date().toISOString().split('T')[0]}.csv`);
+                            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+                          }}
+                          className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-purple-200 cursor-pointer shadow-2xs transition-all"
                         >
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 pb-2">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="w-6 h-6 rounded-lg bg-purple-600 text-white font-black text-[10px] flex items-center justify-center font-mono">
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Export CSV</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {isHistoryLoading ? (
+                      <div className="py-14 text-center flex flex-col items-center justify-center gap-3">
+                        <RefreshCw className="w-6 h-6 text-purple-500 animate-spin" />
+                        <span className="text-sm text-slate-500 font-medium">Loading traceability records from database...</span>
+                      </div>
+                    ) : historyLogs.length === 0 ? (
+                      <div className="py-12 text-center bg-slate-50 rounded-2xl border border-slate-200">
+                        <Clock className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+                        <p className="font-semibold text-slate-600 text-sm">No stage movement logs yet.</p>
+                        <p className="text-[11px] text-slate-400 mt-1">Logs appear automatically when an operator advances a stage or logs rejections.</p>
+                      </div>
+                    ) : (
+                      <div className="relative space-y-3">
+                        <div className="absolute left-[18px] top-6 bottom-6 w-0.5 bg-slate-200 hidden sm:block" />
+                        {historyLogs.map((log: any, idx: number) => {
+                          const dateObj = log.createdAt ? new Date(log.createdAt) : null;
+                          const formattedDate = dateObj ? dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+                          const formattedTime = dateObj ? dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+                          const isRejection = (log.qtyRejected || 0) > 0 || String(log.remarkType || '').toUpperCase().includes('REJECT');
+                          const isCurrentActive = String(log.remarkType || '').includes('CURRENT_STAGE');
+                          const isInitialLaunch = String(log.remarkType || '').includes('INITIAL_LAUNCH');
+                          const logStageName = log.stage?.name || log.stageName || 'Process Stage';
+                          const subNo = log.subJobCard?.subJobCardNo || historyModalJob.jobCardNo;
+                          const qtyFwd = log.qtyForwarded || log.qtyProcessed || 0;
+                          const qtyRej = log.qtyRejected || 0;
+                          const operatorName = log.createdBy?.name || 'Production Operator';
+                          return (
+                            <div key={log.id || idx} className="relative sm:pl-10">
+                              <div className={`absolute left-0 top-3 w-9 h-9 rounded-xl flex items-center justify-center font-black text-[10px] font-mono shrink-0 hidden sm:flex border-2 ${isRejection ? 'bg-rose-600 text-white border-rose-500' : isCurrentActive ? 'bg-blue-600 text-white border-blue-500 ring-2 ring-blue-200' : isInitialLaunch ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-purple-600 text-white border-purple-500'}`}>
                                 #{historyLogs.length - idx}
-                              </span>
-                              <span className="font-mono font-black text-xs text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
-                                {log.subJobCard?.subJobCardNo || historyModalJob.jobCardNo}
-                              </span>
-                              {isRejection ? (
-                                <span className="font-black text-rose-900 bg-rose-100 border border-rose-300 px-2.5 py-0.5 rounded-lg font-mono text-[11px] inline-flex items-center gap-1 shadow-2xs">
-                                  <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                                  <span>DEFECT AT STAGE: {logStageName}</span>
-                                </span>
-                              ) : (
-                                <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-mono text-[11px]">
-                                  {logStageName}
-                                </span>
-                              )}
-                              {isRejection && (
-                                <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-600 text-white font-mono shadow-2xs animate-pulse">
-                                  ⚠️ {log.qtyRejected} PCB(s) REJECTED
-                                </span>
-                              )}
+                              </div>
+                              <div className={`rounded-2xl border text-xs transition-all overflow-hidden ${isRejection ? 'bg-rose-50 border-2 border-rose-300 shadow-sm' : isCurrentActive ? 'bg-blue-50 border-2 border-blue-300 shadow-sm' : isInitialLaunch ? 'bg-emerald-50/80 border border-emerald-200' : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'}`}>
+                                <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 border-b ${isRejection ? 'border-rose-200 bg-rose-100/60' : isCurrentActive ? 'border-blue-200 bg-blue-100/60' : isInitialLaunch ? 'border-emerald-200 bg-emerald-100/40' : 'border-slate-100 bg-slate-50/80'}`}>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className={`sm:hidden w-6 h-6 rounded-lg font-black text-[10px] flex items-center justify-center font-mono ${isRejection ? 'bg-rose-600 text-white' : isCurrentActive ? 'bg-blue-600 text-white' : 'bg-purple-600 text-white'}`}>#{historyLogs.length - idx}</span>
+                                    <span className="font-mono font-black text-[11px] text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs">{subNo}</span>
+                                    {isRejection ? (
+                                      <span className="font-black text-rose-900 bg-rose-100 border border-rose-300 px-2.5 py-0.5 rounded-lg font-mono text-[11px] inline-flex items-center gap-1">
+                                        <AlertCircle className="w-3 h-3 text-rose-600 shrink-0" /><span>DEFECT AT: {logStageName}</span>
+                                      </span>
+                                    ) : isCurrentActive ? (
+                                      <span className="font-black text-blue-900 bg-blue-100 border border-blue-300 px-2.5 py-0.5 rounded-lg font-mono text-[11px] inline-flex items-center gap-1">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" /><span>ACTIVE: {logStageName}</span>
+                                      </span>
+                                    ) : isInitialLaunch ? (
+                                      <span className="font-black text-emerald-900 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-lg font-mono text-[11px] inline-flex items-center gap-1">
+                                        <Play className="w-3 h-3 text-emerald-700 fill-current shrink-0" /><span>LAUNCHED → {logStageName}</span>
+                                      </span>
+                                    ) : (
+                                      <span className="font-bold text-slate-700 bg-white px-2.5 py-0.5 rounded-lg border border-slate-200 font-mono text-[11px]">{logStageName}</span>
+                                    )}
+                                    {isRejection && qtyRej > 0 && (
+                                      <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-600 text-white font-mono">⚠️ {qtyRej} PCB(s) REJECTED</span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-500 shrink-0">
+                                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                                    <span className="font-semibold text-slate-600">{formattedDate}</span>
+                                    <span className="text-slate-400">{formattedTime}</span>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-3 divide-x divide-slate-100">
+                                  <div className="p-3">
+                                    <span className="text-[9px] text-slate-400 font-mono uppercase font-bold block">QTY FORWARDED</span>
+                                    <strong className="text-emerald-700 font-mono font-black text-sm block mt-0.5">{qtyFwd > 0 ? `${qtyFwd} PCBs` : '—'}</strong>
+                                  </div>
+                                  <div className={`p-3 ${isRejection ? 'bg-rose-50/80' : ''}`}>
+                                    <span className={`text-[9px] font-mono uppercase font-bold block ${isRejection ? 'text-rose-600' : 'text-slate-400'}`}>{isRejection ? 'REJECTED / SCRAP' : 'REJECTED QTY'}</span>
+                                    <strong className={`font-mono font-black text-sm block mt-0.5 ${isRejection ? 'text-rose-700' : 'text-slate-500'}`}>
+                                      {qtyRej > 0 ? (<span className="flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />{qtyRej} PCBs</span>) : '0 PCBs'}
+                                    </strong>
+                                  </div>
+                                  <div className="p-3">
+                                    <span className="text-[9px] text-slate-400 font-mono uppercase font-bold block">OPERATOR</span>
+                                    <strong className="text-slate-800 font-bold text-xs block mt-0.5 truncate">{operatorName}</strong>
+                                  </div>
+                                </div>
+                                {log.remarks && (
+                                  <div className="px-3 pb-3">
+                                    <div className={`px-3 py-2 rounded-xl text-[11px] font-mono border ${isRejection ? 'bg-rose-100/80 text-rose-950 border-rose-200 font-semibold' : 'bg-slate-50 text-slate-600 border-slate-100'}`}>
+                                      <span className="font-black uppercase mr-1 text-[10px]">{isRejection ? 'DEFECT DETAILS:' : 'Remarks:'}</span>{log.remarks}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2 font-mono text-[11px] text-slate-500">
-                              <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                              <span className="font-bold text-slate-700">{formattedDate}</span>
-                              <span className="text-slate-400">{formattedTime}</span>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-0.5">
-                            <div className="bg-white p-2 rounded-xl border border-slate-200/80">
-                              <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">QTY FORWARDED</span>
-                              <strong className="text-emerald-700 font-mono font-black text-xs">
-                                {log.qtyForwarded || log.qtyProcessed || 0} PCBs
-                              </strong>
-                            </div>
-                            <div className={`p-2 rounded-xl border ${isRejection ? 'bg-rose-100/90 border-rose-300' : 'bg-white border-slate-200/80'}`}>
-                              <span className={`text-[9px] font-mono uppercase block font-bold ${isRejection ? 'text-rose-800' : 'text-slate-400'}`}>
-                                {isRejection ? 'DEFECTIVE / REJECTED QTY' : 'REJECTED PCB QTY'}
-                              </span>
-                              <strong className={`font-mono font-black text-xs ${isRejection ? 'text-rose-900 text-sm' : 'text-slate-600'}`}>
-                                {log.qtyRejected || 0} PCBs {isRejection ? `(at ${logStageName})` : ''}
-                              </strong>
-                            </div>
-                            <div className="bg-white p-2 rounded-xl border border-slate-200/80">
-                              <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">OPERATOR / INSPECTOR</span>
-                              <strong className="text-slate-800 font-bold truncate block">
-                                {log.createdBy?.name || 'Production Operator'}
-                              </strong>
-                            </div>
-                          </div>
-
-                          {log.remarks && (
-                            <div className={`p-2 rounded-xl border font-mono text-[11px] ${
-                              isRejection ? 'bg-rose-100/80 text-rose-950 border-rose-300 font-bold' : 'bg-white text-slate-700 border-slate-200'
-                            }`}>
-                              <span className="font-extrabold uppercase mr-1">{isRejection ? 'DEFECT DETAILS:' : 'Remarks:'}</span>
-                              <span>{log.remarks}</span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                )}
+
+                </div>
               </div>
 
-              {/* Modal Footer */}
-              <div className="flex items-center justify-between border-t border-slate-200 pt-3 text-xs">
-                <span className="text-slate-500 font-mono text-[11px]">
-                  RF ELECTRO TECH ERP • ISO Traceability System
-                </span>
+              {/* ── Fixed Footer ── */}
+              <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 bg-slate-50 shrink-0 rounded-b-3xl">
+                <span className="text-slate-400 font-mono text-[10px]">RF ELECTRO TECH ERP • ISO Traceability System</span>
                 <button
-                  onClick={() => {
-                    setHistoryModalJob(null);
-                    setHistoryLogs([]);
-                  }}
-                  className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl text-xs transition-all cursor-pointer"
-                >
-                  Close History
-                </button>
+                  onClick={() => { setHistoryModalJob(null); setHistoryLogs([]); }}
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl text-xs transition-all cursor-pointer active:scale-95"
+                >Close</button>
               </div>
+
             </div>
           </div>
         </Portal>
