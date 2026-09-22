@@ -1355,11 +1355,12 @@ export default function JobCardsPage() {
           createdAt: r.timestamp || new Date().toISOString(),
           subJobCard: { subJobCardNo: job.jobCardNo },
           stage: { name: r.stageName },
+          stageName: r.stageName,
           qtyForwarded: 0,
           qtyRejected: r.rejectedPcbQty || 0,
           remarkType: 'REJECTION',
-          remarks: `[REJECTION] ${r.remark} (${r.rejectedPcbQty} PCBs / ${r.rejectedAreaSqm} Sqm)`,
-          createdBy: { name: 'Quality Operator' },
+          remarks: `[DEFECT AT STAGE: ${r.stageName}] ${r.remark} (${r.rejectedPcbQty} PCBs / ${r.rejectedAreaSqm} Sqm)`,
+          createdBy: { name: 'Quality Inspector' },
         }));
         const existingTimestamps = new Set(rawLogs.map((l: any) => l.createdAt));
         const filteredLocalRej = localRejLogs.filter((l) => !existingTimestamps.has(l.createdAt));
@@ -4458,8 +4459,10 @@ export default function JobCardsPage() {
                             {selectedMovementJob.rejectionLogs.map((log, lIdx) => (
                               <div key={lIdx} className="bg-white p-2.5 rounded-xl border border-rose-100 flex items-center justify-between text-xs shadow-2xs">
                                 <div>
-                                  <span className="font-bold text-slate-900">{log.stageName || 'Stage'}</span>
-                                  <span className="text-slate-500 text-[11px] block">{log.remark || 'Rejected during movement'}</span>
+                                  <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-950 font-bold font-mono text-[11px] border border-rose-300 inline-block mb-1">
+                                    Defect Stage: {log.stageName || 'Stage'}
+                                  </span>
+                                  <span className="text-slate-600 text-[11px] block font-medium">{log.remark || 'Rejected during movement'}</span>
                                 </div>
                                 <div className="text-right">
                                   <span className="font-mono font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 text-xs">
@@ -5356,6 +5359,63 @@ export default function JobCardsPage() {
                 </div>
               </div>
 
+              {/* Defect / Quality Rejection Stage Summary Breakdown */}
+              {(() => {
+                const defectLogs = historyLogs.filter((l: any) => (l.qtyRejected || 0) > 0 || String(l.remarkType || '').includes('REJECT'));
+                const hasRejections = defectLogs.length > 0 || Boolean(historyModalJob.rejectedPcbQty && historyModalJob.rejectedPcbQty > 0);
+                if (!hasRejections) return null;
+
+                const totalDefectPcb = defectLogs.reduce((acc: number, curr: any) => acc + (curr.qtyRejected || 0), 0) || historyModalJob.rejectedPcbQty || 0;
+
+                // Group by defect stage
+                const stageMap = new Map<string, { stageName: string; count: number; remarks: string[] }>();
+                defectLogs.forEach((dl: any) => {
+                  const sName = dl.stage?.name || dl.stageName || 'Process Stage';
+                  const prev = stageMap.get(sName);
+                  if (prev) {
+                    prev.count += (dl.qtyRejected || 0);
+                    if (dl.remarks) prev.remarks.push(dl.remarks);
+                  } else {
+                    stageMap.set(sName, { stageName: sName, count: dl.qtyRejected || 0, remarks: dl.remarks ? [dl.remarks] : [] });
+                  }
+                });
+
+                return (
+                  <div className="bg-rose-50 border-2 border-rose-300 p-4 rounded-2xl space-y-2.5 font-sans shadow-xs">
+                    <div className="flex items-center justify-between border-b border-rose-200 pb-2">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="w-4.5 h-4.5 text-rose-600 shrink-0" />
+                        <span className="font-black text-rose-950 text-xs uppercase tracking-wider font-mono">
+                          Defect Stages Breakdown ({totalDefectPcb} Total Defective PCBs)
+                        </span>
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded-lg text-xs font-black font-mono bg-rose-600 text-white shadow-2xs">
+                        ⚠️ Quality Defect(s) Detected
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1">
+                      {Array.from(stageMap.values()).map((ds, dIdx) => (
+                        <div key={dIdx} className="bg-white p-3 rounded-xl border border-rose-200 shadow-2xs flex items-center justify-between">
+                          <div>
+                            <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">Defect Occurred At</span>
+                            <strong className="text-rose-950 font-mono font-black text-xs block">{ds.stageName}</strong>
+                            {ds.remarks.length > 0 && (
+                              <span className="text-[10px] text-slate-500 font-sans block truncate max-w-[170px]" title={ds.remarks.join(', ')}>
+                                {ds.remarks[0]}
+                              </span>
+                            )}
+                          </div>
+                          <span className="font-mono font-black text-rose-700 bg-rose-50 px-2 py-1 rounded-lg border border-rose-200 text-xs shrink-0 shadow-2xs">
+                            ⚠️ {ds.count} PCBs
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Timeline Logs Container */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -5408,27 +5468,40 @@ export default function JobCardsPage() {
                       const formattedDate = dateObj ? dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
                       const formattedTime = dateObj ? dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
                       const isRejection = (log.qtyRejected || 0) > 0 || String(log.remarkType || '').includes('REJECT');
+                      const logStageName = log.stage?.name || log.stageName || 'Process Stage';
 
                       return (
                         <div
                           key={log.id || idx}
                           className={`p-3.5 rounded-2xl border text-xs font-sans transition-all space-y-2 ${
                             isRejection
-                              ? 'bg-rose-50/80 border-rose-200 shadow-2xs'
+                              ? 'bg-rose-50/90 border-2 border-rose-300 shadow-sm ring-1 ring-rose-200'
                               : 'bg-slate-50/90 border-slate-200/90 hover:bg-slate-100/80'
                           }`}
                         >
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 pb-2">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="w-6 h-6 rounded-lg bg-purple-600 text-white font-black text-[10px] flex items-center justify-center font-mono">
                                 #{historyLogs.length - idx}
                               </span>
                               <span className="font-mono font-black text-xs text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
                                 {log.subJobCard?.subJobCardNo || historyModalJob.jobCardNo}
                               </span>
-                              <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-mono text-[11px]">
-                                {log.stage?.name || 'Process Stage'}
-                              </span>
+                              {isRejection ? (
+                                <span className="font-black text-rose-900 bg-rose-100 border border-rose-300 px-2.5 py-0.5 rounded-lg font-mono text-[11px] inline-flex items-center gap-1 shadow-2xs">
+                                  <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                                  <span>DEFECT AT STAGE: {logStageName}</span>
+                                </span>
+                              ) : (
+                                <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-mono text-[11px]">
+                                  {logStageName}
+                                </span>
+                              )}
+                              {isRejection && (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-600 text-white font-mono shadow-2xs animate-pulse">
+                                  ⚠️ {log.qtyRejected} PCB(s) REJECTED
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-2 font-mono text-[11px] text-slate-500">
                               <Calendar className="w-3.5 h-3.5 text-slate-400" />
@@ -5444,10 +5517,12 @@ export default function JobCardsPage() {
                                 {log.qtyForwarded || log.qtyProcessed || 0} PCBs
                               </strong>
                             </div>
-                            <div className="bg-white p-2 rounded-xl border border-slate-200/80">
-                              <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">REJECTED PCB QTY</span>
-                              <strong className={`font-mono font-black text-xs ${isRejection ? 'text-rose-700' : 'text-slate-600'}`}>
-                                {log.qtyRejected || 0} PCBs
+                            <div className={`p-2 rounded-xl border ${isRejection ? 'bg-rose-100/90 border-rose-300' : 'bg-white border-slate-200/80'}`}>
+                              <span className={`text-[9px] font-mono uppercase block font-bold ${isRejection ? 'text-rose-800' : 'text-slate-400'}`}>
+                                {isRejection ? 'DEFECTIVE / REJECTED QTY' : 'REJECTED PCB QTY'}
+                              </span>
+                              <strong className={`font-mono font-black text-xs ${isRejection ? 'text-rose-900 text-sm' : 'text-slate-600'}`}>
+                                {log.qtyRejected || 0} PCBs {isRejection ? `(at ${logStageName})` : ''}
                               </strong>
                             </div>
                             <div className="bg-white p-2 rounded-xl border border-slate-200/80">
@@ -5460,9 +5535,9 @@ export default function JobCardsPage() {
 
                           {log.remarks && (
                             <div className={`p-2 rounded-xl border font-mono text-[11px] ${
-                              isRejection ? 'bg-rose-100/60 text-rose-900 border-rose-300' : 'bg-white text-slate-700 border-slate-200'
+                              isRejection ? 'bg-rose-100/80 text-rose-950 border-rose-300 font-bold' : 'bg-white text-slate-700 border-slate-200'
                             }`}>
-                              <span className="font-extrabold uppercase mr-1">Remarks:</span>
+                              <span className="font-extrabold uppercase mr-1">{isRejection ? 'DEFECT DETAILS:' : 'Remarks:'}</span>
                               <span>{log.remarks}</span>
                             </div>
                           )}
