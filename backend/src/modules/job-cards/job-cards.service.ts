@@ -854,37 +854,47 @@ export class JobCardsService {
       customer = deps.customer;
     }
 
-    let product = await this.prisma.product.findFirst({
-      where: {
-        OR: [
-          ...(data.rfePartCode ? [{ specCardNo: data.rfePartCode }] : []),
-          ...(data.customerPartNo ? [{ code: data.customerPartNo }] : []),
-        ],
-      },
-    });
+    let product: any = null;
+    const productOr: any[] = [];
+    if (data.rfePartCode && String(data.rfePartCode).trim()) {
+      productOr.push({ specCardNo: String(data.rfePartCode).trim() });
+    }
+    if (data.customerPartNo && String(data.customerPartNo).trim()) {
+      productOr.push({ code: String(data.customerPartNo).trim() });
+    }
+    if (productOr.length > 0) {
+      product = await this.prisma.product.findFirst({
+        where: { OR: productOr },
+      }).catch(() => null);
+    }
 
-    if (!product && data.rfePartCode) {
+    if (!product && data.rfePartCode && String(data.rfePartCode).trim()) {
+      const specNo = String(data.rfePartCode).trim();
+      const partCode = String(data.customerPartNo || specNo).trim();
       try {
         product = await this.prisma.product.create({
           data: {
-            specCardNo: data.rfePartCode,
-            name: data.customerPartNo || `Part ${data.rfePartCode}`,
-            code: data.customerPartNo || data.rfePartCode,
+            specCardNo: specNo,
+            revisionNo: 'Rev-00',
+            name: partCode,
+            code: partCode,
             layers: Number(data.layers) || 2,
             thicknessMm: Number(data.thicknessMm) || 1.6,
-            copperWeight: data.copperWeight || '1oz',
-            surfaceFinish: data.surfaceFinish || 'HASL Lead-Free',
-            solderMask: data.solderMask || 'Green',
-            legend: data.legend || 'White',
-            materialType: data.materialType || 'FR4',
-            pcbSize: data.pcbSize || '100x100mm',
+            copperWeight: data.copperWeight ? String(data.copperWeight) : '1oz',
+            surfaceFinish: data.surfaceFinish ? String(data.surfaceFinish) : 'HASL Lead-Free',
+            solderMask: data.solderMask ? String(data.solderMask) : 'Green',
+            legend: data.legend ? String(data.legend) : 'White',
+            materialType: data.materialType ? String(data.materialType) : 'FR4',
+            pcbSize: data.pcbSize ? String(data.pcbSize) : '100x100mm',
             processFlowId: processFlow.id,
             createdById: finalUserId,
           },
         });
       } catch (prodErr: any) {
         console.warn('Auto-create product for job card failed, falling back:', prodErr?.message);
-        product = deps.product;
+        product = await this.prisma.product.findFirst({
+          where: { OR: [{ specCardNo: specNo }, { code: partCode }] },
+        }).catch(() => null);
       }
     } else if (product && (data.layers || data.thicknessMm || data.copperWeight || data.surfaceFinish)) {
       try {
@@ -905,7 +915,7 @@ export class JobCardsService {
     }
 
     if (!product) {
-      product = deps.product;
+      product = deps.product || (await this.prisma.product.findFirst());
     }
 
     let customerPO: any = null;
