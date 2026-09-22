@@ -759,12 +759,12 @@ export default function JobCardsPage() {
     }
   }, []);
 
-  // Save jobCards to localStorage as offline cache only when server is connected
+  // Save jobCards to localStorage as reliable cache and offline persistence
   useEffect(() => {
-    if (isMounted && serverConnectionState.status === 'CONNECTED' && jobCards.length > 0) {
+    if (isMounted && jobCards.length > 0) {
       saveJobCardsToStorage(jobCards);
     }
-  }, [jobCards, isMounted, serverConnectionState.status]);
+  }, [jobCards, isMounted]);
 
   // Sync userRole from localStorage if set
   useEffect(() => {
@@ -1107,6 +1107,9 @@ export default function JobCardsPage() {
                 if (existing) {
                   const combinedQty = (existing.totalPcbQty || 0) + (item.totalPcbQty || 0);
                   const combinedArea = Number(((existing.custPnlAreaSqm || 0) + (item.custPnlAreaSqm || 0)).toFixed(2));
+                  const combinedRejQty = (existing.rejectedPcbQty || 0) + (item.rejectedPcbQty || 0);
+                  const combinedRejArea = Number(((existing.rejectedAreaSqm || 0) + (item.rejectedAreaSqm || 0)).toFixed(2));
+                  const combinedLogs = [...(existing.rejectionLogs || []), ...(item.rejectionLogs || [])];
                   stageMap.set(groupKey, {
                     ...existing,
                     totalPcbQty: combinedQty,
@@ -1114,6 +1117,9 @@ export default function JobCardsPage() {
                     prodPnlQty: Math.ceil(combinedQty / 4),
                     custPnlAreaSqm: combinedArea,
                     prodPnlAreaSqm: combinedArea,
+                    rejectedPcbQty: combinedRejQty,
+                    rejectedAreaSqm: combinedRejArea,
+                    rejectionLogs: combinedLogs,
                   });
                 } else {
                   stageMap.set(groupKey, item);
@@ -1829,10 +1835,12 @@ export default function JobCardsPage() {
     const rawReject = Number(fullMoveRejectQty) || 0;
     const rejectPcb = (hasRejectionInMovement && rawReject > 0) ? Math.min(rawReject, currentPcb) : 0;
 
-    if (hasRejectionInMovement && rejectPcb > 0 && !fullMoveRemarks.trim()) {
-      showToast(`⚠️ Rejection reason required for ${rejectPcb} rejected PCB(s). Remarks likhein ya rejection toggle off karein.`, 'error');
-      return;
-    }
+    // Auto-populate remarks if user didn't type any so movement is NEVER blocked
+    const effectiveRemarks = fullMoveRemarks.trim() || (
+      rejectPcb > 0
+        ? `${rejectPcb} PCB(s) marked as ${fullMoveRemarkType || 'Defect/Rejection'} at ${selectedMovementJob.currentStageName || 'Stage'}`
+        : 'Clear stage movement'
+    );
 
     const movedPcb = currentPcb - rejectPcb;
     const unitArea = currentPcb > 0 ? currentArea / currentPcb : 0.2;
@@ -1859,7 +1867,7 @@ export default function JobCardsPage() {
         stageName: selectedMovementJob.currentStageName,
         rejectedPcbQty: rejectPcb,
         rejectedAreaSqm: rejectArea,
-        remark: fullMoveRemarks.trim() || 'Rejected during stage movement',
+        remark: effectiveRemarks,
         timestamp: new Date().toISOString(),
       }
     ] : (selectedMovementJob.rejectionLogs || []);
@@ -1950,7 +1958,7 @@ export default function JobCardsPage() {
             subJobCardNo: targetSubNo,
             jobCardNo: jobCardNo,
             rejectPcbQty: rejectPcb,
-            remark: fullMoveRemarks.trim() || undefined,
+            remark: effectiveRemarks,
             remarkType: rejectPcb > 0 ? 'REJECTION' : 'FULL_MOVEMENT',
           }),
           signal: controller.signal,
@@ -1971,7 +1979,7 @@ export default function JobCardsPage() {
               subJobCardNo: targetSubNo,
               jobCardNo: jobCardNo,
               rejectPcbQty: rejectPcb,
-              remark: fullMoveRemarks.trim() || undefined,
+              remark: effectiveRemarks,
               remarkType: rejectPcb > 0 ? 'REJECTION' : 'FULL_MOVEMENT',
             }),
             signal: fallbackCtrl.signal,
@@ -2053,7 +2061,10 @@ export default function JobCardsPage() {
       return;
     }
 
-    const nextIndex = selectedMovementJob.currentStageIndex + 1;
+    const currentIdx = (selectedMovementJob.currentStageIndex !== undefined && selectedMovementJob.currentStageIndex >= 0)
+      ? selectedMovementJob.currentStageIndex
+      : normalizeStageIndex(selectedMovementJob.currentStageName);
+    const nextIndex = currentIdx + 1;
     if (nextIndex >= PF01_STAGES.length) {
       showToast('Job has reached the final PACKING stage!', 'info');
       return;
@@ -3252,7 +3263,19 @@ export default function JobCardsPage() {
 
                       {/* Pndg */}
                       <td className="py-2.5 px-3 border-r border-slate-200 font-mono text-right font-bold text-slate-900 whitespace-nowrap">
-                        {jc.totalPcbQty || (jc.custPnlQty && jc.custPnlQty > 50 ? jc.custPnlQty : (jc.prodPnlQty ? Math.round(jc.prodPnlQty * 4) : 160))}
+                        <div className="flex flex-col items-end">
+                          <span className="text-slate-900 font-black">
+                            {jc.totalPcbQty || (jc.custPnlQty && jc.custPnlQty > 50 ? jc.custPnlQty : (jc.prodPnlQty ? Math.round(jc.prodPnlQty * 4) : 160))}
+                          </span>
+                          {Boolean(jc.rejectedPcbQty && jc.rejectedPcbQty > 0) && (
+                            <span
+                              title={`Total Rejected PCBs on this card: ${jc.rejectedPcbQty}`}
+                              className="text-[10px] font-black text-rose-600 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200 font-mono inline-flex items-center gap-0.5 mt-0.5 shadow-2xs"
+                            >
+                              ⚠️ {jc.rejectedPcbQty} Rej
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Unit */}
@@ -4380,12 +4403,61 @@ export default function JobCardsPage() {
                             <strong className="text-emerald-700 font-mono font-black block mt-0.5">{selectedMovementJob.custPnlAreaSqm || selectedMovementJob.prodPnlAreaSqm} Sqm</strong>
                           </div>
 
+                          {Boolean(selectedMovementJob.rejectedPcbQty && selectedMovementJob.rejectedPcbQty > 0) && (
+                            <div className="bg-rose-50/90 p-3 rounded-xl border border-rose-200 shadow-2xs">
+                              <span className="text-[10px] text-rose-700 font-mono uppercase block font-black tracking-wider">REJECTED / SCRAP</span>
+                              <strong className="text-rose-700 font-mono font-black block mt-0.5 text-sm">
+                                ⚠️ {selectedMovementJob.rejectedPcbQty} PCBs
+                              </strong>
+                              {selectedMovementJob.rejectedAreaSqm ? (
+                                <span className="text-[10px] font-mono text-rose-600 font-bold block mt-0.5">
+                                  ({selectedMovementJob.rejectedAreaSqm.toFixed(2)} Sqm)
+                                </span>
+                              ) : null}
+                            </div>
+                          )}
+
                           <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors col-span-2 sm:col-span-1 md:col-span-3">
                             <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">JOB FLOW</span>
                             <strong className="text-slate-800 font-mono block mt-0.5 font-bold">{selectedMovementJob.jobFlowSelection || 'PF-01 Standard'}</strong>
                           </div>
                         </div>
                       </div>
+
+                      {/* Rejection & Defect History in Tab A */}
+                      {selectedMovementJob.rejectionLogs && selectedMovementJob.rejectionLogs.length > 0 && (
+                        <div className="bg-rose-50/60 border border-rose-200 p-4 rounded-2xl space-y-2.5 font-sans shadow-xs">
+                          <div className="flex items-center justify-between border-b border-rose-200 pb-2">
+                            <span className="flex items-center gap-1.5 font-black text-rose-950 text-xs uppercase tracking-wider font-mono">
+                              <AlertCircle className="w-4 h-4 text-rose-600" />
+                              Rejection & Quality Log ({selectedMovementJob.rejectionLogs.length} Records)
+                            </span>
+                            <span className="text-xs font-mono font-black text-rose-700 bg-rose-100 px-2 py-0.5 rounded-lg border border-rose-300">
+                              Total: {selectedMovementJob.rejectedPcbQty || 0} Rejected PCBs
+                            </span>
+                          </div>
+                          <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                            {selectedMovementJob.rejectionLogs.map((log, lIdx) => (
+                              <div key={lIdx} className="bg-white p-2.5 rounded-xl border border-rose-100 flex items-center justify-between text-xs shadow-2xs">
+                                <div>
+                                  <span className="font-bold text-slate-900">{log.stageName || 'Stage'}</span>
+                                  <span className="text-slate-500 text-[11px] block">{log.remark || 'Rejected during movement'}</span>
+                                </div>
+                                <div className="text-right">
+                                  <span className="font-mono font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 text-xs">
+                                    {log.rejectedPcbQty} PCBs
+                                  </span>
+                                  {log.timestamp && (
+                                    <span className="text-[10px] text-slate-400 block font-mono">
+                                      {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* RIGHT COLUMN: Sub-Job Lots Breakdown + Quick Actions (5 Cols) */}
@@ -4492,7 +4564,10 @@ export default function JobCardsPage() {
                   const parsedRejectQty = Math.min(Math.max(0, Number(fullMoveRejectQty) || 0), currentTotalPcb);
                   const movingPcbQty = Math.max(0, currentTotalPcb - parsedRejectQty);
                   const isRejectionRemarksNeeded = parsedRejectQty > 0 && !fullMoveRemarks.trim();
-                  const nextStageTitle = PF01_STAGES[selectedMovementJob.currentStageIndex + 1] || '19. PACKING (COMPLETED)';
+                  const currentStageIdx = (selectedMovementJob.currentStageIndex !== undefined && selectedMovementJob.currentStageIndex >= 0)
+                    ? selectedMovementJob.currentStageIndex
+                    : normalizeStageIndex(selectedMovementJob.currentStageName);
+                  const nextStageTitle = PF01_STAGES[currentStageIdx + 1] || '19. PACKING (COMPLETED)';
 
                   return (
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 text-xs font-sans">
@@ -4505,6 +4580,18 @@ export default function JobCardsPage() {
                           <p className="text-xs leading-relaxed text-blue-950 mt-2">
                             Are you sure you want to move Job Card No. <strong className="text-slate-900 font-mono font-black">{selectedMovementJob.jobCardNo}</strong> ({currentTotalPcb} PCBs, {selectedMovementJob.custPnlAreaSqm || selectedMovementJob.prodPnlAreaSqm || 45} Sqm) to the next process stage?
                           </p>
+
+                          {Boolean(selectedMovementJob.rejectedPcbQty && selectedMovementJob.rejectedPcbQty > 0) && (
+                            <div className="mt-3 p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-950 text-xs flex items-center justify-between shadow-2xs">
+                              <span className="font-bold flex items-center gap-1.5">
+                                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                                Previous Rejections on this Card:
+                              </span>
+                              <span className="font-mono font-black text-rose-700 bg-rose-100 px-2 py-0.5 rounded border border-rose-300">
+                                {selectedMovementJob.rejectedPcbQty} PCBs ({selectedMovementJob.rejectedAreaSqm || 0} Sqm)
+                              </span>
+                            </div>
+                          )}
                         </div>
                         <div className="p-3 font-bold text-blue-900 bg-white rounded-xl border border-blue-200 font-mono text-xs shadow-2xs">
                           Next Stage: <span className="text-blue-700 font-extrabold">{nextStageTitle}</span>
@@ -4554,14 +4641,14 @@ export default function JobCardsPage() {
                                 />
                                 {parsedRejectQty > 0 && (
                                   <p className="text-[11px] text-rose-800 font-bold">
-                                    ⚠️ {parsedRejectQty} PCBs will be rejected. Only {movingPcbQty} PCBs will move to next stage. Remarks are mandatory below!
+                                    ⚠️ {parsedRejectQty} PCBs will be rejected. Only {movingPcbQty} PCBs will move to next stage.
                                   </p>
                                 )}
                               </div>
 
                               <div>
                                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                                  Movement Remarks Category *
+                                  Movement Remarks Category
                                 </label>
                                 <select
                                   value={fullMoveRemarkType}
@@ -4577,18 +4664,15 @@ export default function JobCardsPage() {
 
                               <div>
                                 <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-                                  <span>Remarks / Rejection Details (MANDATORY *)</span>
-                                  {isRejectionRemarksNeeded && (
-                                    <span className="text-[10px] text-rose-600 font-extrabold animate-pulse">Required</span>
-                                  )}
+                                  <span>Remarks / Defect Details (Optional)</span>
+                                  <span className="text-[10px] text-slate-400 font-medium">Auto-filled if empty</span>
                                 </label>
                                 <textarea
                                   rows={2}
-                                  required
                                   value={fullMoveRemarks}
                                   onChange={(e) => setFullMoveRemarks(e.target.value)}
-                                  placeholder="Enter mandatory rejection reason details..."
-                                  className="w-full border rounded-xl p-2.5 text-xs text-slate-900 bg-rose-50/50 border-rose-300 focus:bg-white focus:border-rose-500 focus:outline-none shadow-2xs font-medium"
+                                  placeholder="Enter optional defect reason (e.g. Scratched track, drilled off-center)..."
+                                  className="w-full border rounded-xl p-2.5 text-xs text-slate-900 bg-white border-slate-200 focus:bg-white focus:border-rose-500 focus:outline-none shadow-2xs font-medium"
                                 />
                               </div>
                             </div>
@@ -4610,32 +4694,9 @@ export default function JobCardsPage() {
                           )}
                         </div>
 
-                        {hasRejectionInMovement && isRejectionRemarksNeeded && (
-                          <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-950 text-xs space-y-1.5 shadow-2xs">
-                            <div className="font-extrabold flex items-center gap-1.5 text-amber-900">
-                              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                              <span>Rejection Reason Required</span>
-                            </div>
-                            <p className="text-[11px] text-amber-900 leading-normal">
-                              You entered <strong>{parsedRejectQty} rejected PCB(s)</strong>. Please type the reason above, or click below to move all {currentTotalPcb} PCBs without rejection.
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setHasRejectionInMovement(false);
-                                setFullMoveRejectQty(0);
-                                setFullMoveRemarks('');
-                                setFullMoveRemarkType('Clear Movement');
-                              }}
-                              className="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 text-amber-950 font-bold rounded-lg text-[11px] cursor-pointer transition-colors inline-flex items-center gap-1 shadow-2xs"
-                            >
-                              <span>↺ Clear Rejection (Move All {currentTotalPcb} PCBs)</span>
-                            </button>
-                          </div>
-                        )}
-
                         <div className="space-y-2 pt-1">
                           <button
+                            type="button"
                             onClick={handleFullJobMovement}
                             className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl text-xs shadow-md transition-all cursor-pointer active:scale-98 border border-blue-500/40 flex items-center justify-center gap-1.5"
                           >
@@ -4648,6 +4709,7 @@ export default function JobCardsPage() {
 
                           {selectedMovementJob.status === 'IN_PROGRESS' && (
                             <button
+                              type="button"
                               onClick={() => handleMarkAsCompleted(selectedMovementJob.id)}
                               className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer active:scale-98 border border-emerald-500/40"
                             >

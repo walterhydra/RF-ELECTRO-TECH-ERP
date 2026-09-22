@@ -287,12 +287,7 @@ export default function JobMovementUpdatePage() {
     const actualRejected = Math.min(Math.max(0, parsedRejection), currentPcbQty);
     const forwardedPcbQty = Math.max(0, currentPcbQty - actualRejected);
     const nextStageSqm = Number((forwardedPcbQty * sqmPerPcb).toFixed(2));
-    const effectiveReason = rejectionReasonInput || remarksText || 'Stage Movement';
-
-    if (actualRejected > 0 && !effectiveReason.trim()) {
-      showToastMsg('Mandatory Rejection Remark required when rejecting PCBs.');
-      return;
-    }
+    const effectiveReason = rejectionReasonInput || remarksText || (actualRejected > 0 ? `${actualRejected} PCB(s) rejected at ${selectedJob.currentStageName}` : 'Stage Movement');
 
     const currentIndex = PF01_STAGES.indexOf(selectedJob.currentStageName);
     const nextIndex = Math.min(currentIndex + 1, PF01_STAGES.length - 1);
