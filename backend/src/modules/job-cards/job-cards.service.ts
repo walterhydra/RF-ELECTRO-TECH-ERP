@@ -571,8 +571,8 @@ export class JobCardsService {
       { name: '2. DRILLING',       code: 'DRL',      order: 2  },
       { name: '3. DRL-QC',         code: 'DRL-QC',   order: 3  },
       { name: '4. DML',            code: 'DML',      order: 4  },
-      { name: '5. PTH',            code: 'PTH',      order: 5  },
-      { name: '6. PTH-QC',         code: 'PTH-QC',   order: 6  },
+      { name: '5. PIT',            code: 'PIT',      order: 5  },
+      { name: '6. PIT-QC',         code: 'PIT-QC',   order: 6  },
       { name: '7. PLATING',        code: 'PLT',      order: 7  },
       { name: '8. ETCHING',        code: 'ETC',      order: 8  },
       { name: '9. PREMASK-QC/AOI', code: 'PM-QC',    order: 9  },
@@ -617,6 +617,38 @@ export class JobCardsService {
         }
       }
     }
+
+    // ── Cleanup: delete obsolete stage records no longer in the canonical list ──
+    // (e.g. old PTH, PHOTO PRINTING, PATTERN PLATING, SOLDER MASK, DISPATCH, etc.)
+    const canonicalNames = defaultStageList.map((s) => s.name.toLowerCase());
+    const canonicalCodes = defaultStageList.map((s) => s.code.toLowerCase());
+    const allCurrentStages = await this.prisma.processStage.findMany({});
+    for (const stg of allCurrentStages) {
+      const nameMatch = canonicalNames.includes(stg.name.toLowerCase());
+      const codeMatch = canonicalCodes.includes(stg.code.toLowerCase());
+      if (!nameMatch && !codeMatch) {
+        // Check if any sub-job-card is currently at this stage — if so, migrate it
+        const inUseBySubCard = await this.prisma.subJobCard.findFirst({
+          where: { currentStageId: stg.id },
+          select: { id: true, totalPcbQty: true },
+        });
+        if (inUseBySubCard) {
+          // Find the canonical stage with the same order number
+          const replacementStage = await this.prisma.processStage.findFirst({
+            where: { defaultOrder: stg.defaultOrder, id: { not: stg.id } },
+          });
+          if (replacementStage) {
+            await this.prisma.subJobCard.updateMany({
+              where: { currentStageId: stg.id },
+              data: { currentStageId: replacementStage.id },
+            }).catch(() => {});
+          }
+        }
+        // Safe to delete now
+        await this.prisma.processStage.delete({ where: { id: stg.id } }).catch(() => {});
+      }
+    }
+
     stages = await this.prisma.processStage.findMany({ orderBy: { defaultOrder: 'asc' } });
 
     let processFlow = await this.prisma.processFlowMaster.findFirst({
@@ -1534,8 +1566,8 @@ export class JobCardsService {
       '2. DRILLING',
       '3. DRL-QC',
       '4. DML',
-      '5. PTH',
-      '6. PTH-QC',
+      '5. PIT',
+      '6. PIT-QC',
       '7. PLATING',
       '8. ETCHING',
       '9. PREMASK-QC/AOI',
@@ -1556,8 +1588,9 @@ export class JobCardsService {
     const currentOrder = currentStage?.defaultOrder || 0;
 
     let currIdx = -1;
-    // Match by name first (more reliable than defaultOrder which can be mismatched)
+    // Match by full name first
     currIdx = pfList.findIndex((s) => s.toLowerCase() === currentStageName.toLowerCase());
+    // Match by name without numeric prefix
     if (currIdx === -1) {
       currIdx = pfList.findIndex((s) => {
         const sClean = s.replace(/^\d+\.\s*/, '').toLowerCase();
@@ -1565,12 +1598,50 @@ export class JobCardsService {
         return sClean === cClean;
       });
     }
-    // Only use defaultOrder if name matching failed
+    // Fuzzy keyword fallback for renamed stages (PIT↔PTH, etc.)
+    if (currIdx === -1) {
+      const cLower = currentStageName.toLowerCase().replace(/^\d+\.\s*/, '');
+      const keywordMap: Array<{ keywords: string[]; idx: number }> = [
+        { keywords: ['shear', 'cutting'], idx: 0 },
+        { keywords: ['drill', 'drl'], idx: 1 },
+        { keywords: ['drl-qc', 'drill-qc'], idx: 2 },
+        { keywords: ['dml'], idx: 3 },
+        { keywords: ['pit-qc', 'pth-qc'], idx: 5 },
+        { keywords: ['pit', 'pth'], idx: 4 },
+        { keywords: ['plating', 'pattern plat', 'photo print', 'photo'], idx: 6 },
+        { keywords: ['etch'], idx: 7 },
+        { keywords: ['premask', 'aoi', 'etching-qc', 'etching qc'], idx: 8 },
+        { keywords: ['pism-qc', 'solder mask-qc', 'solder mask qc', 'sm-qc'], idx: 10 },
+        { keywords: ['pism', 'solder mask', 'solder'], idx: 9 },
+        { keywords: ['hasl-qc'], idx: 12 },
+        { keywords: ['hasl', 'hal', 'enig'], idx: 11 },
+        { keywords: ['legend'], idx: 13 },
+        { keywords: ['routing', 'rout', 'punching', 'cnc'], idx: 14 },
+        { keywords: ['vg', 'v-cut', 'vcut', 'v groove'], idx: 15 },
+        { keywords: ['bbt', 'e-testing', 'e testing', 'bare board'], idx: 16 },
+        { keywords: ['fqc', 'final qc', 'photo-qc', 'photo qc'], idx: 17 },
+        { keywords: ['pdi', 'aql'], idx: 18 },
+        { keywords: ['pack', 'dispatch'], idx: 19 },
+      ];
+      for (const entry of keywordMap) {
+        if (entry.keywords.some((kw) => cLower.includes(kw))) {
+          currIdx = entry.idx;
+          break;
+        }
+      }
+    }
+    // Last resort: use defaultOrder if everything else failed
     if (currIdx === -1 && currentOrder >= 1 && currentOrder <= pfList.length) {
       currIdx = currentOrder - 1;
     }
 
-    if (currIdx === -1 || currIdx >= pfList.length - 1) {
+    // currIdx still -1 means truly unknown stage — treat as first stage (don't COMPLETE!)
+    if (currIdx === -1) {
+      console.warn(`[JobCards] getNextProcessStage: Unknown stage "${currentStageName}" \u2014 defaulting to stage 1`);
+      currIdx = 0;
+    }
+
+    if (currIdx >= pfList.length - 1) {
       return { targetNextStageId: null, isLastStage: true };
     }
 

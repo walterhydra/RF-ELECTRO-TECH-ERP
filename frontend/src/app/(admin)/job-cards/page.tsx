@@ -54,8 +54,8 @@ const PF01_STAGES = [
   '2. DRILLING',
   '3. DRL-QC',
   '4. DML',
-  '5. PTH',
-  '6. PTH-QC',
+  '5. PIT',
+  '6. PIT-QC',
   '7. PLATING',
   '8. ETCHING',
   '9. PREMASK-QC/AOI',
@@ -89,20 +89,20 @@ const normalizeStageIndex = (stageName?: string | null): number => {
   if (s.includes('drl-qc') || s.includes('drill-qc')) return 2;        // 3. DRL-QC
   if (s.includes('drill')) return 1;                                    // 2. DRILLING
   if (s.includes('dml')) return 3;                                      // 4. DML
-  if (s.includes('pth-qc') || s.includes('pit-qc')) return 5;          // 6. PTH-QC
-  if (s.includes('pth') || s.includes('pit')) return 4;                // 5. PTH
-  if (s.includes('plating')) return 6;                                  // 7. PLATING
-  if (s.includes('premask') || s.includes('aoi')) return 8;            // 9. PREMASK-QC/AOI
+  if (s.includes('pit-qc') || s.includes('pth-qc')) return 5;          // 6. PIT-QC
+  if (s.includes('pit') || s.includes('pth')) return 4;                // 5. PIT
+  if (s.includes('plating') || s.includes('photo')) return 6;          // 7. PLATING
+  if (s.includes('premask') || s.includes('aoi') || s.includes('etching-qc')) return 8;  // 9. PREMASK-QC/AOI
   if (s.includes('etching') || s.includes('etch')) return 7;           // 8. ETCHING
-  if (s.includes('pism-qc')) return 10;                                 // 11. PISM-QC
-  if (s.includes('pism')) return 9;                                     // 10. PISM
+  if (s.includes('pism-qc') || s.includes('solder mask-qc') || s.includes('sm-qc')) return 10; // 11. PISM-QC
+  if (s.includes('pism') || s.includes('solder mask') || s.includes('solder')) return 9; // 10. PISM
   if (s.includes('hasl-qc')) return 12;                                 // 13. HASL-QC
   if (s.includes('hasl') || s.includes('hal') || s.includes('enig')) return 11; // 12. HASL
   if (s.includes('legend')) return 13;                                  // 14. LEGEND PRINT
   if (s.includes('routing') || s.includes('rout') || s.includes('cnc') || s.includes('punching')) return 14; // 15. ROUTING
   if (s.includes('vg') || s.includes('v-cut') || s.includes('vcut') || s.includes('v-groove')) return 15; // 16. VG
   if (s.includes('bbt') || s.includes('bare board') || s.includes('e-testing') || s.includes('testing')) return 16; // 17. BBT
-  if (s.includes('fqc') || s.includes('final qc') || s.includes('ai')) return 17; // 18. FQC (AI)
+  if (s.includes('fqc') || s.includes('final qc')) return 17;          // 18. FQC (AI)
   if (s.includes('pdi') || s.includes('aql')) return 18;               // 19. PDI-AQL
   if (s.includes('pack') || s.includes('dispatch')) return 19;         // 20. PACKING
 
