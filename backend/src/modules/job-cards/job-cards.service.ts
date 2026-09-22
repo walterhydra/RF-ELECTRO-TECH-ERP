@@ -382,8 +382,8 @@ export class JobCardsService {
       (jobCard as any).currentStageName = topSub.currentStage.name;
       (jobCard as any).currentStageIndex = Math.max(0, (topSub.currentStage.defaultOrder || 1) - 1);
     } else if (jobCard.status === JobCardStatus.COMPLETED) {
-      (jobCard as any).currentStageName = '19. DISPATCH';
-      (jobCard as any).currentStageIndex = 18;
+      (jobCard as any).currentStageName = '20. PACKING';
+      (jobCard as any).currentStageIndex = 19;
     } else {
       (jobCard as any).currentStageName = '1. SHEARING';
       (jobCard as any).currentStageIndex = 0;
@@ -627,23 +627,31 @@ export class JobCardsService {
       const nameMatch = canonicalNames.includes(stg.name.toLowerCase());
       const codeMatch = canonicalCodes.includes(stg.code.toLowerCase());
       if (!nameMatch && !codeMatch) {
-        // Check if any sub-job-card is currently at this stage — if so, migrate it
-        const inUseBySubCard = await this.prisma.subJobCard.findFirst({
-          where: { currentStageId: stg.id },
-          select: { id: true, totalPcbQty: true },
+        // Find replacement canonical stage with the same order number
+        const replacementStage = await this.prisma.processStage.findFirst({
+          where: { defaultOrder: stg.defaultOrder, id: { not: stg.id } },
         });
-        if (inUseBySubCard) {
-          // Find the canonical stage with the same order number
-          const replacementStage = await this.prisma.processStage.findFirst({
-            where: { defaultOrder: stg.defaultOrder, id: { not: stg.id } },
-          });
-          if (replacementStage) {
-            await this.prisma.subJobCard.updateMany({
-              where: { currentStageId: stg.id },
-              data: { currentStageId: replacementStage.id },
-            }).catch(() => {});
-          }
+
+        if (replacementStage) {
+          await this.prisma.subJobCard.updateMany({
+            where: { currentStageId: stg.id },
+            data: { currentStageId: replacementStage.id },
+          }).catch(() => {});
+          await this.prisma.processFlowStep.updateMany({
+            where: { stageId: stg.id },
+            data: { stageId: replacementStage.id },
+          }).catch(() => {});
+          await this.prisma.stageMovementLog.updateMany({
+            where: { stageId: stg.id },
+            data: { stageId: replacementStage.id },
+          }).catch(() => {});
+        } else {
+          // Remove any flow steps referencing this obsolete stage before delete
+          await this.prisma.processFlowStep.deleteMany({
+            where: { stageId: stg.id },
+          }).catch(() => {});
         }
+
         // Safe to delete now
         await this.prisma.processStage.delete({ where: { id: stg.id } }).catch(() => {});
       }
@@ -907,8 +915,16 @@ export class JobCardsService {
       });
     }
 
+    const safeTargetDate = (data.targetDate && !isNaN(new Date(data.targetDate).getTime()))
+      ? new Date(data.targetDate)
+      : null;
+    const safeDeliveryDate = safeTargetDate || new Date(Date.now() + 7 * 86400000);
+    const safeLaunchedAt = (data.launchedAt && !isNaN(new Date(data.launchedAt).getTime()))
+      ? new Date(data.launchedAt)
+      : (data.autoLaunch ? new Date() : null);
+
     if (!customerPO && customer && customer.id !== deps.customer?.id) {
-      const generatedPoNo = data.customerPoNo || `PO-${customer.code || customer.companyName}-${jobCardNo.replace(/[^0-9]/g, '').slice(-4) || '001'}`;
+      const generatedPoNo = data.customerPoNo || `PO-${customer.code || customer.companyName}-${Date.now().toString().slice(-6)}`;
       try {
         customerPO = await this.prisma.customerPO.create({
           data: {
@@ -917,7 +933,7 @@ export class JobCardsService {
             productId: product ? product.id : deps.product.id,
             orderQty: Number(data.totalPcbQty) || 100,
             poDate: new Date(),
-            expectedDeliveryDate: data.targetDate ? new Date(data.targetDate) : new Date(Date.now() + 7 * 86400000),
+            expectedDeliveryDate: safeDeliveryDate,
             createdById: finalUserId,
           },
         });
@@ -955,7 +971,7 @@ export class JobCardsService {
           customerPartNo: data.customerPartNo || '',
           rfePartCode: data.rfePartCode || '',
           customerCode: data.customerCode || '',
-          targetDate: data.targetDate ? new Date(data.targetDate) : null,
+          targetDate: safeTargetDate,
           priority: data.priority || 'NORMAL',
           prodPnlQty: Number(data.prodPnlQty) || 40,
           custPnlQty: Number(data.custPnlQty) || 80,
@@ -963,7 +979,7 @@ export class JobCardsService {
           prodPnlAreaSqm: Number(data.prodPnlAreaSqm) || 50,
           custPnlAreaSqm: Number(data.custPnlAreaSqm) || 45,
           status: data.autoLaunch ? JobCardStatus.IN_PROGRESS : JobCardStatus.CREATED,
-          launchedAt: data.autoLaunch ? new Date() : null,
+          launchedAt: safeLaunchedAt,
           qrCodeValue,
           createdById: finalUserId,
         },
@@ -976,11 +992,17 @@ export class JobCardsService {
       });
 
       let initialStageId: string | null = null;
-      if (data.autoLaunch && processFlow?.steps?.[0]?.stageId) {
-        const candidateStageId = processFlow.steps[0].stageId;
-        const validStage = await tx.processStage.findUnique({ where: { id: candidateStageId } });
-        if (validStage) {
-          initialStageId = validStage.id;
+      if (data.autoLaunch) {
+        if (processFlow?.steps?.[0]?.stageId) {
+          const candidateStageId = processFlow.steps[0].stageId;
+          const validStage = await tx.processStage.findUnique({ where: { id: candidateStageId } });
+          if (validStage) {
+            initialStageId = validStage.id;
+          }
+        }
+        if (!initialStageId) {
+          const firstStage = await tx.processStage.findFirst({ orderBy: { defaultOrder: 'asc' } });
+          initialStageId = firstStage?.id || null;
         }
       }
 
@@ -1337,7 +1359,8 @@ export class JobCardsService {
         id: `completed-summary-${jobCard.id}`,
         createdAt: jobCard.completedAt || jobCard.updatedAt || new Date(),
         subJobCard: { subJobCardNo: jobCard.jobCardNo },
-        stage: { name: '19. DISPATCH (COMPLETED)' },
+        stage: { name: '20. PACKING (COMPLETED)' },
+        stageName: '20. PACKING (COMPLETED)',
         qtyForwarded: jobCard.totalPcbQty || jobCard.totalQty || 160,
         qtyProcessed: jobCard.totalPcbQty || jobCard.totalQty || 160,
         qtyRejected: 0,
@@ -1542,7 +1565,7 @@ export class JobCardsService {
   private async getNextProcessStage(currentStage: any, flowSteps?: any[]): Promise<{ targetNextStageId: string | null; isLastStage: boolean }> {
     // ── STRATEGY 1: Use actual ProcessFlowMaster steps (RELIABLE) ──
     // flowSteps comes from jobCard.processFlowMaster.steps (already sorted by stepOrder ASC)
-    if (flowSteps && flowSteps.length > 0 && currentStage?.id) {
+    if (flowSteps && flowSteps.length >= 20 && currentStage?.id) {
       const currentStepIdx = flowSteps.findIndex(
         (step: any) => step.stageId === currentStage.id || step.stage?.id === currentStage.id,
       );

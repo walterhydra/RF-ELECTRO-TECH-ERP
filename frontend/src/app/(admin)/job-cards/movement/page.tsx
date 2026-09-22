@@ -158,7 +158,7 @@ export default function JobMovementUpdatePage() {
                 const subAreaSqm = sub.custPnlAreaSqm || sub.prodPnlAreaSqm || masterAreaSqm;
                 const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
                 let stageIdx = sub.currentStage?.defaultOrder
-                  ? Math.min(Math.max(0, sub.currentStage.defaultOrder - 1), 18)
+                  ? Math.min(Math.max(0, sub.currentStage.defaultOrder - 1), 19)
                   : PF01_STAGES.findIndex((s) => s.toLowerCase() === rawStage.toLowerCase());
                 if (stageIdx < 0) stageIdx = 0;
 
