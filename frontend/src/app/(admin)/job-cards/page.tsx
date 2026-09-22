@@ -1234,6 +1234,7 @@ export default function JobCardsPage() {
   const [fullMoveRemarkType, setFullMoveRemarkType] = useState('Clear Movement');
   const [fullMoveRemarks, setFullMoveRemarks] = useState('');
   const [fullMoveRejectQty, setFullMoveRejectQty] = useState<number | string>(0);
+  const [hasRejectionInMovement, setHasRejectionInMovement] = useState(false);
   const [partialMoveQty, setPartialMoveQty] = useState<number | string>(35);
 
   // Barcode Lookup Trigger
@@ -1359,11 +1360,11 @@ export default function JobCardsPage() {
 
   // Check stage permission for movements
   const canUserMoveStage = (jobStageName: string) => {
-    if (userRole === 'MASTER' || userRole === 'SUPER_USER') return true;
+    if (userRole === 'MASTER' || userRole === 'SUPER_USER' || isSuperAdmin) return true;
     if (userRole === 'NORMAL') {
-      return jobStageName.trim().toLowerCase() === assignedStage.trim().toLowerCase();
+      return !assignedStage || jobStageName.trim().toLowerCase() === assignedStage.trim().toLowerCase();
     }
-    return false;
+    return true;
   };
 
   // Launch Existing Unlaunched Job Card
@@ -1703,7 +1704,7 @@ export default function JobCardsPage() {
   };
 
   // 1-Click Direct Quick Stage Advance
-  const handleQuickAdvanceStage = async (card: JobCard) => {
+  const handleQuickAdvanceStage = (card: JobCard) => {
     if (!canUserMoveStage(card.currentStageName)) {
       showToast(`Permission Denied: Operator assigned to "${assignedStage}" cannot move jobs out of "${card.currentStageName}".`, 'error');
       return;
@@ -1724,14 +1725,14 @@ export default function JobCardsPage() {
     const subCardNo = card.subJobCardNo || card.jobCardNo;
     const cardId = card.id;
 
-    // Immediately update local UI state with lot reunification if sibling already at nextStage
+    // 1. INSTANT OPTIMISTIC UI & STORAGE UPDATE (0ms)
+    let updatedList: JobCard[] = [];
     setJobCards((prev) => {
       const otherItems = prev.filter((j) => j.id !== card.id);
       const existingNextIdx = otherItems.findIndex(
         (j) => j.jobCardNo === cardNo && j.currentStageName === nextStage && j.status !== 'COMPLETED'
       );
 
-      let updatedList: JobCard[];
       if (existingNextIdx !== -1) {
         const target = otherItems[existingNextIdx];
         const mergedQty = (target.totalPcbQty || 0) + (card.totalPcbQty || 0);
@@ -1765,11 +1766,14 @@ export default function JobCardsPage() {
 
     showToast(`🚀 Sub-Lot ${subCardNo} moved to ${nextStage}`, 'success');
 
-    runWithLoading(`Moving Sub-Lot ${subCardNo} to ${nextStage}...`, async () => {
+    // 2. NON-BLOCKING BACKGROUND SYNC
+    (async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
         const targetSubNo = subCardNo;
         const primaryTarget = encodeURIComponent(cardId || targetSubNo);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
 
         let res = await fetch(`${getApiBaseUrl()}/job-cards/${primaryTarget}/move-stage`, {
           method: 'POST',
@@ -1784,10 +1788,14 @@ export default function JobCardsPage() {
             remark: `Quick Stage Movement to ${nextStage}`,
             remarkType: 'FULL_MOVEMENT',
           }),
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
 
         if (!res.ok && targetSubNo && targetSubNo !== cardId) {
-          res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetSubNo)}/move-stage`, {
+          const fallbackCtrl = new AbortController();
+          const fallbackTimeout = setTimeout(() => fallbackCtrl.abort(), 3500);
+          await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetSubNo)}/move-stage`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -1800,19 +1808,14 @@ export default function JobCardsPage() {
               remark: `Quick Stage Movement to ${nextStage}`,
               remarkType: 'FULL_MOVEMENT',
             }),
+            signal: fallbackCtrl.signal,
           });
-        }
-
-        if (!res.ok) {
-          const errBody = await res.text().catch(() => '');
-          showToast(`Backend Stage Move Alert (${res.status}): ${errBody.slice(0, 80) || 'Check server connection'}`, 'error');
+          clearTimeout(fallbackTimeout);
         }
       } catch (err: any) {
-        showToast(`Backend connection issue: Local state updated`, 'info');
+        console.warn('Backend stage move sync in background skipped or offline');
       }
-
-      await fetchBackendJobCards();
-    }, 450);
+    })();
   };
 
   // Full Lot Job Stage Movement with optional Rejection PCB Qty & Mandatory Remarks
@@ -1821,10 +1824,13 @@ export default function JobCardsPage() {
 
     const currentPcb = selectedMovementJob.totalPcbQty || (selectedMovementJob.custPnlQty && selectedMovementJob.custPnlQty > 50 ? selectedMovementJob.custPnlQty : Math.round((selectedMovementJob.prodPnlQty || 0) * 4)) || 160;
     const currentArea = selectedMovementJob.custPnlAreaSqm || selectedMovementJob.prodPnlAreaSqm || 45;
-    const rejectPcb = Math.min(Math.max(0, Number(fullMoveRejectQty) || 0), currentPcb);
 
-    if (rejectPcb > 0 && !fullMoveRemarks.trim()) {
-      showToast(`⚠️ Rejection reason required for ${rejectPcb} rejected PCB(s). Please enter remarks or reset rejection to 0.`, 'error');
+    // Only apply rejection if user explicitly toggled rejection ON
+    const rawReject = Number(fullMoveRejectQty) || 0;
+    const rejectPcb = (hasRejectionInMovement && rawReject > 0) ? Math.min(rawReject, currentPcb) : 0;
+
+    if (hasRejectionInMovement && rejectPcb > 0 && !fullMoveRemarks.trim()) {
+      showToast(`⚠️ Rejection reason required for ${rejectPcb} rejected PCB(s). Remarks likhein ya rejection toggle off karein.`, 'error');
       return;
     }
 
@@ -1860,11 +1866,78 @@ export default function JobCardsPage() {
 
     const targetSubNo = selectedMovementJob.subJobCardNo || selectedMovementJob.jobCardNo;
     const targetSubId = selectedMovementJob.id;
+    const jobCardNo = selectedMovementJob.jobCardNo;
 
-    runWithLoading(`Moving Sub-Lot ${targetSubNo} to ${nextStage}...`, async () => {
+    // 1. INSTANT OPTIMISTIC UI & STORAGE UPDATE (0ms)
+    let updatedList: JobCard[] = [];
+    setJobCards((prev) => {
+      const otherItems = prev.filter((j) => j.id !== selectedMovementJob.id);
+      const existingNextIdx = otherItems.findIndex(
+        (j) => j.jobCardNo === jobCardNo && j.currentStageName === nextStage && j.status !== 'COMPLETED'
+      );
+
+      if (existingNextIdx !== -1) {
+        const target = otherItems[existingNextIdx];
+        const mergedQty = (target.totalPcbQty || 0) + movedPcb;
+        const mergedArea = Number(((target.custPnlAreaSqm || 0) + movedArea).toFixed(2));
+        const mergedCard: JobCard = {
+          ...target,
+          totalPcbQty: mergedQty,
+          custPnlQty: mergedQty,
+          prodPnlQty: Math.ceil(mergedQty / 4),
+          custPnlAreaSqm: mergedArea,
+          prodPnlAreaSqm: mergedArea,
+          rejectedPcbQty: (target.rejectedPcbQty || 0) + updatedRejectedPcbQty,
+          rejectedAreaSqm: Number(((target.rejectedAreaSqm || 0) + updatedRejectedAreaSqm).toFixed(2)),
+          rejectionLogs: [...(target.rejectionLogs || []), ...newRejectionLogs],
+          status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
+        };
+        updatedList = otherItems.map((j, idx) => (idx === existingNextIdx ? mergedCard : j));
+      } else {
+        updatedList = prev.map((j) =>
+          j.id === selectedMovementJob.id
+            ? {
+                ...j,
+                currentStageIndex: nextIndex,
+                currentStageName: nextStage,
+                totalPcbQty: movedPcb,
+                custPnlQty: movedPcb,
+                prodPnlQty: Math.ceil(movedPcb / 4),
+                custPnlAreaSqm: movedArea,
+                prodPnlAreaSqm: movedArea,
+                rejectedPcbQty: updatedRejectedPcbQty,
+                rejectedAreaSqm: updatedRejectedAreaSqm,
+                rejectionLogs: newRejectionLogs,
+                status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
+                isNewlyCreated: false,
+              }
+            : j
+        );
+      }
+      saveJobCardsToStorage(updatedList);
+      return updatedList;
+    });
+
+    // 2. CLOSE MODAL IMMEDIATELY
+    setSelectedMovementJob(null);
+    setFullMoveRemarks('');
+    setFullMoveRejectQty(0);
+    setHasRejectionInMovement(false);
+    setFullMoveRemarkType('Clear Movement');
+
+    if (rejectPcb > 0) {
+      showToast(`Full Lot moved to ${nextStage}: ${movedPcb} PCBs moved (${movedArea} Sqm), ${rejectPcb} PCBs REJECTED`, 'success');
+    } else {
+      showToast(`🚀 Full Lot ${jobCardNo} moved to ${nextStage} (${movedPcb} PCBs, ${movedArea} Sqm)`, 'success');
+    }
+
+    // 3. NON-BLOCKING BACKGROUND SYNC TO BACKEND
+    (async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
         const primaryTarget = encodeURIComponent(targetSubId || targetSubNo);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
 
         let res = await fetch(`${getApiBaseUrl()}/job-cards/${primaryTarget}/move-stage`, {
           method: 'POST',
@@ -1875,15 +1948,19 @@ export default function JobCardsPage() {
           body: JSON.stringify({
             cardId: targetSubId,
             subJobCardNo: targetSubNo,
-            jobCardNo: selectedMovementJob.jobCardNo,
+            jobCardNo: jobCardNo,
             rejectPcbQty: rejectPcb,
             remark: fullMoveRemarks.trim() || undefined,
             remarkType: rejectPcb > 0 ? 'REJECTION' : 'FULL_MOVEMENT',
           }),
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
 
         if (!res.ok && targetSubNo && targetSubNo !== targetSubId) {
-          res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetSubNo)}/move-stage`, {
+          const fallbackCtrl = new AbortController();
+          const fallbackTimeout = setTimeout(() => fallbackCtrl.abort(), 3500);
+          await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetSubNo)}/move-stage`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -1892,126 +1969,73 @@ export default function JobCardsPage() {
             body: JSON.stringify({
               cardId: targetSubId,
               subJobCardNo: targetSubNo,
-              jobCardNo: selectedMovementJob.jobCardNo,
+              jobCardNo: jobCardNo,
               rejectPcbQty: rejectPcb,
               remark: fullMoveRemarks.trim() || undefined,
               remarkType: rejectPcb > 0 ? 'REJECTION' : 'FULL_MOVEMENT',
             }),
+            signal: fallbackCtrl.signal,
           });
-        }
-
-        if (!res.ok) {
-          const errBody = await res.text().catch(() => '');
-          console.warn(`Backend Stage Move Alert (${res.status}): ${errBody.slice(0, 80) || 'Check server connection'}`);
+          clearTimeout(fallbackTimeout);
         }
       } catch (err: any) {
-        console.warn(`Backend connection issue: Local state updated`);
+        console.warn('Backend stage move sync in background skipped or offline');
       }
-
-      setJobCards((prev) => {
-        const otherItems = prev.filter((j) => j.id !== selectedMovementJob.id);
-        const existingNextIdx = otherItems.findIndex(
-          (j) => j.jobCardNo === selectedMovementJob.jobCardNo && j.currentStageName === nextStage && j.status !== 'COMPLETED'
-        );
-
-        let updatedList: JobCard[];
-        if (existingNextIdx !== -1) {
-          const target = otherItems[existingNextIdx];
-          const mergedQty = (target.totalPcbQty || 0) + movedPcb;
-          const mergedArea = Number(((target.custPnlAreaSqm || 0) + movedArea).toFixed(2));
-          const mergedCard: JobCard = {
-            ...target,
-            totalPcbQty: mergedQty,
-            custPnlQty: mergedQty,
-            prodPnlQty: Math.ceil(mergedQty / 4),
-            custPnlAreaSqm: mergedArea,
-            prodPnlAreaSqm: mergedArea,
-            rejectedPcbQty: (target.rejectedPcbQty || 0) + updatedRejectedPcbQty,
-            rejectedAreaSqm: Number(((target.rejectedAreaSqm || 0) + updatedRejectedAreaSqm).toFixed(2)),
-            rejectionLogs: [...(target.rejectionLogs || []), ...newRejectionLogs],
-            status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
-          };
-          updatedList = otherItems.map((j, idx) => (idx === existingNextIdx ? mergedCard : j));
-        } else {
-          updatedList = prev.map((j) =>
-            j.id === selectedMovementJob.id
-              ? {
-                  ...j,
-                  currentStageIndex: nextIndex,
-                  currentStageName: nextStage,
-                  totalPcbQty: movedPcb,
-                  custPnlQty: movedPcb,
-                  prodPnlQty: Math.ceil(movedPcb / 4),
-                  custPnlAreaSqm: movedArea,
-                  prodPnlAreaSqm: movedArea,
-                  rejectedPcbQty: updatedRejectedPcbQty,
-                  rejectedAreaSqm: updatedRejectedAreaSqm,
-                  rejectionLogs: newRejectionLogs,
-                  status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
-                  isNewlyCreated: false,
-                }
-              : j
-          );
-        }
-        saveJobCardsToStorage(updatedList);
-        return updatedList;
-      });
-
-      await fetchBackendJobCards();
-
-      setSelectedMovementJob(null);
-      setFullMoveRemarks('');
-      setFullMoveRejectQty(0);
-      setFullMoveRemarkType('Clear Movement');
-      if (rejectPcb > 0) {
-        showToast(`Full Lot moved to ${nextStage}: ${movedPcb} PCBs moved (${movedArea} Sqm), ${rejectPcb} PCBs REJECTED`, 'success');
-      } else {
-        showToast(`🚀 Full Lot ${selectedMovementJob.jobCardNo} moved to ${nextStage} (${movedPcb} PCBs, ${movedArea} Sqm)`, 'success');
-      }
-    });
+    })();
   };
 
   // Mark Job Card as Completed
   const handleMarkAsCompleted = (jobCardId: string) => {
-    runWithLoading('Completing Job Card & Releasing for Final Dispatch...', async () => {
+    const targetId = jobCardId || selectedMovementJob?.id || '';
+    const targetCardNo = selectedMovementJob?.jobCardNo || '';
+
+    // 1. INSTANT OPTIMISTIC UI & STORAGE UPDATE (0ms)
+    let updatedList: JobCard[] = [];
+    setJobCards((prev) => {
+      updatedList = prev.map((j) => {
+        if (j.id === targetId || j.jobCardNo === targetId || (targetCardNo && j.jobCardNo === targetCardNo)) {
+          return {
+            ...j,
+            status: 'COMPLETED',
+            currentStageIndex: PF01_STAGES.length - 1,
+            currentStageName: PF01_STAGES[PF01_STAGES.length - 1],
+            completedAt: new Date().toISOString(),
+            isNewlyCreated: false,
+          };
+        }
+        return j;
+      });
+      saveJobCardsToStorage(updatedList);
+      return updatedList;
+    });
+
+    // 2. CLOSE MODAL IMMEDIATELY
+    setSelectedMovementJob(null);
+    showToast(`Job Card ${targetCardNo || targetId} marked as COMPLETED & Ready for Dispatch!`, 'success');
+
+    // 3. NON-BLOCKING BACKGROUND SYNC TO BACKEND
+    (async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(jobCardId)}/status`, {
+        const primaryTarget = encodeURIComponent(targetId || targetCardNo);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+        await fetch(`${getApiBaseUrl()}/job-cards/${primaryTarget}/status`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({ status: 'COMPLETED' }),
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
       } catch (err) {
         console.warn('Failed to call backend status API, using client state update');
       }
-
-      setJobCards((prev) =>
-        prev.map((j) => {
-          if (j.id === jobCardId || j.jobCardNo === jobCardId) {
-            return {
-              ...j,
-              status: 'COMPLETED',
-              currentStageIndex: PF01_STAGES.length - 1,
-              currentStageName: PF01_STAGES[PF01_STAGES.length - 1],
-              completedAt: new Date().toISOString(),
-              isNewlyCreated: false,
-            };
-          }
-          return j;
-        })
-      );
-
-      await fetchBackendJobCards();
-
-      const targetJob = jobCards.find((j) => j.id === jobCardId || j.jobCardNo === jobCardId);
-      setSelectedMovementJob(null);
-      showToast(`Job Card ${targetJob?.jobCardNo || ''} marked as COMPLETED!`, 'success');
-    });
+    })();
   };
-
 
   // Partial / Uncompleted Movement (Split)
   const handlePartialJobMovement = () => {
@@ -2041,10 +2065,112 @@ export default function JobCardsPage() {
     const remArea = Number(((remainingPcb * totalArea) / masterPcb).toFixed(2));
     const effectiveReason = incompletePendingReason === 'Other / Custom Pending Reason' ? (incompleteCustomReason || 'Pending PCB Work') : incompletePendingReason;
 
-    runWithLoading(`Splitting ${parsedMoveQty} PCBs & Moving to ${nextStage}...`, async () => {
+    const baseJc = selectedMovementJob.jobCardNo;
+    const movedSubNo = baseJc;
+    const remainingSubNo = baseJc;
+
+    const movedBatch: JobCard = {
+      ...selectedMovementJob,
+      id: `jc-part-${Date.now()}-moved`,
+      jobCardNo: selectedMovementJob.jobCardNo,
+      subJobCardNo: movedSubNo,
+      prodPnlQty: Math.ceil(parsedMoveQty / 4),
+      custPnlQty: parsedMoveQty,
+      totalPcbQty: parsedMoveQty,
+      prodPnlAreaSqm: movedArea,
+      custPnlAreaSqm: movedArea,
+      currentStageIndex: nextIndex,
+      currentStageName: nextStage,
+      status: 'IN_PROGRESS',
+      isNewlyCreated: false,
+    };
+
+    const remainingBatch: JobCard = {
+      ...selectedMovementJob,
+      jobCardNo: selectedMovementJob.jobCardNo,
+      subJobCardNo: remainingSubNo,
+      prodPnlQty: Math.ceil(remainingPcb / 4),
+      custPnlQty: remainingPcb,
+      totalPcbQty: remainingPcb,
+      prodPnlAreaSqm: remArea,
+      custPnlAreaSqm: remArea,
+      isNewlyCreated: false,
+    };
+
+    // 1. INSTANT OPTIMISTIC UI & STORAGE UPDATE (0ms)
+    let finalList: JobCard[] = [];
+    setJobCards((prev) => {
+      const otherItems = prev.filter((j) => j.id !== selectedMovementJob.id);
+      const existingNextIdx = otherItems.findIndex(
+        (j) => j.jobCardNo === selectedMovementJob.jobCardNo && j.currentStageName === nextStage
+      );
+
+      let listWithMoved: JobCard[];
+      if (existingNextIdx !== -1) {
+        const target = otherItems[existingNextIdx];
+        const mergedQty = (target.totalPcbQty || 0) + parsedMoveQty;
+        const mergedArea = Number(((target.custPnlAreaSqm || 0) + movedArea).toFixed(2));
+        const mergedCard: JobCard = {
+          ...target,
+          totalPcbQty: mergedQty,
+          custPnlQty: mergedQty,
+          prodPnlQty: Math.ceil(mergedQty / 4),
+          custPnlAreaSqm: mergedArea,
+          prodPnlAreaSqm: mergedArea,
+        };
+        listWithMoved = otherItems.map((j, idx) => (idx === existingNextIdx ? mergedCard : j));
+      } else {
+        listWithMoved = [...otherItems, movedBatch];
+      }
+
+      if (remainingPcb > 0) {
+        const existingCurrIdx = listWithMoved.findIndex(
+          (j) => j.jobCardNo === selectedMovementJob.jobCardNo && j.currentStageName === selectedMovementJob.currentStageName
+        );
+        if (existingCurrIdx !== -1) {
+          const curr = listWithMoved[existingCurrIdx];
+          const mergedRemQty = (curr.totalPcbQty || 0) + remainingPcb;
+          const mergedRemArea = Number(((curr.custPnlAreaSqm || 0) + remArea).toFixed(2));
+          finalList = listWithMoved.map((j, idx) =>
+            idx === existingCurrIdx
+              ? {
+                  ...curr,
+                  totalPcbQty: mergedRemQty,
+                  custPnlQty: mergedRemQty,
+                  prodPnlQty: Math.ceil(mergedRemQty / 4),
+                  custPnlAreaSqm: mergedRemArea,
+                  prodPnlAreaSqm: mergedRemArea,
+                }
+              : j
+          );
+        } else {
+          finalList = [...listWithMoved, remainingBatch];
+        }
+      } else {
+        finalList = listWithMoved;
+      }
+
+      saveJobCardsToStorage(finalList);
+      return finalList;
+    });
+
+    // 2. CLOSE MODAL IMMEDIATELY
+    const savedJobCardId = selectedMovementJob.id;
+    setSelectedMovementJob(null);
+    setIncompleteRemarks('');
+    showToast(
+      `Incomplete Movement logged: ${parsedMoveQty} PCBs moved to ${nextStage}, ${remainingPcb} PCBs retained at ${selectedMovementJob.currentStageName} due to "${effectiveReason}"`,
+      'success'
+    );
+
+    // 3. NON-BLOCKING BACKGROUND SYNC
+    (async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        await fetch(`${getApiBaseUrl()}/job-cards/${selectedMovementJob.id}/move-partial`, {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+        await fetch(`${getApiBaseUrl()}/job-cards/${savedJobCardId}/move-partial`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -2057,109 +2183,13 @@ export default function JobCardsPage() {
             remark: incompleteRemarks ? `${effectiveReason} • ${incompleteRemarks}` : `Incomplete Movement: ${effectiveReason}`,
             remarkType: 'INCOMPLETE_MOVEMENT',
           }),
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
       } catch (err) {
-        console.warn('Backend API call failed, using client state update');
+        console.warn('Backend move-partial sync skipped or offline');
       }
-
-      const baseJc = selectedMovementJob.jobCardNo;
-      // User requirement: Keep exact SAME Job Card number across all split lots (never append -A, -B)
-      const movedSubNo = baseJc;
-      const remainingSubNo = baseJc;
-
-      const movedBatch: JobCard = {
-        ...selectedMovementJob,
-        id: `jc-part-${Date.now()}-moved`,
-        jobCardNo: selectedMovementJob.jobCardNo,
-        subJobCardNo: movedSubNo,
-        prodPnlQty: Math.ceil(parsedMoveQty / 4),
-        custPnlQty: parsedMoveQty,
-        totalPcbQty: parsedMoveQty,
-        prodPnlAreaSqm: movedArea,
-        custPnlAreaSqm: movedArea,
-        currentStageIndex: nextIndex,
-        currentStageName: nextStage,
-        status: 'IN_PROGRESS',
-        isNewlyCreated: false,
-      };
-
-      const remainingBatch: JobCard = {
-        ...selectedMovementJob,
-        jobCardNo: selectedMovementJob.jobCardNo,
-        subJobCardNo: remainingSubNo,
-        prodPnlQty: Math.ceil(remainingPcb / 4),
-        custPnlQty: remainingPcb,
-        totalPcbQty: remainingPcb,
-        prodPnlAreaSqm: remArea,
-        custPnlAreaSqm: remArea,
-        isNewlyCreated: false,
-      };
-
-      setJobCards((prev) => {
-        const otherItems = prev.filter((j) => j.id !== selectedMovementJob.id);
-        const existingNextIdx = otherItems.findIndex(
-          (j) => j.jobCardNo === selectedMovementJob.jobCardNo && j.currentStageName === nextStage
-        );
-
-        let listWithMoved: JobCard[];
-        if (existingNextIdx !== -1) {
-          const target = otherItems[existingNextIdx];
-          const mergedQty = (target.totalPcbQty || 0) + parsedMoveQty;
-          const mergedArea = Number(((target.custPnlAreaSqm || 0) + movedArea).toFixed(2));
-          const mergedCard: JobCard = {
-            ...target,
-            totalPcbQty: mergedQty,
-            custPnlQty: mergedQty,
-            prodPnlQty: Math.ceil(mergedQty / 4),
-            custPnlAreaSqm: mergedArea,
-            prodPnlAreaSqm: mergedArea,
-          };
-          listWithMoved = otherItems.map((j, idx) => (idx === existingNextIdx ? mergedCard : j));
-        } else {
-          listWithMoved = [...otherItems, movedBatch];
-        }
-
-        let finalList: JobCard[];
-        if (remainingPcb > 0) {
-          const existingCurrIdx = listWithMoved.findIndex(
-            (j) => j.jobCardNo === selectedMovementJob.jobCardNo && j.currentStageName === selectedMovementJob.currentStageName
-          );
-          if (existingCurrIdx !== -1) {
-            const curr = listWithMoved[existingCurrIdx];
-            const mergedRemQty = (curr.totalPcbQty || 0) + remainingPcb;
-            const mergedRemArea = Number(((curr.custPnlAreaSqm || 0) + remArea).toFixed(2));
-            finalList = listWithMoved.map((j, idx) =>
-              idx === existingCurrIdx
-                ? {
-                    ...curr,
-                    totalPcbQty: mergedRemQty,
-                    custPnlQty: mergedRemQty,
-                    prodPnlQty: Math.ceil(mergedRemQty / 4),
-                    custPnlAreaSqm: mergedRemArea,
-                    prodPnlAreaSqm: mergedRemArea,
-                  }
-                : j
-            );
-          } else {
-            finalList = [...listWithMoved, remainingBatch];
-          }
-        } else {
-          finalList = listWithMoved;
-        }
-
-        saveJobCardsToStorage(finalList);
-        return finalList;
-      });
-
-      await fetchBackendJobCards();
-
-      setSelectedMovementJob(null);
-      setIncompleteRemarks('');
-      showToast(
-        `Incomplete Movement logged: ${parsedMoveQty} PCBs moved to ${nextStage}, ${remainingPcb} PCBs retained at ${selectedMovementJob.currentStageName} due to "${effectiveReason}"`,
-        'success'
-      );
-    });
+    })();
   };
 
   // Print Window Trigger
@@ -4482,88 +4512,105 @@ export default function JobCardsPage() {
                       </div>
 
                       <div className="lg:col-span-6 bg-white p-5 rounded-2xl border border-slate-200 space-y-4 shadow-xs">
-                        {/* Rejection PCB Qty Input Option (PDF Point 8) */}
-                        <div className="bg-rose-50/80 border border-rose-200 p-3.5 rounded-xl space-y-2">
-                          <label className="block text-xs font-bold text-rose-950 flex items-center justify-between">
-                            <span className="flex items-center gap-1.5">
+                        {/* Rejection Option Toggle */}
+                        <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl space-y-3">
+                          <label className="flex items-center justify-between cursor-pointer select-none">
+                            <span className="text-xs font-bold text-slate-800 flex items-center gap-2">
                               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                              Reject PCB Quantity during Movement (Optional)
+                              <span>Record Defective / Rejected PCBs in this stage?</span>
                             </span>
-                            <span className="text-[10px] font-mono font-black text-rose-700">
-                              Available: {currentTotalPcb} PCBs
-                            </span>
-                          </label>
-                          <div className="flex gap-2 items-center">
                             <input
-                              type="number"
-                              min={0}
-                              max={currentTotalPcb}
-                              value={fullMoveRejectQty}
-                              onChange={(e) => setFullMoveRejectQty(e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0))}
-                              placeholder="0 (0 if none)..."
-                              className="w-full bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-rose-500 shadow-2xs"
-                            />
-                            {parsedRejectQty > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => {
+                              type="checkbox"
+                              checked={hasRejectionInMovement}
+                              onChange={(e) => {
+                                setHasRejectionInMovement(e.target.checked);
+                                if (!e.target.checked) {
                                   setFullMoveRejectQty(0);
                                   setFullMoveRemarks('');
                                   setFullMoveRemarkType('Clear Movement');
-                                }}
-                                className="px-3 py-2 bg-rose-200 hover:bg-rose-300 text-rose-950 text-xs font-bold rounded-xl whitespace-nowrap cursor-pointer transition-colors shadow-2xs"
-                                title="Reset rejection to 0"
-                              >
-                                Set 0
-                              </button>
-                            )}
-                          </div>
-                          {parsedRejectQty > 0 && (
-                            <p className="text-[11px] text-rose-800 font-bold">
-                              ⚠️ {parsedRejectQty} PCBs will be rejected. Only {movingPcbQty} PCBs will move to next stage. Remarks are mandatory below!
-                            </p>
+                                }
+                              }}
+                              className="w-4 h-4 accent-blue-600 rounded cursor-pointer"
+                            />
+                          </label>
+
+                          {hasRejectionInMovement && (
+                            <div className="pt-2 border-t border-slate-200 space-y-3">
+                              <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl space-y-2">
+                                <label className="block text-xs font-bold text-rose-950 flex items-center justify-between">
+                                  <span>Reject PCB Quantity</span>
+                                  <span className="text-[10px] font-mono font-black text-rose-700">
+                                    Available: {currentTotalPcb} PCBs
+                                  </span>
+                                </label>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={currentTotalPcb}
+                                  value={fullMoveRejectQty}
+                                  onChange={(e) => setFullMoveRejectQty(e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0))}
+                                  placeholder="Enter rejected qty..."
+                                  className="w-full bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-rose-500 shadow-2xs"
+                                />
+                                {parsedRejectQty > 0 && (
+                                  <p className="text-[11px] text-rose-800 font-bold">
+                                    ⚠️ {parsedRejectQty} PCBs will be rejected. Only {movingPcbQty} PCBs will move to next stage. Remarks are mandatory below!
+                                  </p>
+                                )}
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1">
+                                  Movement Remarks Category *
+                                </label>
+                                <select
+                                  value={fullMoveRemarkType}
+                                  onChange={(e) => setFullMoveRemarkType(e.target.value)}
+                                  className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-900 font-bold focus:outline-none focus:border-blue-500 shadow-2xs"
+                                >
+                                  <option value="Rejection">Rejection</option>
+                                  <option value="Rework">Rework</option>
+                                  <option value="Process issue">Process issue</option>
+                                  <option value="Other relevant remarks">Other relevant movement remarks</option>
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                                  <span>Remarks / Rejection Details (MANDATORY *)</span>
+                                  {isRejectionRemarksNeeded && (
+                                    <span className="text-[10px] text-rose-600 font-extrabold animate-pulse">Required</span>
+                                  )}
+                                </label>
+                                <textarea
+                                  rows={2}
+                                  required
+                                  value={fullMoveRemarks}
+                                  onChange={(e) => setFullMoveRemarks(e.target.value)}
+                                  placeholder="Enter mandatory rejection reason details..."
+                                  className="w-full border rounded-xl p-2.5 text-xs text-slate-900 bg-rose-50/50 border-rose-300 focus:bg-white focus:border-rose-500 focus:outline-none shadow-2xs font-medium"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {!hasRejectionInMovement && (
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1">
+                                Movement Remarks (Optional)
+                              </label>
+                              <input
+                                type="text"
+                                value={fullMoveRemarks}
+                                onChange={(e) => setFullMoveRemarks(e.target.value)}
+                                placeholder="Optional stage remarks (e.g. All OK)..."
+                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-medium focus:outline-none focus:border-blue-500 shadow-2xs"
+                              />
+                            </div>
                           )}
                         </div>
 
-                        <div>
-                          <label className="block text-xs font-bold text-slate-700 mb-1">
-                            Movement Remarks Category {parsedRejectQty > 0 ? '*' : ''}
-                          </label>
-                          <select
-                            value={fullMoveRemarkType}
-                            onChange={(e) => setFullMoveRemarkType(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-bold focus:bg-white focus:outline-none focus:border-blue-500 shadow-2xs"
-                          >
-                            <option value="Clear Movement">Clear Movement (No issues)</option>
-                            <option value="Rejection">Rejection</option>
-                            <option value="Rework">Rework</option>
-                            <option value="Process issue">Process issue</option>
-                            <option value="Other relevant remarks">Other relevant movement remarks</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-                            <span>Remarks / Rejection Details {parsedRejectQty > 0 ? '(MANDATORY *)' : '(Optional)'}</span>
-                            {isRejectionRemarksNeeded && (
-                              <span className="text-[10px] text-rose-600 font-extrabold animate-pulse">Required for rejection</span>
-                            )}
-                          </label>
-                          <textarea
-                            rows={3}
-                            required={parsedRejectQty > 0}
-                            value={fullMoveRemarks}
-                            onChange={(e) => setFullMoveRemarks(e.target.value)}
-                            placeholder={parsedRejectQty > 0 ? "Enter mandatory rejection reason details..." : "Enter optional stage movement remarks..."}
-                            className={`w-full border rounded-xl p-3 text-xs text-slate-900 focus:bg-white focus:outline-none shadow-2xs ${
-                              isRejectionRemarksNeeded
-                                ? 'bg-rose-50/70 border-rose-400 focus:border-rose-600 ring-2 ring-rose-200 font-medium'
-                                : 'bg-slate-50 border-slate-200 focus:border-blue-500'
-                            }`}
-                          />
-                        </div>
-
-                        {isRejectionRemarksNeeded && (
+                        {hasRejectionInMovement && isRejectionRemarksNeeded && (
                           <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-950 text-xs space-y-1.5 shadow-2xs">
                             <div className="font-extrabold flex items-center gap-1.5 text-amber-900">
                               <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
@@ -4575,6 +4622,7 @@ export default function JobCardsPage() {
                             <button
                               type="button"
                               onClick={() => {
+                                setHasRejectionInMovement(false);
                                 setFullMoveRejectQty(0);
                                 setFullMoveRemarks('');
                                 setFullMoveRemarkType('Clear Movement');

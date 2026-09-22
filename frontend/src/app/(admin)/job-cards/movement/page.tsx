@@ -270,9 +270,10 @@ export default function JobMovementUpdatePage() {
     }
   };
 
-  const handleFullJobMovement = async () => {
+  const handleFullJobMovement = () => {
     if (!selectedJob) return;
     const jobId = selectedJob.id;
+    const jobCardNo = selectedJob.jobCardNo;
     if (!canUserMoveStage(selectedJob.currentStageName)) {
       showToastMsg(`Permission Denied: Operator assigned to "${assignedStage}" cannot move jobs out of "${selectedJob.currentStageName}".`);
       return;
@@ -283,7 +284,6 @@ export default function JobMovementUpdatePage() {
     const sqmPerPcb = currentPcbQty > 0 ? currentSqmArea / currentPcbQty : 0;
 
     const parsedRejection = typeof rejectedPcbQtyInput === 'number' ? rejectedPcbQtyInput : parseInt(String(rejectedPcbQtyInput), 10) || 0;
-
     const actualRejected = Math.min(Math.max(0, parsedRejection), currentPcbQty);
     const forwardedPcbQty = Math.max(0, currentPcbQty - actualRejected);
     const nextStageSqm = Number((forwardedPcbQty * sqmPerPcb).toFixed(2));
@@ -294,43 +294,18 @@ export default function JobMovementUpdatePage() {
       return;
     }
 
-    try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      const res = await fetch(`${getApiBaseUrl()}/job-cards/${jobId}/move-stage`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          jobCardNo: selectedJob.jobCardNo,
-          rejectPcbQty: actualRejected,
-          remark: actualRejected > 0
-            ? `Rejection: ${actualRejected} PCBs rejected. Reason: ${effectiveReason}`
-            : `${remarkCategory}: ${remarksText || 'Clear Movement'}`,
-          remarkType: actualRejected > 0 ? 'REJECTION' : 'FULL_MOVEMENT',
-        }),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '');
-        console.warn(`Backend Stage Move Alert (${res.status}): ${errText.slice(0, 80) || res.statusText}`);
-      }
-    } catch (e: any) {
-      console.warn(`Backend API unavailable: ${e?.message || 'Network error'}`);
-    }
-
     const currentIndex = PF01_STAGES.indexOf(selectedJob.currentStageName);
     const nextIndex = Math.min(currentIndex + 1, PF01_STAGES.length - 1);
     const nextStageName = PF01_STAGES[nextIndex];
 
+    // 1. INSTANT OPTIMISTIC UI & LOCAL STORAGE UPDATE (0ms)
+    let updatedList: JobCard[] = [];
     setJobs((prev) => {
       const otherItems = prev.filter((j) => j.id !== selectedJob.id);
       const existingNextIdx = otherItems.findIndex(
-        (j) => j.jobCardNo === selectedJob.jobCardNo && j.currentStageName === nextStageName && j.status !== 'COMPLETED'
+        (j) => j.jobCardNo === jobCardNo && j.currentStageName === nextStageName && j.status !== 'COMPLETED'
       );
 
-      let updatedList: JobCard[];
       if (existingNextIdx !== -1) {
         const target = otherItems[existingNextIdx];
         const mergedQty = (target.totalPcbQty || 0) + forwardedPcbQty;
@@ -370,42 +345,90 @@ export default function JobMovementUpdatePage() {
 
     showToastMsg(
       actualRejected > 0
-        ? `Job ${selectedJob.jobCardNo}: ${forwardedPcbQty} PCBs moved to ${nextStageName} (${actualRejected} Rejected, Next Area: ${nextStageSqm} Sqm).`
-        : `Full Movement: Job ${selectedJob.jobCardNo} moved to Stage ${nextStageName}`
+        ? `Job ${jobCardNo}: ${forwardedPcbQty} PCBs moved to ${nextStageName} (${actualRejected} Rejected, Next Area: ${nextStageSqm} Sqm).`
+        : `Full Movement: Job ${jobCardNo} moved to Stage ${nextStageName}`
     );
 
-    await fetchMovementJobs();
     setSelectedJob(null);
     setRejectedPcbQtyInput(0);
     setRejectionReasonInput('');
     setRemarksText('');
+
+    // 2. NON-BLOCKING BACKGROUND SYNC
+    (async () => {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+        let res = await fetch(`${getApiBaseUrl()}/job-cards/${jobId}/move-stage`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            jobCardNo: jobCardNo,
+            rejectPcbQty: actualRejected,
+            remark: actualRejected > 0
+              ? `Rejection: ${actualRejected} PCBs rejected. Reason: ${effectiveReason}`
+              : `${remarkCategory}: ${remarksText || 'Clear Movement'}`,
+            remarkType: actualRejected > 0 ? 'REJECTION' : 'FULL_MOVEMENT',
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          console.warn(`Backend Stage Move Alert (${res.status}): ${errText.slice(0, 80) || res.statusText}`);
+        }
+      } catch (e: any) {
+        console.warn(`Backend API unavailable: ${e?.message || 'Network error'}`);
+      }
+    })();
   };
 
-  const handleJobDispatch = async (jobId: string) => {
+  const handleJobDispatch = (jobId: string) => {
     const targetJob = jobs.find((j) => j.id === jobId);
     if (!targetJob) return;
 
-    try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      await fetch(`${getApiBaseUrl()}/job-cards/${jobId}/move-stage`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          jobCardNo: targetJob.jobCardNo,
-          status: 'COMPLETED',
-          remark: 'Direct Job Dispatch from Packing stage',
-        }),
-      });
-    } catch (e) {
-      console.warn('Backend API unavailable');
-    }
+    // 1. INSTANT OPTIMISTIC UI & LOCAL STORAGE UPDATE (0ms)
+    let updatedList: JobCard[] = [];
+    setJobs((prev) => {
+      updatedList = prev.map((j) => (j.id === jobId ? { ...j, status: 'COMPLETED' } : j));
+      saveJobCardsToStorage(updatedList);
+      return updatedList;
+    });
 
-    await fetchMovementJobs();
     showToastMsg(`🚚 Job ${targetJob.jobCardNo} successfully Dispatched & Marked Completed!`);
     setSelectedJob(null);
+
+    // 2. NON-BLOCKING BACKGROUND SYNC
+    (async () => {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+        await fetch(`${getApiBaseUrl()}/job-cards/${jobId}/move-stage`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            jobCardNo: targetJob.jobCardNo,
+            status: 'COMPLETED',
+            remark: 'Direct Job Dispatch from Packing stage',
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+      } catch (e) {
+        console.warn('Backend API unavailable');
+      }
+    })();
   };
 
   const [pendingWorkReason, setPendingWorkReason] = useState<string>('Drilling & Hole Check Pending');
