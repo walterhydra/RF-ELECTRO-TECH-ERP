@@ -68,6 +68,7 @@ interface JobCard {
   currentStageName: string;
   status: 'UNLAUNCHED' | 'IN_PROGRESS' | 'COMPLETED';
   photoUrl?: string;
+  rejectedPcbQty?: number;
   createdAt: string;
 }
 
@@ -313,17 +314,59 @@ export default function JobMovementUpdatePage() {
 
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
-        showToastMsg(`Backend Stage Move Alert (${res.status}): ${errText.slice(0, 80) || res.statusText}`);
-        return;
+        console.warn(`Backend Stage Move Alert (${res.status}): ${errText.slice(0, 80) || res.statusText}`);
       }
     } catch (e: any) {
-      showToastMsg(`Backend API unavailable: ${e?.message || 'Network error'}`);
-      return;
+      console.warn(`Backend API unavailable: ${e?.message || 'Network error'}`);
     }
 
     const currentIndex = PF01_STAGES.indexOf(selectedJob.currentStageName);
     const nextIndex = Math.min(currentIndex + 1, PF01_STAGES.length - 1);
     const nextStageName = PF01_STAGES[nextIndex];
+
+    setJobs((prev) => {
+      const otherItems = prev.filter((j) => j.id !== selectedJob.id);
+      const existingNextIdx = otherItems.findIndex(
+        (j) => j.jobCardNo === selectedJob.jobCardNo && j.currentStageName === nextStageName && j.status !== 'COMPLETED'
+      );
+
+      let updatedList: JobCard[];
+      if (existingNextIdx !== -1) {
+        const target = otherItems[existingNextIdx];
+        const mergedQty = (target.totalPcbQty || 0) + forwardedPcbQty;
+        const mergedArea = Number(((target.prodPnlAreaSqm || 0) + nextStageSqm).toFixed(2));
+        const mergedCard: JobCard = {
+          ...target,
+          totalPcbQty: mergedQty,
+          custPnlQty: mergedQty,
+          prodPnlQty: Math.ceil(mergedQty / 4),
+          prodPnlAreaSqm: mergedArea,
+          custPnlAreaSqm: mergedArea,
+          rejectedPcbQty: (target.rejectedPcbQty || 0) + actualRejected,
+          status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
+        };
+        updatedList = otherItems.map((j, idx) => (idx === existingNextIdx ? mergedCard : j));
+      } else {
+        updatedList = prev.map((j) =>
+          j.id === selectedJob.id
+            ? {
+                ...j,
+                currentStageIndex: nextIndex,
+                currentStageName: nextStageName,
+                totalPcbQty: forwardedPcbQty,
+                custPnlQty: forwardedPcbQty,
+                prodPnlQty: Math.ceil(forwardedPcbQty / 4),
+                prodPnlAreaSqm: nextStageSqm,
+                custPnlAreaSqm: nextStageSqm,
+                rejectedPcbQty: (j.rejectedPcbQty || 0) + actualRejected,
+                status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
+              }
+            : j
+        );
+      }
+      saveJobCardsToStorage(updatedList);
+      return updatedList;
+    });
 
     showToastMsg(
       actualRejected > 0
