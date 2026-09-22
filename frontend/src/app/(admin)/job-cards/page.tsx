@@ -691,6 +691,13 @@ export default function JobCardsPage() {
   // Track recently deleted IDs to prevent re-appearing during sync polling
   const recentlyDeletedIds = useRef<Set<string>>(new Set());
 
+  // Track in-flight optimistic mutations so the merge doesn't override server ground truth
+  // Key = local temp card id or subJobCardNo, Value = { stageIdx, stageName, timestamp }
+  const inFlightMovements = useRef<Map<string, { stageIdx: number; stageName: string; timestamp: number }>>(new Map());
+
+  // When set to true, next fetchBackendJobCards call bypasses local merge and trusts server directly
+  const forceFreshOnNextPoll = useRef<boolean>(false);
+
   // Available Products from Master for Live Specs & Auto-population
   const [availableProducts, setAvailableProducts] = useState<any[]>([]);
 
@@ -1144,20 +1151,59 @@ export default function JobCardsPage() {
               return filtered;
             }
 
+            // If forceFreshOnNextPoll is set (e.g., right after a partial split completed on server),
+            // trust the server completely. Clear temp in-flight optimistic lots (those with jc-part- IDs)
+            // and accept server data as the single source of truth.
+            if (forceFreshOnNextPoll.current) {
+              forceFreshOnNextPoll.current = false;
+              // Clean up expired in-flight entries (older than 30s)
+              const now = Date.now();
+              inFlightMovements.current.forEach((val, key) => {
+                if (now - val.timestamp > 30000) inFlightMovements.current.delete(key);
+              });
+              saveJobCardsToStorage(filtered);
+              return filtered;
+            }
+
+            // Clean up expired in-flight entries (older than 30s)
+            const now = Date.now();
+            inFlightMovements.current.forEach((val, key) => {
+              if (now - val.timestamp > 30000) inFlightMovements.current.delete(key);
+            });
+
             const merged = filtered.map((serverCard) => {
-              const localCard = prev.find(
-                (p) =>
-                  p.id === serverCard.id ||
-                  (p.subJobCardNo && serverCard.subJobCardNo && p.subJobCardNo === serverCard.subJobCardNo) ||
-                  (p.jobCardNo === serverCard.jobCardNo && p.currentStageIndex === serverCard.currentStageIndex)
-              );
+              // STRICT ID-ONLY matching: only match by exact UUID (p.id === serverCard.id)
+              // Never match by subJobCardNo alone — that caused the split-lot corruption bug
+              // where two lots shared the same subJobCardNo and one would steal the other's stage.
+              // Also allow matching by jobCardNo+stageIndex ONLY for launched/completed status merges
+              // where there is no active in-flight partial movement for that job.
+              const hasInFlight = inFlightMovements.current.size > 0 &&
+                Array.from(inFlightMovements.current.keys()).some(
+                  (k) => k.startsWith(serverCard.jobCardNo) || k === serverCard.id
+                );
+
+              // Match by exact UUID first (most reliable)
+              let localCard = prev.find((p) => p.id === serverCard.id && !p.id.startsWith('jc-part-'));
+
+              // Only fall back to jobCardNo+stageIndex match when there are NO in-flight splits for this job
+              if (!localCard && !hasInFlight) {
+                localCard = prev.find(
+                  (p) =>
+                    !p.id.startsWith('jc-part-') &&
+                    p.jobCardNo === serverCard.jobCardNo &&
+                    p.currentStageIndex === serverCard.currentStageIndex
+                );
+              }
+
               if (!localCard) return serverCard;
 
               const localStageIdx = localCard.currentStageIndex !== undefined ? localCard.currentStageIndex : normalizeStageIndex(localCard.currentStageName);
               const serverStageIdx = serverCard.currentStageIndex !== undefined ? serverCard.currentStageIndex : normalizeStageIndex(serverCard.currentStageName);
 
-              // 1. If local card has moved further, keep local stage progress
-              const isLocalFurther = localStageIdx > serverStageIdx;
+              // 1. Only apply local-further override when the EXACT UUID is registered in inFlightMovements
+              // This prevents the old "movedBatch" optimistic card from overriding server's remaining lot
+              const isInFlightForThisCard = inFlightMovements.current.has(localCard.id) || inFlightMovements.current.has(localCard.subJobCardNo || '');
+              const isLocalFurther = isInFlightForThisCard && localStageIdx > serverStageIdx;
 
               // 2. If local card was completed, keep COMPLETED
               const isLocalCompleted = localCard.status === 'COMPLETED' && serverCard.status !== 'COMPLETED';
@@ -2070,12 +2116,16 @@ export default function JobCardsPage() {
     const effectiveReason = incompletePendingReason === 'Other / Custom Pending Reason' ? (incompleteCustomReason || 'Pending PCB Work') : incompletePendingReason;
 
     const baseJc = selectedMovementJob.jobCardNo;
-    const movedSubNo = baseJc;
-    const remainingSubNo = baseJc;
+    // Give moved batch a distinct temporary sub-lot number with '-A' suffix
+    // so the merge logic never confuses it with the remaining lot (which keeps the original subJobCardNo).
+    // The backend will assign the real letter suffix (e.g. 26-27-7328-A) on its own.
+    const movedTempId = `jc-part-${Date.now()}-moved`;
+    const movedSubNo = `${baseJc}-A`;
+    const remainingSubNo = selectedMovementJob.subJobCardNo || baseJc;
 
     const movedBatch: JobCard = {
       ...selectedMovementJob,
-      id: `jc-part-${Date.now()}-moved`,
+      id: movedTempId,
       jobCardNo: selectedMovementJob.jobCardNo,
       subJobCardNo: movedSubNo,
       prodPnlQty: Math.ceil(parsedMoveQty / 4),
@@ -2088,6 +2138,11 @@ export default function JobCardsPage() {
       status: 'IN_PROGRESS',
       isNewlyCreated: false,
     };
+
+    // Register the moved batch in inFlightMovements so the merge logic can
+    // identify it as an optimistic card and avoid applying its stage to unrelated server cards.
+    inFlightMovements.current.set(movedTempId, { stageIdx: nextIndex, stageName: nextStage, timestamp: Date.now() });
+    inFlightMovements.current.set(movedSubNo, { stageIdx: nextIndex, stageName: nextStage, timestamp: Date.now() });
 
     const remainingBatch: JobCard = {
       ...selectedMovementJob,
@@ -2202,12 +2257,23 @@ export default function JobCardsPage() {
         clearTimeout(timeoutId);
 
         if (res.ok) {
+          // Server has committed the split. Clear in-flight tracking and force-fresh poll
+          // so all devices (including this one) adopt the server's authoritative split records.
+          inFlightMovements.current.delete(movedTempId);
+          inFlightMovements.current.delete(movedSubNo);
+          forceFreshOnNextPoll.current = true;
           // Immediately sync from backend so real SubJobCard IDs & split records are live on all devices
           await fetchBackendJobCards();
         } else {
+          // On failure, clean up in-flight so we don't block future polls
+          inFlightMovements.current.delete(movedTempId);
+          inFlightMovements.current.delete(movedSubNo);
           console.warn('Backend move-partial returned non-OK status:', res.status);
         }
       } catch (err) {
+        // On network error, clean up in-flight
+        inFlightMovements.current.delete(movedTempId);
+        inFlightMovements.current.delete(movedSubNo);
         console.warn('Backend move-partial sync skipped or offline', err);
       }
     })();
