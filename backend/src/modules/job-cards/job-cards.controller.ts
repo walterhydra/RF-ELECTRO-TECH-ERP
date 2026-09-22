@@ -161,11 +161,20 @@ export class JobCardsController {
   @Public()
   @ApiOperation({ summary: 'Execute Uncompleted / Partial Job Movement to next process stage' })
   async movePartial(
-    @Param('id') id: string,
-    @Body() body: { qtyToMove: number; areaToMove?: number; remark?: string; pendingWorkReason?: string; remarkType?: string },
+    @Param('id') pathId: string,
+    @Body() body: any,
     @Req() req: any,
   ) {
-    return this.jobCardsService.movePartial(id, body, req.user);
+    const targetId = pathId || body?.id || body?.cardId || body?.subJobCardId || body?.subJobCardNo || body?.jobCardNo || '';
+    return this.jobCardsService.movePartial(targetId, body, req.user);
+  }
+
+  @Post('move-partial')
+  @Public()
+  @ApiOperation({ summary: 'Execute Uncompleted / Partial Job Movement to next process stage (root)' })
+  async movePartialRoot(@Body() body: any, @Req() req: any) {
+    const targetId = body?.id || body?.cardId || body?.subJobCardId || body?.subJobCardNo || body?.jobCardNo || '';
+    return this.jobCardsService.movePartial(targetId, body, req.user);
   }
 
   @Delete('clear-all/all')

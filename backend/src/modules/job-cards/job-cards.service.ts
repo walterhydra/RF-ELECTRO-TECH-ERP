@@ -131,7 +131,7 @@ export class JobCardsService {
         const masterPcbQty = jc.totalPcbQty || (jc.custPnlQty && jc.custPnlQty > 50 ? jc.custPnlQty : (jc.prodPnlQty ? jc.prodPnlQty * 4 : 160));
 
         jc.subJobCards.forEach((sub, subIdx) => {
-          const subPcbQty = sub.totalPcbQty || (sub.qty && sub.qty > 50 ? sub.qty : masterPcbQty);
+          const subPcbQty = (sub.totalPcbQty && sub.totalPcbQty > 0) ? sub.totalPcbQty : (sub.qty && sub.qty > 0 ? sub.qty : masterPcbQty);
 
           let cleanNo = sub.subJobCardNo;
 
@@ -1631,7 +1631,21 @@ export class JobCardsService {
 
       if (jc) {
         jobCardId = jc.id;
-        subCard = (jc.subJobCards && jc.subJobCards.length > 0) ? (jc.subJobCards[0] as any) : null;
+        if (jc.subJobCards && jc.subJobCards.length > 0) {
+          if (subJobCardNo) {
+            subCard = jc.subJobCards.find((s: any) => s.subJobCardNo === subJobCardNo || s.subJobCardNo === searchNo);
+          }
+          if (!subCard && body?.currentStageName) {
+            const targetStg = String(body.currentStageName).toLowerCase().replace(/^\d+\.\s*/, '').trim();
+            subCard = jc.subJobCards.find((s: any) => {
+              const currStg = String(s.currentStage?.name || '').toLowerCase().replace(/^\d+\.\s*/, '').trim();
+              return currStg === targetStg || currStg.includes(targetStg) || targetStg.includes(currStg);
+            });
+          }
+          if (!subCard) {
+            subCard = jc.subJobCards[0] as any;
+          }
+        }
       }
     }
 
@@ -1823,11 +1837,39 @@ export class JobCardsService {
 
   async movePartial(
     id: string,
-    body: { qtyToMove: number; areaToMove?: number; remark?: string; pendingWorkReason?: string; remarkType?: string },
+    body: {
+      cardId?: string;
+      jobCardNo?: string;
+      subJobCardNo?: string;
+      currentStageName?: string;
+      stageId?: string;
+      qtyToMove: number;
+      areaToMove?: number;
+      remark?: string;
+      pendingWorkReason?: string;
+      remarkType?: string;
+    },
     user: any,
   ) {
-    let subCard = await this.prisma.subJobCard.findUnique({
-      where: { id },
+    const cardId = (body?.cardId || '').trim();
+    const subJobCardNo = (body?.subJobCardNo || '').trim();
+    const jobCardNo = (body?.jobCardNo || '').trim();
+    const rawTarget = (id || cardId || subJobCardNo || jobCardNo || '').trim();
+    const searchNo = (jobCardNo || rawTarget || '').trim();
+
+    const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
+    const subCardOr: any[] = [];
+    if (isUuid(id)) subCardOr.push({ id });
+    if (cardId && isUuid(cardId) && cardId !== id) subCardOr.push({ id: cardId });
+    if (subJobCardNo) subCardOr.push({ subJobCardNo });
+    if (rawTarget && rawTarget !== id && rawTarget !== subJobCardNo) subCardOr.push({ subJobCardNo: rawTarget });
+    subCardOr.push({ qrCodeValue: rawTarget });
+
+    let subCard: any = subCardOr.length > 0 ? await this.prisma.subJobCard.findFirst({
+      where: {
+        OR: subCardOr.filter(Boolean),
+      },
       include: {
         currentStage: true,
         jobCard: {
@@ -1838,12 +1880,20 @@ export class JobCardsService {
           },
         },
       },
-    });
+    }) : null;
 
-    let jobCardId = id;
+    let jobCardId = subCard ? subCard.jobCardId : rawTarget;
     if (!subCard) {
-      let jc = await this.prisma.jobCard.findFirst({
-        where: { OR: [{ id }, { jobCardNo: id }] },
+      const jcOr: any[] = [];
+      if (searchNo) jcOr.push({ jobCardNo: searchNo });
+      if (rawTarget && rawTarget !== searchNo) jcOr.push({ jobCardNo: rawTarget });
+      if (isUuid(rawTarget)) jcOr.push({ id: rawTarget });
+      if (cardId && isUuid(cardId)) jcOr.push({ id: cardId });
+
+      let jc: any = await this.prisma.jobCard.findFirst({
+        where: {
+          OR: jcOr.filter(Boolean),
+        },
         include: {
           subJobCards: { include: { currentStage: true } },
           processFlowMaster: {
@@ -1851,15 +1901,32 @@ export class JobCardsService {
           },
         },
       });
+
       if (!jc) {
-        throw new NotFoundException(`Job Card or Sub-Job Card with ID "${id}" not found in database`);
+        throw new NotFoundException(`Job Card or Sub-Job Card "${rawTarget}" not found in database`);
       }
+
       jobCardId = jc.id;
-      subCard = (jc.subJobCards && jc.subJobCards.length > 0) ? (jc.subJobCards[0] as any) : null;
+      if (jc.subJobCards && jc.subJobCards.length > 0) {
+        if (subJobCardNo) {
+          subCard = jc.subJobCards.find((s: any) => s.subJobCardNo === subJobCardNo || s.subJobCardNo === searchNo);
+        }
+        if (!subCard && body?.currentStageName) {
+          const targetStg = String(body.currentStageName).toLowerCase().replace(/^\d+\.\s*/, '').trim();
+          subCard = jc.subJobCards.find((s: any) => {
+            const currStg = String(s.currentStage?.name || '').toLowerCase().replace(/^\d+\.\s*/, '').trim();
+            return currStg === targetStg || currStg.includes(targetStg) || targetStg.includes(currStg);
+          });
+        }
+        if (!subCard) {
+          subCard = jc.subJobCards[0] as any;
+        }
+      }
+
       if (!subCard) {
         const fullQty = jc.totalPcbQty || jc.custPnlQty || 160;
         const firstStage = await this.prisma.processStage.findFirst({ orderBy: { defaultOrder: 'asc' } });
-        subCard = await this.prisma.subJobCard.create({
+        subCard = (await this.prisma.subJobCard.create({
           data: {
             subJobCardNo: `${jc.jobCardNo}-1`,
             jobCardId: jc.id,
@@ -1875,7 +1942,7 @@ export class JobCardsService {
             createdById: user?.id || jc.createdById,
           },
           include: { currentStage: true },
-        }) as any;
+        })) as any;
       }
     } else {
       jobCardId = subCard.jobCardId;
@@ -1934,7 +2001,7 @@ export class JobCardsService {
         },
       });
 
-      // 2. Keep SAME Job Card Number (NO -A, -B suffix as per PDF spec)
+      // 2. Reunite if sibling lot is already waiting at targetNextStageId, else create split lot with letter suffix
       const existingSubAtNextStage = await tx.subJobCard.findFirst({
         where: {
           jobCardId: subCard.jobCardId,
@@ -1956,6 +2023,7 @@ export class JobCardsService {
             prodPnlQty: Math.ceil(mergedQty / 4),
             custPnlAreaSqm: mergedArea,
             prodPnlAreaSqm: mergedArea,
+            status: SubJobCardStatus.IN_STAGE,
           },
         });
       } else {
@@ -1964,15 +2032,16 @@ export class JobCardsService {
           select: { subJobCardNo: true },
         });
 
-        // Exact parent Job Card number is ALWAYS the base (never stripped!)
         const parentJobCard = subCard.jobCard || (await tx.jobCard.findUnique({
           where: { id: subCard.jobCardId },
           select: { jobCardNo: true },
         }));
         const baseJobCardNo = parentJobCard?.jobCardNo || subCard.subJobCardNo;
 
-        // Keep SAME Job Card number base across all split lots (avoid -A suffix per user requirement)
-        const nextSubNo = `${baseJobCardNo}-lot-${allSubs.length + 1}`;
+        // Follow user rule: Split lots receive sequential uppercase letter suffixes (-A, -B, -C...)
+        const splitIndex = allSubs.length;
+        const letterSuffix = String.fromCharCode(65 + Math.max(0, splitIndex - 1));
+        const nextSubNo = `${baseJobCardNo}-${letterSuffix}`;
 
         await tx.subJobCard.create({
           data: {
@@ -1986,7 +2055,7 @@ export class JobCardsService {
             prodPnlAreaSqm: areaToMove,
             status: SubJobCardStatus.IN_STAGE,
             currentStageId: targetNextStageId,
-            qrCodeValue: `RFE-SJC-${baseJobCardNo}-LOT${allSubs.length + 1}-${Date.now().toString().slice(-4)}`,
+            qrCodeValue: `RFE-SJC-${nextSubNo}-${Date.now().toString().slice(-4)}`,
             createdById: userId,
           },
         });
@@ -2001,6 +2070,16 @@ export class JobCardsService {
           prodPnlQty: Math.ceil(remainingQty / 4),
           custPnlAreaSqm: Number(Math.max(0, currentTotalArea - areaToMove).toFixed(2)),
           prodPnlAreaSqm: Number(Math.max(0, currentTotalArea - areaToMove).toFixed(2)),
+          status: SubJobCardStatus.IN_STAGE,
+        },
+      });
+
+      // Ensure parent JobCard status is IN_PROGRESS so it displays as active across all devices
+      await tx.jobCard.update({
+        where: { id: subCard.jobCardId },
+        data: {
+          status: JobCardStatus.IN_PROGRESS,
+          launchedAt: subCard.jobCard?.launchedAt || new Date(),
         },
       });
 

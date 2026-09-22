@@ -1058,7 +1058,7 @@ export default function JobCardsPage() {
                   subStatusNorm = 'UNLAUNCHED';
                 }
 
-                const finalSubNo = j.jobCardNo;
+                const finalSubNo = sub.subJobCardNo || j.jobCardNo;
 
                 return {
                   id: sub.id,
@@ -1188,7 +1188,12 @@ export default function JobCardsPage() {
             }
 
             const merged = filtered.map((serverCard) => {
-              const localCard = prev.find((p) => p.id === serverCard.id || p.jobCardNo === serverCard.jobCardNo);
+              const localCard = prev.find(
+                (p) =>
+                  p.id === serverCard.id ||
+                  (p.subJobCardNo && serverCard.subJobCardNo && p.subJobCardNo === serverCard.subJobCardNo) ||
+                  (p.jobCardNo === serverCard.jobCardNo && p.currentStageIndex === serverCard.currentStageIndex)
+              );
               if (!localCard) return serverCard;
 
               const localStageIdx = localCard.currentStageIndex !== undefined ? localCard.currentStageIndex : normalizeStageIndex(localCard.currentStageName);
@@ -1798,7 +1803,7 @@ export default function JobCardsPage() {
         const targetSubNo = subCardNo;
         const primaryTarget = encodeURIComponent(cardId || targetSubNo);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
 
         let res = await fetch(`${getApiBaseUrl()}/job-cards/${primaryTarget}/move-stage`, {
           method: 'POST',
@@ -1810,6 +1815,7 @@ export default function JobCardsPage() {
             cardId: cardId,
             subJobCardNo: targetSubNo,
             jobCardNo: cardNo,
+            currentStageName: card.currentStageName,
             remark: `Quick Stage Movement to ${nextStage}`,
             remarkType: 'FULL_MOVEMENT',
           }),
@@ -1819,8 +1825,8 @@ export default function JobCardsPage() {
 
         if (!res.ok && targetSubNo && targetSubNo !== cardId) {
           const fallbackCtrl = new AbortController();
-          const fallbackTimeout = setTimeout(() => fallbackCtrl.abort(), 3500);
-          await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetSubNo)}/move-stage`, {
+          const fallbackTimeout = setTimeout(() => fallbackCtrl.abort(), 15000);
+          res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetSubNo)}/move-stage`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -1830,12 +1836,17 @@ export default function JobCardsPage() {
               cardId: cardId,
               subJobCardNo: targetSubNo,
               jobCardNo: cardNo,
+              currentStageName: card.currentStageName,
               remark: `Quick Stage Movement to ${nextStage}`,
               remarkType: 'FULL_MOVEMENT',
             }),
             signal: fallbackCtrl.signal,
           });
           clearTimeout(fallbackTimeout);
+        }
+
+        if (res.ok) {
+          await fetchBackendJobCards();
         }
       } catch (err: any) {
         console.warn('Backend stage move sync in background skipped or offline');
@@ -1964,7 +1975,7 @@ export default function JobCardsPage() {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
         const primaryTarget = encodeURIComponent(targetSubId || targetSubNo);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
 
         let res = await fetch(`${getApiBaseUrl()}/job-cards/${primaryTarget}/move-stage`, {
           method: 'POST',
@@ -1976,6 +1987,7 @@ export default function JobCardsPage() {
             cardId: targetSubId,
             subJobCardNo: targetSubNo,
             jobCardNo: jobCardNo,
+            currentStageName: selectedMovementJob.currentStageName,
             rejectPcbQty: rejectPcb,
             remark: effectiveRemarks,
             remarkType: rejectPcb > 0 ? 'REJECTION' : 'FULL_MOVEMENT',
@@ -1986,8 +1998,8 @@ export default function JobCardsPage() {
 
         if (!res.ok && targetSubNo && targetSubNo !== targetSubId) {
           const fallbackCtrl = new AbortController();
-          const fallbackTimeout = setTimeout(() => fallbackCtrl.abort(), 3500);
-          await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetSubNo)}/move-stage`, {
+          const fallbackTimeout = setTimeout(() => fallbackCtrl.abort(), 15000);
+          res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetSubNo)}/move-stage`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -1997,6 +2009,7 @@ export default function JobCardsPage() {
               cardId: targetSubId,
               subJobCardNo: targetSubNo,
               jobCardNo: jobCardNo,
+              currentStageName: selectedMovementJob.currentStageName,
               rejectPcbQty: rejectPcb,
               remark: effectiveRemarks,
               remarkType: rejectPcb > 0 ? 'REJECTION' : 'FULL_MOVEMENT',
@@ -2004,6 +2017,10 @@ export default function JobCardsPage() {
             signal: fallbackCtrl.signal,
           });
           clearTimeout(fallbackTimeout);
+        }
+
+        if (res.ok) {
+          await fetchBackendJobCards();
         }
       } catch (err: any) {
         console.warn('Backend stage move sync in background skipped or offline');
@@ -2193,20 +2210,30 @@ export default function JobCardsPage() {
       'success'
     );
 
-    // 3. NON-BLOCKING BACKGROUND SYNC
+    // 3. NON-BLOCKING BACKGROUND SYNC FOR INSTANT MULTI-DEVICE CONSISTENCY
     (async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-        await fetch(`${getApiBaseUrl()}/job-cards/${savedJobCardId}/move-partial`, {
+        const primaryTarget = encodeURIComponent(
+          savedJobCardId && !savedJobCardId.startsWith('jc-part-')
+            ? savedJobCardId
+            : (selectedMovementJob.subJobCardNo || selectedMovementJob.jobCardNo)
+        );
+
+        const res = await fetch(`${getApiBaseUrl()}/job-cards/${primaryTarget}/move-partial`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({
+            cardId: savedJobCardId,
+            jobCardNo: selectedMovementJob.jobCardNo,
+            subJobCardNo: selectedMovementJob.subJobCardNo || selectedMovementJob.jobCardNo,
+            currentStageName: selectedMovementJob.currentStageName,
             qtyToMove: parsedMoveQty,
             areaToMove: movedArea,
             pendingWorkReason: effectiveReason,
@@ -2216,8 +2243,15 @@ export default function JobCardsPage() {
           signal: controller.signal,
         });
         clearTimeout(timeoutId);
+
+        if (res.ok) {
+          // Immediately sync from backend so real SubJobCard IDs & split records are live on all devices
+          await fetchBackendJobCards();
+        } else {
+          console.warn('Backend move-partial returned non-OK status:', res.status);
+        }
       } catch (err) {
-        console.warn('Backend move-partial sync skipped or offline');
+        console.warn('Backend move-partial sync skipped or offline', err);
       }
     })();
   };

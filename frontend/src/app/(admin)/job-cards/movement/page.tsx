@@ -236,7 +236,11 @@ export default function JobMovementUpdatePage() {
               return mapped;
             }
             const merged = mapped.map((serverCard) => {
-              const localCard = prev.find((p) => p.id === serverCard.id || p.jobCardNo === serverCard.jobCardNo);
+              const localCard = prev.find(
+                (p) =>
+                  p.id === serverCard.id ||
+                  (p.jobCardNo === serverCard.jobCardNo && p.currentStageIndex === serverCard.currentStageIndex)
+              );
               if (!localCard) return serverCard;
               const localStageIdx = localCard.currentStageIndex !== undefined ? localCard.currentStageIndex : PF01_STAGES.indexOf(localCard.currentStageName);
               const serverStageIdx = serverCard.currentStageIndex !== undefined ? serverCard.currentStageIndex : PF01_STAGES.indexOf(serverCard.currentStageName);
@@ -470,13 +474,22 @@ export default function JobMovementUpdatePage() {
 
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      await fetch(`${getApiBaseUrl()}/job-cards/${selectedJob.id}/move-partial`, {
+      const targetEndpoint = encodeURIComponent(
+        selectedJob.id && !selectedJob.id.startsWith('jc-part-')
+          ? selectedJob.id
+          : selectedJob.jobCardNo
+      );
+      await fetch(`${getApiBaseUrl()}/job-cards/${targetEndpoint}/move-partial`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
+          cardId: selectedJob.id,
+          jobCardNo: selectedJob.jobCardNo,
+          subJobCardNo: selectedJob.jobCardNo,
+          currentStageName: selectedJob.currentStageName,
           qtyToMove: parsedMoveQty,
           areaToMove: sqmMoved,
           pendingWorkReason: effectiveReason,
