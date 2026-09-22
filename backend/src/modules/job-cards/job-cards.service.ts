@@ -1615,163 +1615,148 @@ export class JobCardsService {
     await this.prisma.$transaction(async (tx) => {
       await tx.stageMovementLog.deleteMany({});
       await tx.dispatch.deleteMany({});
-      await tx.subJobCard.updateMany({ data: { parentSubJobCardId: null } });
       await tx.subJobCard.deleteMany({});
       await tx.jobCard.deleteMany({});
     });
     return { success: true, message: 'All Job Cards cleared successfully' };
   }
 
-
-
   private async getNextProcessStage(currentStage: any, flowSteps?: any[]): Promise<{ targetNextStageId: string | null; isLastStage: boolean }> {
-    // ── STRATEGY 1: Use actual ProcessFlowMaster steps (RELIABLE) ──
-    // flowSteps comes from jobCard.processFlowMaster.steps (already sorted by stepOrder ASC)
-    if (flowSteps && flowSteps.length >= 20 && currentStage?.id) {
-      const currentStepIdx = flowSteps.findIndex(
-        (step: any) => step.stageId === currentStage.id || step.stage?.id === currentStage.id,
-      );
-
-      if (currentStepIdx !== -1) {
-        if (currentStepIdx >= flowSteps.length - 1) {
-          return { targetNextStageId: null, isLastStage: true };
-        }
-        const nextStep = flowSteps[currentStepIdx + 1];
-        const nextStageId = nextStep.stageId || nextStep.stage?.id;
-        return {
-          targetNextStageId: nextStageId || null,
-          isLastStage: false,
-        };
-      }
-      // If current stage not found in flow steps, try name matching
-      const currentStageName = String(currentStage?.name || '').trim().toLowerCase();
-      const nameMatchIdx = flowSteps.findIndex(
-        (step: any) => {
-          const stepName = String(step.stage?.name || '').trim().toLowerCase();
-          return stepName === currentStageName ||
-            stepName.replace(/^\d+\.\s*/, '') === currentStageName.replace(/^\d+\.\s*/, '');
-        },
-      );
-      if (nameMatchIdx !== -1) {
-        if (nameMatchIdx >= flowSteps.length - 1) {
-          return { targetNextStageId: null, isLastStage: true };
-        }
-        const nextStep = flowSteps[nameMatchIdx + 1];
-        return {
-          targetNextStageId: nextStep.stageId || nextStep.stage?.id || null,
-          isLastStage: false,
-        };
-      }
-    }
-
-    // ── STRATEGY 2: Fallback to hardcoded PF-OI 20-stage list (only when flow steps unavailable) ──
-    const pfList = [
-      '1. SHEARING',
-      '2. DRILLING',
-      '3. DRL-QC',
-      '4. DML',
-      '5. PIT',
-      '6. PIT-QC',
-      '7. PLATING',
-      '8. ETCHING',
-      '9. PREMASK-QC/AOI',
-      '10. PISM',
-      '11. PISM-QC',
-      '12. HASL',
-      '13. HASL-QC',
-      '14. LEGEND PRINT',
-      '15. ROUTING',
-      '16. VG',
-      '17. BBT',
-      '18. FQC (AI)',
-      '19. PDI-AQL',
-      '20. PACKING',
+    const defaultStageList = [
+      { name: '1. SHEARING',       code: 'SHR',      order: 1  },
+      { name: '2. DRILLING',       code: 'DRL',      order: 2  },
+      { name: '3. DRL-QC',         code: 'DRL-QC',   order: 3  },
+      { name: '4. DML',            code: 'DML',      order: 4  },
+      { name: '5. PIT',            code: 'PIT',      order: 5  },
+      { name: '6. PIT-QC',         code: 'PIT-QC',   order: 6  },
+      { name: '7. PLATING',        code: 'PLT',      order: 7  },
+      { name: '8. ETCHING',        code: 'ETC',      order: 8  },
+      { name: '9. PREMASK-QC/AOI', code: 'PM-QC',    order: 9  },
+      { name: '10. PISM',          code: 'PISM',     order: 10 },
+      { name: '11. PISM-QC',       code: 'PISM-QC',  order: 11 },
+      { name: '12. HASL',          code: 'HASL',     order: 12 },
+      { name: '13. HASL-QC',       code: 'HASL-QC',  order: 13 },
+      { name: '14. LEGEND PRINT',  code: 'LGD',      order: 14 },
+      { name: '15. ROUTING',       code: 'RTE',      order: 15 },
+      { name: '16. VG',            code: 'VG',       order: 16 },
+      { name: '17. BBT',           code: 'BBT',      order: 17 },
+      { name: '18. FQC (AI)',       code: 'FQC',      order: 18 },
+      { name: '19. PDI-AQL',       code: 'PDI',      order: 19 },
+      { name: '20. PACKING',       code: 'PKG',      order: 20 },
     ];
 
     const currentStageName = String(currentStage?.name || '').trim();
+    const currentCode = String(currentStage?.code || '').trim();
     const currentOrder = currentStage?.defaultOrder || 0;
 
     let currIdx = -1;
-    // Match by full name first
-    currIdx = pfList.findIndex((s) => s.toLowerCase() === currentStageName.toLowerCase());
-    // Match by name without numeric prefix
-    if (currIdx === -1) {
-      currIdx = pfList.findIndex((s) => {
-        const sClean = s.replace(/^\d+\.\s*/, '').toLowerCase();
-        const cClean = currentStageName.replace(/^\d+\.\s*/, '').toLowerCase();
+
+    // 1. Try numeric prefix from name (e.g. "1. SHEARING" -> 0, "5. PIT" -> 4)
+    const numMatch = currentStageName.match(/^(\d+)\./);
+    if (numMatch) {
+      const n = parseInt(numMatch[1], 10);
+      if (n >= 1 && n <= defaultStageList.length) {
+        currIdx = n - 1;
+      }
+    }
+
+    // 2. Try exact code match
+    if (currIdx === -1 && currentCode) {
+      currIdx = defaultStageList.findIndex((s) => s.code.toLowerCase() === currentCode.toLowerCase());
+    }
+
+    // 3. Try exact full name match
+    if (currIdx === -1 && currentStageName) {
+      currIdx = defaultStageList.findIndex((s) => s.name.toLowerCase() === currentStageName.toLowerCase());
+    }
+
+    // 4. Try stripped name match (without numeric prefix)
+    if (currIdx === -1 && currentStageName) {
+      const cClean = currentStageName.replace(/^\d+[\.\s\-]+/, '').trim().toLowerCase();
+      currIdx = defaultStageList.findIndex((s) => {
+        const sClean = s.name.replace(/^\d+[\.\s\-]+/, '').trim().toLowerCase();
         return sClean === cClean;
       });
     }
-    // Fuzzy keyword fallback for renamed stages (PIT↔PTH, etc.)
-    if (currIdx === -1) {
-      const cLower = currentStageName.toLowerCase().replace(/^\d+\.\s*/, '');
-      const keywordMap: Array<{ keywords: string[]; idx: number }> = [
-        { keywords: ['shear', 'cutting'], idx: 0 },
-        { keywords: ['drill', 'drl'], idx: 1 },
-        { keywords: ['drl-qc', 'drill-qc'], idx: 2 },
-        { keywords: ['dml'], idx: 3 },
-        { keywords: ['pit-qc', 'pth-qc'], idx: 5 },
-        { keywords: ['pit', 'pth'], idx: 4 },
-        { keywords: ['plating', 'pattern plat', 'photo print', 'photo'], idx: 6 },
-        { keywords: ['etch'], idx: 7 },
-        { keywords: ['premask', 'aoi', 'etching-qc', 'etching qc'], idx: 8 },
-        { keywords: ['pism-qc', 'solder mask-qc', 'solder mask qc', 'sm-qc'], idx: 10 },
-        { keywords: ['pism', 'solder mask', 'solder'], idx: 9 },
-        { keywords: ['hasl-qc'], idx: 12 },
-        { keywords: ['hasl', 'hal', 'enig'], idx: 11 },
-        { keywords: ['legend'], idx: 13 },
-        { keywords: ['routing', 'rout', 'punching', 'cnc'], idx: 14 },
-        { keywords: ['vg', 'v-cut', 'vcut', 'v groove'], idx: 15 },
-        { keywords: ['bbt', 'e-testing', 'e testing', 'bare board'], idx: 16 },
-        { keywords: ['fqc', 'final qc', 'photo-qc', 'photo qc'], idx: 17 },
-        { keywords: ['pdi', 'aql'], idx: 18 },
-        { keywords: ['pack', 'dispatch'], idx: 19 },
-      ];
-      for (const entry of keywordMap) {
-        if (entry.keywords.some((kw) => cLower.includes(kw))) {
-          currIdx = entry.idx;
-          break;
-        }
-      }
+
+    // 5. Keyword fuzzy fallback
+    if (currIdx === -1 && currentStageName) {
+      const cLower = currentStageName.toLowerCase();
+      if (cLower.includes('shear') || cLower.includes('cutting')) currIdx = 0;
+      else if (cLower.includes('drl-qc') || cLower.includes('drill-qc')) currIdx = 2;
+      else if (cLower.includes('drill') || cLower.includes('drl')) currIdx = 1;
+      else if (cLower.includes('dml')) currIdx = 3;
+      else if (cLower.includes('pit-qc') || cLower.includes('pth-qc')) currIdx = 5;
+      else if (cLower.includes('pit') || cLower.includes('pth')) currIdx = 4;
+      else if (cLower.includes('plat') || cLower.includes('photo')) currIdx = 6;
+      else if (cLower.includes('premask') || cLower.includes('aoi') || cLower.includes('etching-qc')) currIdx = 8;
+      else if (cLower.includes('etch')) currIdx = 7;
+      else if (cLower.includes('pism-qc') || cLower.includes('solder mask-qc') || cLower.includes('sm-qc')) currIdx = 10;
+      else if (cLower.includes('pism') || cLower.includes('solder')) currIdx = 9;
+      else if (cLower.includes('hasl-qc')) currIdx = 12;
+      else if (cLower.includes('hasl') || cLower.includes('hal') || cLower.includes('enig')) currIdx = 11;
+      else if (cLower.includes('legend')) currIdx = 13;
+      else if (cLower.includes('rout') || cLower.includes('cnc') || cLower.includes('punch')) currIdx = 14;
+      else if (cLower.includes('vg') || cLower.includes('v-cut') || cLower.includes('vcut')) currIdx = 15;
+      else if (cLower.includes('bbt') || cLower.includes('bare board') || cLower.includes('testing')) currIdx = 16;
+      else if (cLower.includes('fqc') || cLower.includes('final qc')) currIdx = 17;
+      else if (cLower.includes('pdi') || cLower.includes('aql')) currIdx = 18;
+      else if (cLower.includes('pack') || cLower.includes('dispatch')) currIdx = 19;
     }
-    // Last resort: use defaultOrder if everything else failed
-    if (currIdx === -1 && currentOrder >= 1 && currentOrder <= pfList.length) {
+
+    // 6. DefaultOrder fallback
+    if (currIdx === -1 && currentOrder >= 1 && currentOrder <= defaultStageList.length) {
       currIdx = currentOrder - 1;
     }
 
-    // currIdx still -1 means truly unknown stage — treat as first stage (don't COMPLETE!)
+    // 7. If still not identified, start from stage 1
     if (currIdx === -1) {
-      console.warn(`[JobCards] getNextProcessStage: Unknown stage "${currentStageName}" \u2014 defaulting to stage 1`);
       currIdx = 0;
     }
 
-    if (currIdx >= pfList.length - 1) {
+    // If currently at or beyond Stage 20 PACKING (index 19) -> Moving out of last stage means COMPLETED
+    if (currIdx >= defaultStageList.length - 1) {
       return { targetNextStageId: null, isLastStage: true };
     }
 
-    const nextOrder = currIdx + 2;
-    const nextStageName = pfList[currIdx + 1];
+    // Next stage is currIdx + 1 (1..19)
+    const targetItem = defaultStageList[currIdx + 1];
+    const targetCleanName = targetItem.name.replace(/^\d+[\.\s\-]+/, '').trim();
 
-    // Use name match first, then defaultOrder — NOT an OR that could match the wrong stage
+    // Look up target stage in database
     let nextStage = await this.prisma.processStage.findFirst({
-      where: { name: nextStageName },
+      where: {
+        OR: [
+          { name: targetItem.name },
+          { name: targetCleanName },
+          { code: targetItem.code },
+          { defaultOrder: targetItem.order },
+        ],
+      },
+      orderBy: { defaultOrder: 'asc' },
     });
 
     if (!nextStage) {
-      nextStage = await this.prisma.processStage.findFirst({
-        where: { defaultOrder: nextOrder },
-      });
-    }
-
-    if (!nextStage) {
-      nextStage = await this.prisma.processStage.create({
-        data: {
-          name: nextStageName,
-          code: nextStageName.split(' ')[1] || 'STG',
-          defaultOrder: nextOrder,
-          description: `${nextStageName} Stage`,
-        },
-      }).catch(() => null);
+      try {
+        nextStage = await this.prisma.processStage.create({
+          data: {
+            name: targetItem.name,
+            code: targetItem.code,
+            defaultOrder: targetItem.order,
+            description: `${targetItem.name} Stage`,
+          },
+        });
+      } catch {
+        nextStage = await this.prisma.processStage.findFirst({
+          where: {
+            OR: [
+              { defaultOrder: targetItem.order },
+              { code: targetItem.code },
+              { name: targetItem.name },
+            ],
+          },
+        });
+      }
     }
 
     return {
@@ -1930,13 +1915,21 @@ export class JobCardsService {
         },
       });
 
-      if (targetNextStageId && !isLastStage) {
+      if (!isLastStage) {
+        let stageToSetId = targetNextStageId;
+        if (!stageToSetId) {
+          const fallbackNext = await tx.processStage.findFirst({
+            where: { defaultOrder: 2 },
+          });
+          stageToSetId = fallbackNext?.id || subCard.currentStageId;
+        }
+
         // AUTOMATIC LOT REUNIFICATION / MERGE:
         // Check if another sub-job-card of the SAME parent Job Card already exists at targetNextStageId
         const existingSubAtNextStage = await tx.subJobCard.findFirst({
           where: {
             jobCardId: subCard.jobCardId,
-            currentStageId: targetNextStageId,
+            currentStageId: stageToSetId,
             id: { not: subCard.id },
             status: SubJobCardStatus.IN_STAGE,
           },
@@ -1974,7 +1967,7 @@ export class JobCardsService {
           await tx.subJobCard.update({
             where: { id: subCard.id },
             data: {
-              currentStageId: targetNextStageId,
+              currentStageId: stageToSetId,
               status: SubJobCardStatus.IN_STAGE,
               qty: movedPcb,
               totalPcbQty: movedPcb,
