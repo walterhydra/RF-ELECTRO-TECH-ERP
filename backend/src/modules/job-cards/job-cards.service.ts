@@ -655,39 +655,58 @@ export class JobCardsService {
       where: { isActive: true },
       include: { steps: { orderBy: { stepOrder: 'asc' } } },
     });
-    if (!processFlow || !processFlow.steps || processFlow.steps.length === 0) {
-      if (!processFlow) {
-        processFlow = await this.prisma.processFlowMaster.create({
-          data: {
-            name: 'PF-01 Standard Flow',
-            totalSteps: stages.length || 19,
-            createdById: defaultUser.id,
-          },
-          include: { steps: { orderBy: { stepOrder: 'asc' } } },
-        });
-      }
-      if (stages.length > 0) {
-        for (let i = 0; i < stages.length; i++) {
-          await this.prisma.processFlowStep.upsert({
-            where: {
-              processFlowMasterId_stepOrder: {
-                processFlowMasterId: processFlow.id,
-                stepOrder: i + 1,
-              },
-            },
-            update: { stageId: stages[i].id },
-            create: {
+
+    // Always create or ensure flow master exists
+    if (!processFlow) {
+      processFlow = await this.prisma.processFlowMaster.create({
+        data: {
+          name: 'PF-01 Standard Flow',
+          totalSteps: stages.length,
+          createdById: defaultUser.id,
+        },
+        include: { steps: { orderBy: { stepOrder: 'asc' } } },
+      });
+    }
+
+    // ── ALWAYS sync processFlowMaster steps to exactly match the 20 canonical stages ──
+    // This fixes the critical bug where old 19-step flows caused early COMPLETED
+    if (stages.length > 0) {
+      // Upsert all canonical steps in correct order
+      for (let i = 0; i < stages.length; i++) {
+        await this.prisma.processFlowStep.upsert({
+          where: {
+            processFlowMasterId_stepOrder: {
               processFlowMasterId: processFlow.id,
-              stageId: stages[i].id,
               stepOrder: i + 1,
             },
-          }).catch(() => {});
-        }
-        processFlow = await this.prisma.processFlowMaster.findUnique({
-          where: { id: processFlow.id },
-          include: { steps: { orderBy: { stepOrder: 'asc' } } },
-        }) || processFlow;
+          },
+          update: { stageId: stages[i].id },
+          create: {
+            processFlowMasterId: processFlow.id,
+            stageId: stages[i].id,
+            stepOrder: i + 1,
+          },
+        }).catch(() => {});
       }
+
+      // Delete any extra steps beyond canonical count (e.g. leftover step 20 from old 19-step flow)
+      await this.prisma.processFlowStep.deleteMany({
+        where: {
+          processFlowMasterId: processFlow.id,
+          stepOrder: { gt: stages.length },
+        },
+      }).catch(() => {});
+
+      // Ensure totalSteps is always accurate
+      await this.prisma.processFlowMaster.update({
+        where: { id: processFlow.id },
+        data: { totalSteps: stages.length },
+      }).catch(() => {});
+
+      processFlow = await this.prisma.processFlowMaster.findUnique({
+        where: { id: processFlow.id },
+        include: { steps: { orderBy: { stepOrder: 'asc' } } },
+      }) || processFlow;
     }
 
     let customer = await this.prisma.customer.findFirst();
