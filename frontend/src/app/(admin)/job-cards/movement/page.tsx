@@ -151,7 +151,7 @@ export default function JobMovementUpdatePage() {
             const masterAreaSqm = j.custPnlAreaSqm || j.prodPnlAreaSqm || 45;
 
             if (j.subJobCards && j.subJobCards.length > 0) {
-              return j.subJobCards.map((sub: any) => {
+              const mappedSubs: JobCard[] = j.subJobCards.map((sub: any) => {
                 const subPcbQty = sub.totalPcbQty || sub.qty || masterPcbQty;
                 const subAreaSqm = sub.custPnlAreaSqm || sub.prodPnlAreaSqm || masterAreaSqm;
                 const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
@@ -179,6 +179,29 @@ export default function JobMovementUpdatePage() {
                   createdAt: j.createdAt,
                 };
               });
+
+              // Consolidate sub-lots of the same job card at the same stage
+              const stageMap = new Map<string, JobCard>();
+              mappedSubs.forEach((item) => {
+                const groupKey = `${item.currentStageIndex}-${item.status}`;
+                const existing = stageMap.get(groupKey);
+                if (existing) {
+                  const combinedQty = (existing.totalPcbQty || 0) + (item.totalPcbQty || 0);
+                  const combinedArea = Number(((existing.custPnlAreaSqm || 0) + (item.custPnlAreaSqm || 0)).toFixed(2));
+                  stageMap.set(groupKey, {
+                    ...existing,
+                    totalPcbQty: combinedQty,
+                    custPnlQty: combinedQty,
+                    prodPnlQty: Math.ceil(combinedQty / 4),
+                    custPnlAreaSqm: combinedArea,
+                    prodPnlAreaSqm: combinedArea,
+                  });
+                } else {
+                  stageMap.set(groupKey, item);
+                }
+              });
+
+              return Array.from(stageMap.values());
             }
 
             const rawStage = j.currentStageName || j.currentStage?.name || PF01_STAGES[0];

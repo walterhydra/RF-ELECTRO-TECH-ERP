@@ -1036,7 +1036,7 @@ export default function JobCardsPage() {
 
             const subLots = Array.isArray(j.subJobCards) ? j.subJobCards : [];
             if (subLots.length > 0) {
-              return subLots.map((sub: any, lotIdx: number) => {
+              const mappedSubs: JobCard[] = subLots.map((sub: any) => {
                 const subPcbQty = sub.totalPcbQty || sub.qty || masterPcbQty;
                 const subAreaSqm = sub.custPnlAreaSqm || sub.prodPnlAreaSqm || masterAreaSqm;
                 const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
@@ -1058,8 +1058,6 @@ export default function JobCardsPage() {
                   subStatusNorm = 'UNLAUNCHED';
                 }
 
-                // Determine display subJobCardNo (WIP No.)
-                // User requirement: Keep exact SAME Job Card number across all split lots (never append -A, -B)
                 const finalSubNo = j.jobCardNo;
 
                 return {
@@ -1098,6 +1096,31 @@ export default function JobCardsPage() {
                   rejectionLogs: j.rejectionLogs || [],
                 };
               });
+
+              // AUTOMATIC LOT REUNIFICATION / MERGE:
+              // If multiple sub-lots of the same Job Card are at the same stage,
+              // automatically consolidate them into 1 unified traveler lot (e.g. 250 + 250 = 500 PCBs)
+              const stageMap = new Map<string, JobCard>();
+              mappedSubs.forEach((item) => {
+                const groupKey = `${item.currentStageIndex}-${item.status}`;
+                const existing = stageMap.get(groupKey);
+                if (existing) {
+                  const combinedQty = (existing.totalPcbQty || 0) + (item.totalPcbQty || 0);
+                  const combinedArea = Number(((existing.custPnlAreaSqm || 0) + (item.custPnlAreaSqm || 0)).toFixed(2));
+                  stageMap.set(groupKey, {
+                    ...existing,
+                    totalPcbQty: combinedQty,
+                    custPnlQty: combinedQty,
+                    prodPnlQty: Math.ceil(combinedQty / 4),
+                    custPnlAreaSqm: combinedArea,
+                    prodPnlAreaSqm: combinedArea,
+                  });
+                } else {
+                  stageMap.set(groupKey, item);
+                }
+              });
+
+              return Array.from(stageMap.values());
             }
 
             const rawStage = j.currentStageName || j.currentStage?.name || (j.status === 'COMPLETED' ? '20. PACKING' : PF01_STAGES[0]);
@@ -1701,20 +1724,41 @@ export default function JobCardsPage() {
     const subCardNo = card.subJobCardNo || card.jobCardNo;
     const cardId = card.id;
 
-    // Immediately update local UI state ONLY for this specific sub-lot row
-    setJobCards((prev) =>
-      prev.map((j) =>
-        j.id === card.id
-          ? {
-              ...j,
-              currentStageIndex: nextIndex,
-              currentStageName: nextStage,
-              status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
-              isNewlyCreated: false,
-            }
-          : j
-      )
-    );
+    // Immediately update local UI state with lot reunification if sibling already at nextStage
+    setJobCards((prev) => {
+      const otherItems = prev.filter((j) => j.id !== card.id);
+      const existingNextIdx = otherItems.findIndex(
+        (j) => j.jobCardNo === cardNo && j.currentStageName === nextStage && j.status !== 'COMPLETED'
+      );
+
+      if (existingNextIdx !== -1) {
+        const target = otherItems[existingNextIdx];
+        const mergedQty = (target.totalPcbQty || 0) + (card.totalPcbQty || 0);
+        const mergedArea = Number(((target.custPnlAreaSqm || 0) + (card.custPnlAreaSqm || 0)).toFixed(2));
+        const mergedCard: JobCard = {
+          ...target,
+          totalPcbQty: mergedQty,
+          custPnlQty: mergedQty,
+          prodPnlQty: Math.ceil(mergedQty / 4),
+          custPnlAreaSqm: mergedArea,
+          prodPnlAreaSqm: mergedArea,
+          status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
+        };
+        return otherItems.map((j, idx) => (idx === existingNextIdx ? mergedCard : j));
+      } else {
+        return prev.map((j) =>
+          j.id === card.id
+            ? {
+                ...j,
+                currentStageIndex: nextIndex,
+                currentStageName: nextStage,
+                status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
+                isNewlyCreated: false,
+              }
+            : j
+        );
+      }
+    });
 
     showToast(`🚀 Sub-Lot ${subCardNo} moved to ${nextStage}`, 'success');
 
@@ -1861,27 +1905,51 @@ export default function JobCardsPage() {
         showToast(`Backend connection issue: Local state updated`, 'info');
       }
 
-      setJobCards((prev) =>
-        prev.map((j) =>
-          j.id === selectedMovementJob.id
-            ? {
-                ...j,
-                currentStageIndex: nextIndex,
-                currentStageName: nextStage,
-                totalPcbQty: movedPcb,
-                custPnlQty: movedPcb,
-                prodPnlQty: Math.ceil(movedPcb / 4),
-                custPnlAreaSqm: movedArea,
-                prodPnlAreaSqm: movedArea,
-                rejectedPcbQty: updatedRejectedPcbQty,
-                rejectedAreaSqm: updatedRejectedAreaSqm,
-                rejectionLogs: newRejectionLogs,
-                status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
-                isNewlyCreated: false,
-              }
-            : j
-        )
-      );
+      setJobCards((prev) => {
+        const otherItems = prev.filter((j) => j.id !== selectedMovementJob.id);
+        const existingNextIdx = otherItems.findIndex(
+          (j) => j.jobCardNo === selectedMovementJob.jobCardNo && j.currentStageName === nextStage && j.status !== 'COMPLETED'
+        );
+
+        if (existingNextIdx !== -1) {
+          const target = otherItems[existingNextIdx];
+          const mergedQty = (target.totalPcbQty || 0) + movedPcb;
+          const mergedArea = Number(((target.custPnlAreaSqm || 0) + movedArea).toFixed(2));
+          const mergedCard: JobCard = {
+            ...target,
+            totalPcbQty: mergedQty,
+            custPnlQty: mergedQty,
+            prodPnlQty: Math.ceil(mergedQty / 4),
+            custPnlAreaSqm: mergedArea,
+            prodPnlAreaSqm: mergedArea,
+            rejectedPcbQty: (target.rejectedPcbQty || 0) + updatedRejectedPcbQty,
+            rejectedAreaSqm: Number(((target.rejectedAreaSqm || 0) + updatedRejectedAreaSqm).toFixed(2)),
+            rejectionLogs: [...(target.rejectionLogs || []), ...newRejectionLogs],
+            status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
+          };
+          return otherItems.map((j, idx) => (idx === existingNextIdx ? mergedCard : j));
+        } else {
+          return prev.map((j) =>
+            j.id === selectedMovementJob.id
+              ? {
+                  ...j,
+                  currentStageIndex: nextIndex,
+                  currentStageName: nextStage,
+                  totalPcbQty: movedPcb,
+                  custPnlQty: movedPcb,
+                  prodPnlQty: Math.ceil(movedPcb / 4),
+                  custPnlAreaSqm: movedArea,
+                  prodPnlAreaSqm: movedArea,
+                  rejectedPcbQty: updatedRejectedPcbQty,
+                  rejectedAreaSqm: updatedRejectedAreaSqm,
+                  rejectionLogs: newRejectionLogs,
+                  status: nextIndex === PF01_STAGES.length - 1 ? 'COMPLETED' : 'IN_PROGRESS',
+                  isNewlyCreated: false,
+                }
+              : j
+          );
+        }
+      });
 
       await fetchBackendJobCards();
 

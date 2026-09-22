@@ -1690,19 +1690,61 @@ export class JobCardsService {
       });
 
       if (targetNextStageId && !isLastStage) {
-        await tx.subJobCard.update({
-          where: { id: subCard.id },
-          data: {
+        // AUTOMATIC LOT REUNIFICATION / MERGE:
+        // Check if another sub-job-card of the SAME parent Job Card already exists at targetNextStageId
+        const existingSubAtNextStage = await tx.subJobCard.findFirst({
+          where: {
+            jobCardId: subCard.jobCardId,
             currentStageId: targetNextStageId,
+            id: { not: subCard.id },
             status: SubJobCardStatus.IN_STAGE,
-            qty: movedPcb,
-            totalPcbQty: movedPcb,
-            custPnlQty: movedPcb,
-            prodPnlQty: Math.ceil(movedPcb / 4),
-            custPnlAreaSqm: movedArea,
-            prodPnlAreaSqm: movedArea,
           },
         });
+
+        if (existingSubAtNextStage) {
+          // Re-unite split lots: merge movedPcb and movedArea into the waiting sibling
+          const mergedQty = (existingSubAtNextStage.totalPcbQty || existingSubAtNextStage.qty || 0) + movedPcb;
+          const mergedArea = Number(((existingSubAtNextStage.custPnlAreaSqm || 0) + movedArea).toFixed(2));
+
+          await tx.subJobCard.update({
+            where: { id: existingSubAtNextStage.id },
+            data: {
+              qty: mergedQty,
+              totalPcbQty: mergedQty,
+              custPnlQty: mergedQty,
+              prodPnlQty: Math.ceil(mergedQty / 4),
+              custPnlAreaSqm: mergedArea,
+              prodPnlAreaSqm: mergedArea,
+              status: SubJobCardStatus.IN_STAGE,
+            },
+          });
+
+          // Preserve complete traceability logs by linking them to the surviving unified sub-job-card
+          await tx.stageMovementLog.updateMany({
+            where: { subJobCardId: subCard.id },
+            data: { subJobCardId: existingSubAtNextStage.id },
+          });
+
+          // Delete the now-reunited redundant sub-card row
+          await tx.subJobCard.delete({
+            where: { id: subCard.id },
+          });
+        } else {
+          await tx.subJobCard.update({
+            where: { id: subCard.id },
+            data: {
+              currentStageId: targetNextStageId,
+              status: SubJobCardStatus.IN_STAGE,
+              qty: movedPcb,
+              totalPcbQty: movedPcb,
+              custPnlQty: movedPcb,
+              prodPnlQty: Math.ceil(movedPcb / 4),
+              custPnlAreaSqm: movedArea,
+              prodPnlAreaSqm: movedArea,
+            },
+          });
+        }
+
         await tx.jobCard.update({
           where: { id: jobCardId },
           data: {
@@ -1712,19 +1754,56 @@ export class JobCardsService {
         });
       } else {
         // Last stage reached (PACKING / DISPATCH) -> Mark completed
-        await tx.subJobCard.update({
-          where: { id: subCard.id },
-          data: {
-            currentStageId: null,
+        // Check if there is already another completed sub-job-card of the SAME parent Job Card
+        const existingCompletedSub = await tx.subJobCard.findFirst({
+          where: {
+            jobCardId: subCard.jobCardId,
+            id: { not: subCard.id },
             status: SubJobCardStatus.COMPLETED,
-            qty: movedPcb,
-            totalPcbQty: movedPcb,
-            custPnlQty: movedPcb,
-            prodPnlQty: Math.ceil(movedPcb / 4),
-            custPnlAreaSqm: movedArea,
-            prodPnlAreaSqm: movedArea,
           },
         });
+
+        if (existingCompletedSub) {
+          const mergedQty = (existingCompletedSub.totalPcbQty || existingCompletedSub.qty || 0) + movedPcb;
+          const mergedArea = Number(((existingCompletedSub.custPnlAreaSqm || 0) + movedArea).toFixed(2));
+
+          await tx.subJobCard.update({
+            where: { id: existingCompletedSub.id },
+            data: {
+              qty: mergedQty,
+              totalPcbQty: mergedQty,
+              custPnlQty: mergedQty,
+              prodPnlQty: Math.ceil(mergedQty / 4),
+              custPnlAreaSqm: mergedArea,
+              prodPnlAreaSqm: mergedArea,
+              status: SubJobCardStatus.COMPLETED,
+            },
+          });
+
+          await tx.stageMovementLog.updateMany({
+            where: { subJobCardId: subCard.id },
+            data: { subJobCardId: existingCompletedSub.id },
+          });
+
+          await tx.subJobCard.delete({
+            where: { id: subCard.id },
+          });
+        } else {
+          await tx.subJobCard.update({
+            where: { id: subCard.id },
+            data: {
+              currentStageId: null,
+              status: SubJobCardStatus.COMPLETED,
+              qty: movedPcb,
+              totalPcbQty: movedPcb,
+              custPnlQty: movedPcb,
+              prodPnlQty: Math.ceil(movedPcb / 4),
+              custPnlAreaSqm: movedArea,
+              prodPnlAreaSqm: movedArea,
+            },
+          });
+        }
+
         await tx.jobCard.update({
           where: { id: jobCardId },
           data: {
@@ -1860,6 +1939,7 @@ export class JobCardsService {
         where: {
           jobCardId: subCard.jobCardId,
           currentStageId: targetNextStageId,
+          id: { not: subCard.id },
           status: SubJobCardStatus.IN_STAGE,
         },
       });
