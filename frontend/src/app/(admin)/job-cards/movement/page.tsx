@@ -230,8 +230,25 @@ export default function JobMovementUpdatePage() {
 
           });
 
-          setJobs(mapped);
-          saveJobCardsToStorage(mapped);
+          setJobs((prev) => {
+            if (prev.length === 0) {
+              saveJobCardsToStorage(mapped);
+              return mapped;
+            }
+            const merged = mapped.map((serverCard) => {
+              const localCard = prev.find((p) => p.id === serverCard.id || p.jobCardNo === serverCard.jobCardNo);
+              if (!localCard) return serverCard;
+              const localStageIdx = localCard.currentStageIndex !== undefined ? localCard.currentStageIndex : PF01_STAGES.indexOf(localCard.currentStageName);
+              const serverStageIdx = serverCard.currentStageIndex !== undefined ? serverCard.currentStageIndex : PF01_STAGES.indexOf(serverCard.currentStageName);
+
+              if (localStageIdx > serverStageIdx || localCard.status === 'COMPLETED') {
+                return { ...serverCard, ...localCard };
+              }
+              return serverCard;
+            });
+            saveJobCardsToStorage(merged);
+            return merged;
+          });
         }
       })
       .catch(() => {});

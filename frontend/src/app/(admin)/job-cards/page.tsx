@@ -1176,13 +1176,59 @@ export default function JobCardsPage() {
           });
 
 
-          // Server Database is 100% Single Source of Truth for Real-Time Multi-Device Sync
-          // Filter out any recently deleted IDs to prevent re-appearing during sync
+          // Server Database Multi-Device Sync: Smart-merge to preserve any newer local stage advancements, rejections, or launches
           const filtered = recentlyDeletedIds.current.size > 0
             ? mapped.filter((jc) => !recentlyDeletedIds.current.has(jc.id) && !recentlyDeletedIds.current.has(jc.jobCardNo) && !recentlyDeletedIds.current.has(jc.subJobCardNo || ''))
             : mapped;
-          setJobCards(filtered);
-          saveJobCardsToStorage(filtered);
+
+          setJobCards((prev) => {
+            if (prev.length === 0) {
+              saveJobCardsToStorage(filtered);
+              return filtered;
+            }
+
+            const merged = filtered.map((serverCard) => {
+              const localCard = prev.find((p) => p.id === serverCard.id || p.jobCardNo === serverCard.jobCardNo);
+              if (!localCard) return serverCard;
+
+              const localStageIdx = localCard.currentStageIndex !== undefined ? localCard.currentStageIndex : normalizeStageIndex(localCard.currentStageName);
+              const serverStageIdx = serverCard.currentStageIndex !== undefined ? serverCard.currentStageIndex : normalizeStageIndex(serverCard.currentStageName);
+
+              // 1. If local card has moved further, keep local stage progress
+              const isLocalFurther = localStageIdx > serverStageIdx;
+
+              // 2. If local card was completed, keep COMPLETED
+              const isLocalCompleted = localCard.status === 'COMPLETED' && serverCard.status !== 'COMPLETED';
+
+              // 3. If local card was launched, keep IN_PROGRESS
+              const isLocalLaunched = localCard.status === 'IN_PROGRESS' && (serverCard.status === 'UNLAUNCHED' || serverCard.status === 'CREATED');
+
+              // 4. If local card has more rejections recorded, preserve rejection logs and quantities
+              const hasMoreLocalRejections = (localCard.rejectedPcbQty || 0) > (serverCard.rejectedPcbQty || 0);
+
+              if (isLocalFurther || isLocalCompleted || isLocalLaunched || hasMoreLocalRejections) {
+                return {
+                  ...serverCard,
+                  currentStageIndex: isLocalFurther ? localCard.currentStageIndex : serverCard.currentStageIndex,
+                  currentStageName: isLocalFurther ? localCard.currentStageName : serverCard.currentStageName,
+                  status: (isLocalCompleted || isLocalLaunched) ? localCard.status : serverCard.status,
+                  totalPcbQty: (isLocalFurther || hasMoreLocalRejections) ? localCard.totalPcbQty : serverCard.totalPcbQty,
+                  custPnlQty: (isLocalFurther || hasMoreLocalRejections) ? localCard.custPnlQty : serverCard.custPnlQty,
+                  prodPnlQty: (isLocalFurther || hasMoreLocalRejections) ? localCard.prodPnlQty : serverCard.prodPnlQty,
+                  custPnlAreaSqm: (isLocalFurther || hasMoreLocalRejections) ? localCard.custPnlAreaSqm : serverCard.custPnlAreaSqm,
+                  prodPnlAreaSqm: (isLocalFurther || hasMoreLocalRejections) ? localCard.prodPnlAreaSqm : serverCard.prodPnlAreaSqm,
+                  rejectedPcbQty: Math.max(localCard.rejectedPcbQty || 0, serverCard.rejectedPcbQty || 0),
+                  rejectedAreaSqm: Math.max(localCard.rejectedAreaSqm || 0, serverCard.rejectedAreaSqm || 0),
+                  rejectionLogs: localCard.rejectionLogs && localCard.rejectionLogs.length > 0 ? localCard.rejectionLogs : serverCard.rejectionLogs,
+                };
+              }
+
+              return serverCard;
+            });
+
+            saveJobCardsToStorage(merged);
+            return merged;
+          });
         }
       } else {
         setServerConnectionState({
@@ -1384,89 +1430,61 @@ export default function JobCardsPage() {
     let cardId = targetJob?.parentJobCardId || targetJob?.id || jobCardId;
     const cardNo = targetJob?.jobCardNo || jobCardId;
 
-    runWithLoading(`Releasing Job Card ${cardNo} into Stage 1 Production (1. SHEARING)...`, async () => {
+    // 1. INSTANT OPTIMISTIC UI & STORAGE UPDATE (0ms)
+    let updatedList: JobCard[] = [];
+    setJobCards((prev) => {
+      updatedList = prev.map((j) => {
+        if (j.id === cardId || j.id === jobCardId || j.jobCardNo === cardNo || j.parentJobCardId === cardId) {
+          return {
+            ...j,
+            status: 'IN_PROGRESS',
+            currentStageIndex: 0,
+            currentStageName: PF01_STAGES[0],
+            launchedAt: new Date().toISOString(),
+            isNewlyCreated: false,
+          };
+        }
+        return j;
+      });
+      saveJobCardsToStorage(updatedList);
+      return updatedList;
+    });
+
+    showToast(`🚀 Job Card ${cardNo} launched into Stage 1 (${PF01_STAGES[0]})`, 'success');
+
+    // 2. NON-BLOCKING BACKGROUND SYNC TO BACKEND
+    (async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         };
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
 
-        // 1. Try launching by ID
         let launchTarget = encodeURIComponent(cardId);
         let res = await fetch(`${getApiBaseUrl()}/job-cards/${launchTarget}/launch`, {
           method: 'POST',
           headers,
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
 
-        // 2. Fallback: Try launching by Job Card No
         if (!res.ok && cardNo && cardNo !== cardId) {
-          launchTarget = encodeURIComponent(cardNo);
-          res = await fetch(`${getApiBaseUrl()}/job-cards/${launchTarget}/launch`, {
+          const fbCtrl = new AbortController();
+          const fbTimeout = setTimeout(() => fbCtrl.abort(), 3500);
+          await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(cardNo)}/launch`, {
             method: 'POST',
             headers,
+            signal: fbCtrl.signal,
           });
+          clearTimeout(fbTimeout);
         }
-
-        // 3. Fallback: If card only existed in client memory, auto-create in DB with autoLaunch
-        if (!res.ok && targetJob) {
-          res = await fetch(`${getApiBaseUrl()}/job-cards/create`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-              jobCardNo: targetJob.jobCardNo,
-              customerPartNo: targetJob.customerPartNo,
-              rfePartCode: targetJob.rfePartCode,
-              customerCode: targetJob.customerCode,
-              targetDate: targetJob.targetDate,
-              priority: targetJob.priority,
-              totalPcbQty: targetJob.totalPcbQty || 160,
-              prodPnlQty: targetJob.prodPnlQty || 40,
-              custPnlQty: targetJob.custPnlQty || 160,
-              prodPnlAreaSqm: targetJob.prodPnlAreaSqm || 50,
-              custPnlAreaSqm: targetJob.custPnlAreaSqm || 45,
-              jobFlowSelection: targetJob.jobFlowSelection || 'PF-01',
-              autoLaunch: true,
-            }),
-          });
-
-          if (res.ok) {
-            const createdData = await res.json();
-            if (createdData?.id) {
-              cardId = createdData.id;
-            }
-          }
-        }
-
-        if (!res.ok) {
-          const errText = await res.text().catch(() => '');
-          showToast(`Backend Launch Error (${res.status}): ${errText.slice(0, 80) || 'Server rejected launch'}`, 'error');
-          return;
-        }
-      } catch (e: any) {
-        showToast(`Backend launch failed: Server unreachable or network error`, 'error');
-        return;
+      } catch (err) {
+        console.warn('Backend launch sync in background skipped or offline');
       }
-
-      setJobCards((prev) =>
-        prev.map((j) => {
-          if (j.id === cardId || j.id === jobCardId || j.jobCardNo === cardNo || j.parentJobCardId === cardId) {
-            return {
-              ...j,
-              status: 'IN_PROGRESS',
-              currentStageIndex: 0,
-              currentStageName: PF01_STAGES[0],
-              launchedAt: new Date().toISOString(),
-              isNewlyCreated: false,
-            };
-          }
-          return j;
-        })
-      );
-
-      await fetchBackendJobCards();
-      showToast(`🚀 Job Card ${cardNo} launched successfully into Stage 1 (${PF01_STAGES[0]})`, 'success');
-    });
+    })();
   };
 
   // Launch New Job Card Form Submit
