@@ -1006,8 +1006,11 @@ export default function JobCardsPage() {
               const mappedSubs: JobCard[] = subLots.map((sub: any) => {
                 const subPcbQty = sub.totalPcbQty || sub.qty || masterPcbQty;
                 const subAreaSqm = sub.custPnlAreaSqm || sub.prodPnlAreaSqm || masterAreaSqm;
-                const rawStage = sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
-                let stageIdx = sub.currentStage?.defaultOrder
+                const inFlight = inFlightMovements.current.get(sub.id) || (sub.subJobCardNo ? inFlightMovements.current.get(sub.subJobCardNo) : undefined);
+                const rawStage = (inFlight && inFlight.stageName) || sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
+                let stageIdx = (inFlight && inFlight.stageIdx !== undefined)
+                  ? inFlight.stageIdx
+                  : sub.currentStage?.defaultOrder
                   ? Math.min(Math.max(0, sub.currentStage.defaultOrder - 1), 19)
                   : normalizeStageIndex(rawStage);
                 if (stageIdx < 0) stageIdx = 0;
@@ -1098,8 +1101,11 @@ export default function JobCardsPage() {
               return Array.from(stageMap.values());
             }
 
-            const rawStage = j.currentStageName || j.currentStage?.name || (j.status === 'COMPLETED' ? '20. PACKING' : PF01_STAGES[0]);
-            let stageIdx = normalizeStageIndex(rawStage);
+            const inFlightParent = inFlightMovements.current.get(j.id) || (j.jobCardNo ? inFlightMovements.current.get(j.jobCardNo) : undefined);
+            const rawStage = (inFlightParent && inFlightParent.stageName) || j.currentStageName || j.currentStage?.name || (j.status === 'COMPLETED' ? '20. PACKING' : PF01_STAGES[0]);
+            let stageIdx = (inFlightParent && inFlightParent.stageIdx !== undefined)
+              ? inFlightParent.stageIdx
+              : normalizeStageIndex(rawStage);
             const jStatusRaw = String(j.status || '').toUpperCase();
             let jStatusNorm = (jStatusRaw === 'CREATED' || jStatusRaw === 'PENDING_LAUNCH' || jStatusRaw === 'UNLAUNCHED') ? 'UNLAUNCHED' : (j.status || 'IN_PROGRESS');
 
@@ -2093,9 +2099,20 @@ export default function JobCardsPage() {
         }
 
         if (res.ok) {
+          inFlightMovements.current.delete(targetSubId);
+          inFlightMovements.current.delete(targetSubNo);
+          inFlightMovements.current.delete(jobCardNo);
+          forceFreshOnNextPoll.current = true;
           await fetchBackendJobCards();
+        } else {
+          inFlightMovements.current.delete(targetSubId);
+          inFlightMovements.current.delete(targetSubNo);
+          inFlightMovements.current.delete(jobCardNo);
         }
       } catch (err: any) {
+        inFlightMovements.current.delete(targetSubId);
+        inFlightMovements.current.delete(targetSubNo);
+        inFlightMovements.current.delete(jobCardNo);
         console.warn('Backend stage move sync in background skipped or offline');
       }
     })();
