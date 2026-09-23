@@ -1203,10 +1203,9 @@ export default function JobCardsPage() {
               const localStageIdx = localCard.currentStageIndex !== undefined ? localCard.currentStageIndex : normalizeStageIndex(localCard.currentStageName);
               const serverStageIdx = serverCard.currentStageIndex !== undefined ? serverCard.currentStageIndex : normalizeStageIndex(serverCard.currentStageName);
 
-              // 1. Only apply local-further override when the EXACT UUID is registered in inFlightMovements
-              // This prevents the old "movedBatch" optimistic card from overriding server's remaining lot
-              const isInFlightForThisCard = inFlightMovements.current.has(localCard.id) || inFlightMovements.current.has(localCard.subJobCardNo || '');
-              const isLocalFurther = isInFlightForThisCard && localStageIdx > serverStageIdx;
+              // 1. If local card has moved further in stage than server response, preserve the local higher stage
+              // to prevent the 2-second bounce-back / flickering while the backend write is committing.
+              const isLocalFurther = localStageIdx > serverStageIdx;
 
               // 2. If local card was completed, keep COMPLETED
               const isLocalCompleted = localCard.status === 'COMPLETED' && serverCard.status !== 'COMPLETED';
@@ -1443,6 +1442,9 @@ export default function JobCardsPage() {
     const cardNo = targetJob?.jobCardNo || jobCardId;
 
     // 1. INSTANT OPTIMISTIC UI & STORAGE UPDATE (0ms)
+    inFlightMovements.current.set(cardId, { stageIdx: 0, stageName: PF01_STAGES[0], timestamp: Date.now() });
+    inFlightMovements.current.set(cardNo, { stageIdx: 0, stageName: PF01_STAGES[0], timestamp: Date.now() });
+
     let updatedList: JobCard[] = [];
     setJobCards((prev) => {
       updatedList = prev.map((j) => {
@@ -1783,6 +1785,10 @@ export default function JobCardsPage() {
     const cardId = card.id;
 
     // 1. INSTANT OPTIMISTIC UI & STORAGE UPDATE (0ms)
+    inFlightMovements.current.set(cardId, { stageIdx: nextIndex, stageName: nextStage, timestamp: Date.now() });
+    inFlightMovements.current.set(subCardNo, { stageIdx: nextIndex, stageName: nextStage, timestamp: Date.now() });
+    inFlightMovements.current.set(cardNo, { stageIdx: nextIndex, stageName: nextStage, timestamp: Date.now() });
+
     let updatedList: JobCard[] = [];
     setJobCards((prev) => {
       const otherItems = prev.filter((j) => j.id !== card.id);
@@ -1954,6 +1960,10 @@ export default function JobCardsPage() {
     const jobCardNo = selectedMovementJob.jobCardNo;
 
     // 1. INSTANT OPTIMISTIC UI & STORAGE UPDATE (0ms)
+    inFlightMovements.current.set(targetSubId, { stageIdx: nextIndex, stageName: nextStage, timestamp: Date.now() });
+    inFlightMovements.current.set(targetSubNo, { stageIdx: nextIndex, stageName: nextStage, timestamp: Date.now() });
+    inFlightMovements.current.set(jobCardNo, { stageIdx: nextIndex, stageName: nextStage, timestamp: Date.now() });
+
     let updatedList: JobCard[] = [];
     setJobCards((prev) => {
       const otherItems = prev.filter((j) => j.id !== selectedMovementJob.id);
@@ -2081,6 +2091,9 @@ export default function JobCardsPage() {
     const targetCardNo = selectedMovementJob?.jobCardNo || '';
 
     // 1. INSTANT OPTIMISTIC UI & STORAGE UPDATE (0ms)
+    inFlightMovements.current.set(targetId, { stageIdx: PF01_STAGES.length - 1, stageName: PF01_STAGES[PF01_STAGES.length - 1], timestamp: Date.now() });
+    if (targetCardNo) inFlightMovements.current.set(targetCardNo, { stageIdx: PF01_STAGES.length - 1, stageName: PF01_STAGES[PF01_STAGES.length - 1], timestamp: Date.now() });
+
     let updatedList: JobCard[] = [];
     setJobCards((prev) => {
       updatedList = prev.map((j) => {
