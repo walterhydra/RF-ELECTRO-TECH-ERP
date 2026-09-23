@@ -1074,9 +1074,11 @@ export default function JobCardsPage() {
                 if (existing) {
                   const combinedQty = (existing.totalPcbQty || 0) + (item.totalPcbQty || 0);
                   const combinedArea = Number(((existing.custPnlAreaSqm || 0) + (item.custPnlAreaSqm || 0)).toFixed(2));
-                  const combinedRejQty = (existing.rejectedPcbQty || 0) + (item.rejectedPcbQty || 0);
-                  const combinedRejArea = Number(((existing.rejectedAreaSqm || 0) + (item.rejectedAreaSqm || 0)).toFixed(2));
-                  const combinedLogs = [...(existing.rejectionLogs || []), ...(item.rejectionLogs || [])];
+                  const combinedRejQty = Math.max(existing.rejectedPcbQty || 0, item.rejectedPcbQty || 0);
+                  const combinedRejArea = Math.max(existing.rejectedAreaSqm || 0, item.rejectedAreaSqm || 0);
+                  const combinedLogs = (existing.rejectionLogs && existing.rejectionLogs.length > 0)
+                    ? existing.rejectionLogs
+                    : (item.rejectionLogs || []);
                   stageMap.set(groupKey, {
                     ...existing,
                     totalPcbQty: combinedQty,
@@ -1316,6 +1318,10 @@ export default function JobCardsPage() {
     if (matched) {
       runWithLoading(`Scanning QR/Barcode & Loading Job Card ${matched.jobCardNo}...`, () => {
         setSelectedMovementJob(matched);
+        setHasRejectionInMovement(false);
+        setFullMoveRejectQty(0);
+        setFullMoveRemarks('');
+        setFullMoveRemarkType('Clear Movement');
         setPartialMoveQty(Math.max(1, Math.floor((matched.totalPcbQty || 160) / 2)));
         setMovementTab('VIEW');
         setBarcodeInput('');
@@ -1982,9 +1988,9 @@ export default function JobCardsPage() {
           prodPnlQty: Math.ceil(mergedQty / 4),
           custPnlAreaSqm: mergedArea,
           prodPnlAreaSqm: mergedArea,
-          rejectedPcbQty: (target.rejectedPcbQty || 0) + updatedRejectedPcbQty,
-          rejectedAreaSqm: Number(((target.rejectedAreaSqm || 0) + updatedRejectedAreaSqm).toFixed(2)),
-          rejectionLogs: [...(target.rejectionLogs || []), ...newRejectionLogs],
+          rejectedPcbQty: Math.max(target.rejectedPcbQty || 0, updatedRejectedPcbQty),
+          rejectedAreaSqm: Math.max(target.rejectedAreaSqm || 0, updatedRejectedAreaSqm),
+          rejectionLogs: newRejectionLogs.length > 0 ? newRejectionLogs : (target.rejectionLogs || []),
           status: 'IN_PROGRESS',
         };
         updatedList = otherItems.map((j, idx) => (idx === existingNextIdx ? mergedCard : j));
@@ -3557,6 +3563,7 @@ export default function JobCardsPage() {
                             <button
                               onClick={() => {
                                 setSelectedMovementJob(jc);
+                                setHasRejectionInMovement(false);
                                 setFullMoveRejectQty(0);
                                 setFullMoveRemarks('');
                                 setFullMoveRemarkType('Clear Movement');
