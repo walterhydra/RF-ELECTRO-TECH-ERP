@@ -728,17 +728,21 @@ export default function JobCardsPage() {
     }
   }, [jobCards, isMounted]);
 
-  // Sync userRole from localStorage if set
+  // Sync userRole and assignedStage from localStorage if set
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('userRole');
-      if (stored) {
-        const upper = stored.toUpperCase();
-        if (upper.includes('SUPER') || upper.includes('MASTER') || upper.includes('ADMIN')) {
-          setUserRole('MASTER');
-        } else if (upper.includes('PROD') || upper.includes('MANAGER')) {
-          setUserRole('SUPER_USER');
-        }
+      const stored = localStorage.getItem('userRole') || '';
+      const storedStage = localStorage.getItem('assignedStage');
+      if (storedStage) {
+        setAssignedStage(storedStage);
+      }
+      const upper = stored.toUpperCase();
+      if (upper.includes('OPERATOR') || Boolean(storedStage) || upper === 'NORMAL' || upper === 'PROCESS_OPERATOR') {
+        setUserRole('NORMAL');
+      } else if (upper.includes('SUPER') || upper.includes('ADMIN')) {
+        setUserRole('MASTER');
+      } else if (upper.includes('PROD') || upper.includes('MANAGER')) {
+        setUserRole('SUPER_USER');
       }
     }
   }, []);
@@ -746,7 +750,7 @@ export default function JobCardsPage() {
   // Super Admin Check Helper
   const isSuperAdmin = React.useMemo(() => {
     const upper = userRole.toUpperCase();
-    return upper.includes('SUPER') || upper.includes('MASTER') || upper.includes('ADMIN') || userRole === 'MASTER';
+    return (upper.includes('SUPER') || upper.includes('MASTER') || upper.includes('ADMIN') || userRole === 'MASTER') && !userRole.includes('OPERATOR');
   }, [userRole]);
 
   // Toast Notification State (Replaces native browser alerts)
@@ -2531,15 +2535,41 @@ export default function JobCardsPage() {
       .trim();
   };
 
+  const isOperatorUser = userRole === 'NORMAL' || !isSuperAdmin;
+
+  // Scoped Cards: When logged in as a Stage Operator, strictly isolate to that stage
+  const scopedCards = React.useMemo(() => {
+    if (!isOperatorUser || !assignedStage) return jobCards;
+    const targetSlug = normalizeStageSlug(assignedStage);
+    return jobCards.filter((jc) => {
+      const isCardUnlaunched = jc.status === 'UNLAUNCHED' || jc.status === 'CREATED';
+      const isCardCompleted = jc.status === 'COMPLETED';
+      if (isCardUnlaunched) return targetSlug === 'shearing' || targetSlug === '1shearing';
+      if (isCardCompleted) return targetSlug === 'packing' || targetSlug === '20packing';
+
+      const cardStageSlug = normalizeStageSlug(jc.currentStageName);
+      if (cardStageSlug === targetSlug || (jc.currentStageName || '').toLowerCase().includes(assignedStage.toLowerCase())) {
+        return true;
+      }
+      if (jc.subJobCards && Array.isArray(jc.subJobCards) && jc.subJobCards.length > 0) {
+        return jc.subJobCards.some((s: any) => {
+          const subStageName = s.currentStage?.name || jc.currentStageName || '';
+          const subSlug = normalizeStageSlug(subStageName);
+          return subSlug === targetSlug || subStageName.toLowerCase().includes(assignedStage.toLowerCase());
+        });
+      }
+      return false;
+    });
+  }, [jobCards, isOperatorUser, assignedStage]);
+
   // Filtered Cards based on per-column filters, global search, and radio status
-  const filteredCards = jobCards.filter((jc) => {
+  const filteredCards = scopedCards.filter((jc) => {
     const matchesWip = !colFilters.wipNo || jc.jobCardNo.toLowerCase().includes(colFilters.wipNo.toLowerCase());
     const matchesProduct = !colFilters.product || jc.customerPartNo?.toLowerCase().includes(colFilters.product.toLowerCase());
     const matchesCode = !colFilters.productCode || jc.rfePartCode?.toLowerCase().includes(colFilters.productCode.toLowerCase());
     const matchesCust = !colFilters.customer || jc.customerCode?.toLowerCase().includes(colFilters.customer.toLowerCase());
 
-    const isOperatorUser = userRole === 'NORMAL';
-    const effectiveStageFilter = isOperatorUser ? assignedStage : colFilters.stage;
+    const effectiveStageFilter = (!isOperatorUser && colFilters.stage) ? colFilters.stage : '';
     let matchesStage = true;
     if (effectiveStageFilter) {
       const targetSlug = normalizeStageSlug(effectiveStageFilter);
@@ -2580,14 +2610,14 @@ export default function JobCardsPage() {
     return matchesWip && matchesProduct && matchesCode && matchesCust && matchesStage && matchesPriority && matchesGlobal && matchesRadio;
   });
 
-  const totalMasterCards = jobCards.length;
-  const inProgressCount = jobCards.filter((j) => j.status === 'IN_PROGRESS').length;
-  const totalSubLots = jobCards.reduce((acc, j) => acc + (j.subJobCards?.length || 1), 0);
-  const activePnlCount = jobCards.reduce((acc, j) => acc + (j.prodPnlQty || 0), 0);
-  const activePcbCount = jobCards.reduce((acc, j) => acc + (j.totalPcbQty || (j.custPnlQty && j.custPnlQty > 50 ? j.custPnlQty : ((j.prodPnlQty || 0) * 4))), 0);
-  const activeSqmArea = jobCards.reduce((acc, j) => acc + (j.prodPnlAreaSqm || 0), 0);
+  const totalMasterCards = scopedCards.length;
+  const inProgressCount = scopedCards.filter((j) => j.status === 'IN_PROGRESS').length;
+  const totalSubLots = scopedCards.reduce((acc, j) => acc + (j.subJobCards?.length || 1), 0);
+  const activePnlCount = scopedCards.reduce((acc, j) => acc + (j.prodPnlQty || 0), 0);
+  const activePcbCount = scopedCards.reduce((acc, j) => acc + (j.totalPcbQty || (j.custPnlQty && j.custPnlQty > 50 ? j.custPnlQty : ((j.prodPnlQty || 0) * 4))), 0);
+  const activeSqmArea = scopedCards.reduce((acc, j) => acc + (j.prodPnlAreaSqm || 0), 0);
 
-  const overdueCards = React.useMemo(() => jobCards.filter(isCardOverdue), [jobCards, isCardOverdue]);
+  const overdueCards = React.useMemo(() => scopedCards.filter(isCardOverdue), [scopedCards, isCardOverdue]);
   const overdueCount = overdueCards.length;
   const overduePcbCount = React.useMemo(
     () => overdueCards.reduce((acc, curr) => acc + (curr.totalPcbQty || curr.custPnlQty || 0), 0),
@@ -2596,7 +2626,7 @@ export default function JobCardsPage() {
 
   // Top 3 WIP Stages by active Sqm Area
   const top3WipStages = React.useMemo(() => {
-    const activeCards = jobCards.filter((j) => j.status !== 'COMPLETED');
+    const activeCards = scopedCards.filter((j) => j.status !== 'COMPLETED');
     const totalFloorSqm = activeCards.reduce((sum, j) => sum + (j.custPnlAreaSqm || j.prodPnlAreaSqm || 0), 0);
 
     const stageMap: Record<string, { stageName: string; areaSqm: number; pcbQty: number; cardCount: number }> = {};
@@ -2622,15 +2652,15 @@ export default function JobCardsPage() {
         areaSqm: Number(item.areaSqm.toFixed(2)),
         percentage: totalFloorSqm > 0 ? Math.round((item.areaSqm / totalFloorSqm) * 100) : 0,
       }));
-  }, [jobCards]);
+  }, [scopedCards]);
 
   // Top 5 High Rejection Job Cards (Tracked live upon stage movement entry)
   const top5RejectedCards = React.useMemo(() => {
-    return jobCards
+    return scopedCards
       .filter((j) => (j.rejectedPcbQty || 0) > 0)
       .sort((a, b) => (b.rejectedPcbQty || 0) - (a.rejectedPcbQty || 0))
       .slice(0, 5);
-  }, [jobCards]);
+  }, [scopedCards]);
 
   const getStatusBadge = (status?: string) => {
     switch (status) {

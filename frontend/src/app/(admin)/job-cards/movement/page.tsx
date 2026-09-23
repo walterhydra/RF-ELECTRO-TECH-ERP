@@ -544,6 +544,12 @@ export default function JobMovementUpdatePage() {
   const filteredJobs = jobs.filter((j) => {
     if (userRole === 'NORMAL') {
       const assignedSlug = normalizeStageSlug(assignedStage);
+      const isUnlaunched = j.status === 'UNLAUNCHED';
+      const isCompleted = j.status === 'COMPLETED';
+
+      if (isUnlaunched && assignedSlug !== 'shearing' && assignedSlug !== '1shearing') return false;
+      if (isCompleted && assignedSlug !== 'packing' && assignedSlug !== '20packing') return false;
+
       const jobSlug = normalizeStageSlug(j.currentStageName);
       if (assignedSlug && jobSlug && assignedSlug !== jobSlug) {
         return false;
