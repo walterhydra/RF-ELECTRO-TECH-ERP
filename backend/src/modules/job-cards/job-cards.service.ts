@@ -605,9 +605,9 @@ export class JobCardsService {
       { name: '9. PREMASK-QC/AOI', code: 'PM-QC',    order: 9  },
       { name: '10. PISM',          code: 'PISM',     order: 10 },
       { name: '11. PISM-QC',       code: 'PISM-QC',  order: 11 },
-      { name: '12. HASL',          code: 'HASL',     order: 12 },
-      { name: '13. HASL-QC',       code: 'HASL-QC',  order: 13 },
-      { name: '14. LEGEND PRINT',  code: 'LGD',      order: 14 },
+      { name: '12. LEGEND PRINT',  code: 'LGD',      order: 12 },
+      { name: '13. HASL',          code: 'HASL',     order: 13 },
+      { name: '14. HASL-QC',       code: 'HASL-QC',  order: 14 },
       { name: '15. ROUTING',       code: 'RTE',      order: 15 },
       { name: '16. VG',            code: 'VG',       order: 16 },
       { name: '17. BBT',           code: 'BBT',      order: 17 },
@@ -1662,9 +1662,9 @@ export class JobCardsService {
       { name: '9. PREMASK-QC/AOI', code: 'PM-QC',    order: 9  },
       { name: '10. PISM',          code: 'PISM',     order: 10 },
       { name: '11. PISM-QC',       code: 'PISM-QC',  order: 11 },
-      { name: '12. HASL',          code: 'HASL',     order: 12 },
-      { name: '13. HASL-QC',       code: 'HASL-QC',  order: 13 },
-      { name: '14. LEGEND PRINT',  code: 'LGD',      order: 14 },
+      { name: '12. LEGEND PRINT',  code: 'LGD',      order: 12 },
+      { name: '13. HASL',          code: 'HASL',     order: 13 },
+      { name: '14. HASL-QC',       code: 'HASL-QC',  order: 14 },
       { name: '15. ROUTING',       code: 'RTE',      order: 15 },
       { name: '16. VG',            code: 'VG',       order: 16 },
       { name: '17. BBT',           code: 'BBT',      order: 17 },
@@ -1721,9 +1721,9 @@ export class JobCardsService {
       else if (cLower.includes('etch')) currIdx = 7;
       else if (cLower.includes('pism-qc') || cLower.includes('solder mask-qc') || cLower.includes('sm-qc')) currIdx = 10;
       else if (cLower.includes('pism') || cLower.includes('solder')) currIdx = 9;
-      else if (cLower.includes('hasl-qc')) currIdx = 12;
-      else if (cLower.includes('hasl') || cLower.includes('hal') || cLower.includes('enig')) currIdx = 11;
-      else if (cLower.includes('legend')) currIdx = 13;
+      else if (cLower.includes('legend')) currIdx = 11;
+      else if (cLower.includes('hasl-qc')) currIdx = 13;
+      else if (cLower.includes('hasl') || cLower.includes('hal') || cLower.includes('enig')) currIdx = 12;
       else if (cLower.includes('rout') || cLower.includes('cnc') || cLower.includes('punch')) currIdx = 14;
       else if (cLower.includes('vg') || cLower.includes('v-cut') || cLower.includes('vcut')) currIdx = 15;
       else if (cLower.includes('bbt') || cLower.includes('bare board') || cLower.includes('testing')) currIdx = 16;

@@ -61,9 +61,9 @@ const PF01_STAGES = [
   '9. PREMASK-QC/AOI',
   '10. PISM',
   '11. PISM-QC',
-  '12. HASL',
-  '13. HASL-QC',
-  '14. LEGEND PRINT',
+  '12. LEGEND PRINT',
+  '13. HASL',
+  '14. HASL-QC',
   '15. ROUTING',
   '16. VG',
   '17. BBT',
@@ -96,9 +96,9 @@ const normalizeStageIndex = (stageName?: string | null): number => {
   if (s.includes('etching') || s.includes('etch')) return 7;           // 8. ETCHING
   if (s.includes('pism-qc') || s.includes('solder mask-qc') || s.includes('sm-qc')) return 10; // 11. PISM-QC
   if (s.includes('pism') || s.includes('solder mask') || s.includes('solder')) return 9; // 10. PISM
-  if (s.includes('hasl-qc')) return 12;                                 // 13. HASL-QC
-  if (s.includes('hasl') || s.includes('hal') || s.includes('enig')) return 11; // 12. HASL
-  if (s.includes('legend')) return 13;                                  // 14. LEGEND PRINT
+  if (s.includes('legend')) return 11;                                  // 12. LEGEND PRINT
+  if (s.includes('hasl-qc')) return 13;                                 // 14. HASL-QC
+  if (s.includes('hasl') || s.includes('hal') || s.includes('enig')) return 12; // 13. HASL
   if (s.includes('routing') || s.includes('rout') || s.includes('cnc') || s.includes('punching')) return 14; // 15. ROUTING
   if (s.includes('vg') || s.includes('v-cut') || s.includes('vcut') || s.includes('v-groove')) return 15; // 16. VG
   if (s.includes('bbt') || s.includes('bare board') || s.includes('e-testing') || s.includes('testing')) return 16; // 17. BBT
