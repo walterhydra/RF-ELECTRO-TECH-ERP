@@ -2431,6 +2431,7 @@ export default function JobCardsPage() {
               <th class="header-cell" style="width: 100px;">Prod PNL Qty</th>
               <th class="header-cell" style="width: 100px;">Cust PNL Qty</th>
               <th class="header-cell" style="width: 110px;">Total PCB Qty</th>
+              <th class="header-cell" style="width: 100px;">Rej PCBs</th>
               <th class="header-cell" style="width: 110px;">WIP Area (Sqm)</th>
               <th class="header-cell" style="width: 160px;">Current Process Stage</th>
               <th class="header-cell" style="width: 120px;">Job Status</th>
@@ -2471,6 +2472,7 @@ export default function JobCardsPage() {
           <td class="data-cell text-right font-mono" style="mso-number-format:'\\#\\,\\#\\#0';">${j.prodPnlQty || 0}</td>
           <td class="data-cell text-right font-mono" style="mso-number-format:'\\#\\,\\#\\#0';">${j.custPnlQty || 0}</td>
           <td class="data-cell text-right font-mono" style="mso-number-format:'\\#\\,\\#\\#0';">${j.totalPcbQty || 0}</td>
+          <td class="data-cell text-right font-mono" style="mso-number-format:'\\#\\,\\#\\#0'; color: ${j.rejectedPcbQty ? '#e11d48' : '#64748b'}; font-weight: bold;">${j.rejectedPcbQty || 0}</td>
           <td class="data-cell text-right font-mono" style="mso-number-format:'0\\.00';">${(j.prodPnlAreaSqm || 0).toFixed(2)} Sqm</td>
           <td class="data-cell text-center font-mono">${stageDisplay}</td>
           <td class="data-cell text-center">${statusBadge}</td>
@@ -2519,6 +2521,7 @@ export default function JobCardsPage() {
     target: '',
     priority: '',
     pndg: '',
+    rejection: '',
     unit: '',
     area: '',
     stage: '',
@@ -2601,6 +2604,8 @@ export default function JobCardsPage() {
     }
 
     const matchesPriority = !colFilters.priority || jc.priority.toLowerCase().includes(colFilters.priority.toLowerCase());
+    const matchesPndg = !colFilters.pndg || String(jc.totalPcbQty || jc.custPnlQty || '').includes(colFilters.pndg);
+    const matchesRejection = !colFilters.rejection || String(jc.rejectedPcbQty || 0).includes(colFilters.rejection);
     
     const matchesGlobal =
       !globalSearch ||
@@ -2623,7 +2628,7 @@ export default function JobCardsPage() {
         ? isCardOverdue(jc)
         : true;
 
-    return matchesWip && matchesProduct && matchesCode && matchesCust && matchesStage && matchesPriority && matchesGlobal && matchesRadio;
+    return matchesWip && matchesProduct && matchesCode && matchesCust && matchesStage && matchesPriority && matchesPndg && matchesRejection && matchesGlobal && matchesRadio;
   });
 
   const totalMasterCards = scopedCards.length;
@@ -3221,6 +3226,7 @@ export default function JobCardsPage() {
                 <th className="py-2.5 px-3 border-r border-slate-300 min-w-[90px] whitespace-nowrap">Target</th>
                 <th className="py-2.5 px-3 border-r border-slate-300 min-w-[65px] whitespace-nowrap">Priority</th>
                 <th className="py-2.5 px-3 border-r border-slate-300 min-w-[60px] text-right whitespace-nowrap">Pndg</th>
+                <th className="py-2.5 px-3 border-r border-slate-300 min-w-[80px] text-center whitespace-nowrap text-rose-700 font-extrabold">Rejection</th>
                 <th className="py-2.5 px-3 border-r border-slate-300 min-w-[50px] whitespace-nowrap">Unit</th>
                 <th className="py-2.5 px-3 border-r border-slate-300 min-w-[65px] text-right whitespace-nowrap">Area</th>
                 <th className="py-2.5 px-3 border-r border-slate-300 min-w-[110px] whitespace-nowrap">Stage</th>
@@ -3298,6 +3304,15 @@ export default function JobCardsPage() {
                   <td className="p-1 border-r border-slate-300">
                     <input
                       type="text"
+                      value={colFilters.rejection}
+                      onChange={(e) => setColFilters({ ...colFilters, rejection: e.target.value })}
+                      placeholder="Rej..."
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 font-mono shadow-2xs text-center"
+                    />
+                  </td>
+                  <td className="p-1 border-r border-slate-300">
+                    <input
+                      type="text"
                       value={colFilters.unit}
                       onChange={(e) => setColFilters({ ...colFilters, unit: e.target.value })}
                       className="w-full bg-white border border-slate-300 rounded-lg px-2 py-0.5 text-[10px] focus:outline-none focus:border-amber-500 shadow-2xs"
@@ -3335,7 +3350,7 @@ export default function JobCardsPage() {
             <tbody className="divide-y divide-slate-200">
               {filteredCards.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="py-12 text-center text-slate-400 text-xs font-mono">
+                  <td colSpan={14} className="py-12 text-center text-slate-400 text-xs font-mono">
                     <div className="flex flex-col items-center justify-center gap-3 py-4">
                       <p className="text-slate-600 font-sans font-semibold text-sm">No job cards found matching current filters.</p>
                       <div className="flex items-center gap-2">
@@ -3443,19 +3458,27 @@ export default function JobCardsPage() {
 
                       {/* Pndg */}
                       <td className="py-2.5 px-3 border-r border-slate-200 font-mono text-right font-bold text-slate-900 whitespace-nowrap">
-                        <div className="flex flex-col items-end">
-                          <span className="text-slate-900 font-black">
-                            {jc.totalPcbQty || (jc.custPnlQty && jc.custPnlQty > 50 ? jc.custPnlQty : (jc.prodPnlQty ? Math.round(jc.prodPnlQty * 4) : 160))}
+                        <span className="text-slate-900 font-black">
+                          {jc.totalPcbQty || (jc.custPnlQty && jc.custPnlQty > 50 ? jc.custPnlQty : (jc.prodPnlQty ? Math.round(jc.prodPnlQty * 4) : 160))}
+                        </span>
+                      </td>
+
+                      {/* Rejection */}
+                      <td className="py-2.5 px-3 border-r border-slate-200 font-mono text-center whitespace-nowrap">
+                        {Boolean(jc.rejectedPcbQty && jc.rejectedPcbQty > 0) ? (
+                          <span
+                            title={`Total Rejected PCBs: ${jc.rejectedPcbQty} (${jc.rejectedAreaSqm || 0} Sqm) - Click to view history`}
+                            onClick={() => fetchJobCardHistory(jc)}
+                            className="text-[11px] font-black text-rose-700 bg-rose-50 border border-rose-300 px-2 py-0.5 rounded-lg font-mono inline-flex items-center gap-1 shadow-2xs cursor-pointer hover:bg-rose-100 transition-colors"
+                          >
+                            <span>⚠️</span>
+                            <span>{jc.rejectedPcbQty} Rej</span>
                           </span>
-                          {Boolean(jc.rejectedPcbQty && jc.rejectedPcbQty > 0) && (
-                            <span
-                              title={`Total Rejected PCBs on this card: ${jc.rejectedPcbQty}`}
-                              className="text-[10px] font-black text-rose-600 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200 font-mono inline-flex items-center gap-0.5 mt-0.5 shadow-2xs"
-                            >
-                              ⚠️ {jc.rejectedPcbQty} Rej
-                            </span>
-                          )}
-                        </div>
+                        ) : (
+                          <span className="text-[11px] font-mono text-slate-400 font-medium">
+                            0
+                          </span>
+                        )}
                       </td>
 
                       {/* Unit */}
