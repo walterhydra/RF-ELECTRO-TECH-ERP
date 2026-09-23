@@ -861,6 +861,7 @@ export default function JobCardsPage() {
   // High-Tech Loading Screen Overlay State
   const [isLoading, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState('Processing ERP Request...');
+  const [isSubmittingLaunch, setIsSubmittingLaunch] = useState(false);
 
   const runWithLoading = (text: string, action: () => void, delayMs = 650) => {
     setLoadingText(text);
@@ -1604,19 +1605,16 @@ export default function JobCardsPage() {
         },
       };
 
-      runWithLoading(`Updating Job Card ${jcNo}...`, async () => {
-        try {
-          await fetch(`${getApiBaseUrl()}/job-cards/${existing.id}`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-            },
-            body: JSON.stringify(updatedJobCard),
-          });
-        } catch (err) {
-          // offline fallback
-        }
+      setIsSubmittingLaunch(true);
+      try {
+        await fetch(`${getApiBaseUrl()}/job-cards/${existing.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+          },
+          body: JSON.stringify(updatedJobCard),
+        });
 
         setJobCards((prev) => prev.map((j, idx) => (idx === existingIndex ? updatedJobCard : j)));
         saveJobCardsToStorage(jobCards.map((j, idx) => (idx === existingIndex ? updatedJobCard : j)));
@@ -1624,11 +1622,16 @@ export default function JobCardsPage() {
         setShowGenerateModal(false);
         setEditingCardId(null);
         await fetchBackendJobCards();
-      });
+      } catch (err: any) {
+        showToast(`Error updating Job Card: ${err?.message || 'Server error'}`, 'error');
+      } finally {
+        setIsSubmittingLaunch(false);
+      }
       return;
     }
 
-    runWithLoading('Creating New Job Card & Generating Barcode Tag...', async () => {
+    setIsSubmittingLaunch(true);
+    try {
       const newJobCard: JobCard = {
         id: `jc-${Date.now()}`,
         jobCardNo: jcNo,
@@ -1674,55 +1677,51 @@ export default function JobCardsPage() {
       };
 
       // Backend POST API sync - MUST succeed before adding to state/localStorage
-      try {
-        const createRes = await fetch(`${getApiBaseUrl()}/job-cards/create`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-          },
-          body: JSON.stringify({
-            jobCardNo: jcNo,
-            photoUrl: launchForm.photoUrl,
-            customerPartNo: launchForm.customerPartNo,
-            rfePartCode: launchForm.rfePartCode,
-            customerCode: launchForm.customerCode,
-            targetDate: launchForm.targetDate,
-            launchedAt: launchIsoDate,
-            priority: launchForm.priority,
-            prodPnlQty: Math.ceil(totalPcb / 4),
-            custPnlQty: totalPcb,
-            totalPcbQty: totalPcb,
-            prodPnlAreaSqm: launchForm.prodPnlAreaSqm,
-            custPnlAreaSqm: launchForm.custPnlAreaSqm,
-            jobFlowSelection: launchForm.jobFlowSelection,
-            autoLaunch: launchForm.autoLaunch,
-            splits: apiSplits,
-            layers: Number(launchForm.layers) || 2,
-            thicknessMm: Number(launchForm.thicknessMm) || 1.6,
-            copperWeight: launchForm.copperWeight || '1oz',
-            surfaceFinish: launchForm.surfaceFinish || 'HASL Lead-Free',
-            solderMask: launchForm.solderMask || 'Green',
-            materialType: launchForm.materialType || 'FR-4',
-          }),
-        });
+      const createRes = await fetch(`${getApiBaseUrl()}/job-cards/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+        },
+        body: JSON.stringify({
+          jobCardNo: jcNo,
+          photoUrl: launchForm.photoUrl,
+          customerPartNo: launchForm.customerPartNo,
+          rfePartCode: launchForm.rfePartCode,
+          customerCode: launchForm.customerCode,
+          targetDate: launchForm.targetDate,
+          launchedAt: launchIsoDate,
+          priority: launchForm.priority,
+          prodPnlQty: Math.ceil(totalPcb / 4),
+          custPnlQty: totalPcb,
+          totalPcbQty: totalPcb,
+          prodPnlAreaSqm: launchForm.prodPnlAreaSqm,
+          custPnlAreaSqm: launchForm.custPnlAreaSqm,
+          jobFlowSelection: launchForm.jobFlowSelection,
+          autoLaunch: launchForm.autoLaunch,
+          splits: apiSplits,
+          layers: Number(launchForm.layers) || 2,
+          thicknessMm: Number(launchForm.thicknessMm) || 1.6,
+          copperWeight: launchForm.copperWeight || '1oz',
+          surfaceFinish: launchForm.surfaceFinish || 'HASL Lead-Free',
+          solderMask: launchForm.solderMask || 'Green',
+          materialType: launchForm.materialType || 'FR-4',
+        }),
+      });
 
-        if (!createRes.ok) {
-          const errorMsg = await createRes.text().catch(() => '');
-          showToast(`Backend Create Error (${createRes.status}): ${errorMsg.slice(0, 80) || 'Server rejected creation'}`, 'error');
-          return; // DO NOT add to local state if backend creation fails
-        }
+      if (!createRes.ok) {
+        const errorMsg = await createRes.text().catch(() => '');
+        showToast(`Backend Create Error (${createRes.status}): ${errorMsg.slice(0, 80) || 'Server rejected creation'}`, 'error');
+        return; // DO NOT add to local state if backend creation fails
+      }
 
-        const createdData = await createRes.json();
-        if (createdData && createdData.id) {
-          newJobCard.id = createdData.id;
-        }
-      } catch (err: any) {
-        showToast(`Backend unreachable. Cannot create Job Card without server connection: ${err?.message || 'Network error'}`, 'error');
-        return; // DO NOT add to local state if network fails
+      const createdData = await createRes.json();
+      if (createdData && createdData.id) {
+        newJobCard.id = createdData.id;
       }
 
       setJobCards((prev) => [newJobCard, ...prev]);
+      saveJobCardsToStorage([newJobCard, ...jobCards]);
       setStatusRadio('All');
       setShowGenerateModal(false);
       setShowQrModal(newJobCard);
@@ -1735,7 +1734,11 @@ export default function JobCardsPage() {
         }`,
         'success'
       );
-    });
+    } catch (err: any) {
+      showToast(`Backend unreachable. Cannot create Job Card without server connection: ${err?.message || 'Network error'}`, 'error');
+    } finally {
+      setIsSubmittingLaunch(false);
+    }
   };
 
   // 1-Click Direct Quick Stage Advance
@@ -3643,8 +3646,9 @@ export default function JobCardsPage() {
                 
                 <button 
                   type="button"
+                  disabled={isSubmittingLaunch}
                   onClick={() => setShowGenerateModal(false)} 
-                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer text-sm font-bold"
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                   title="Close modal"
                 >
                   ✕
@@ -4332,27 +4336,46 @@ export default function JobCardsPage() {
 
               {/* Modal Footer Actions */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 bg-slate-50 border-t border-slate-200/80 shrink-0">
-                <div className="text-xs text-slate-500 hidden sm:flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span>Ready to dispatch to production</span>
-                </div>
+                {isSubmittingLaunch ? (
+                  <div className="text-xs text-amber-700 font-bold flex items-center gap-2 animate-pulse">
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                    <span>{editingCardId ? 'Saving changes & updating WIP record...' : 'Generating industrial barcode traveler & launching WIP...'}</span>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500 hidden sm:flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>Ready to dispatch to production</span>
+                  </div>
+                )}
 
                 <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
                   <button
                     type="button"
+                    disabled={isSubmittingLaunch}
                     onClick={() => setShowGenerateModal(false)}
-                    className="px-5 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs transition-all shadow-2xs cursor-pointer"
+                    className="px-5 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs transition-all shadow-2xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     Cancel
                   </button>
 
                   <button
                     type="button"
+                    disabled={isSubmittingLaunch}
                     onClick={(e) => handleLaunchJobCard(e as any)}
-                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-75 disabled:cursor-not-allowed disabled:transform-none"
                   >
-                    {editingCardId ? <CheckCircle2 className="w-4 h-4 text-slate-950 stroke-[2.5]" /> : <Plus className="w-4 h-4 text-slate-950 stroke-[3]" />}
-                    <span>{editingCardId ? 'SAVE CHANGES' : 'LAUNCH JOB'}</span>
+                    {isSubmittingLaunch ? (
+                      <RefreshCw className="w-4 h-4 text-slate-950 stroke-[2.5] animate-spin" />
+                    ) : editingCardId ? (
+                      <CheckCircle2 className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+                    ) : (
+                      <Plus className="w-4 h-4 text-slate-950 stroke-[3]" />
+                    )}
+                    <span>
+                      {isSubmittingLaunch
+                        ? editingCardId ? 'SAVING CHANGES...' : 'CREATING JOB CARD...'
+                        : editingCardId ? 'SAVE CHANGES' : 'LAUNCH JOB'}
+                    </span>
                   </button>
                 </div>
               </div>
