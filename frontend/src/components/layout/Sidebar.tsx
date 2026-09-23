@@ -29,11 +29,15 @@ export const Sidebar: React.FC = () => {
 
   const [isMobileOpen, setIsMobileOpen] = React.useState(false);
 
+  const [assignedStage, setAssignedStage] = React.useState<string | null>(null);
+
   React.useEffect(() => {
     const role = localStorage.getItem('userRole');
     const email = localStorage.getItem('userEmail');
+    const stage = localStorage.getItem('assignedStage');
     if (role) setUserRole(role);
     if (email) setUserEmail(email);
+    if (stage) setAssignedStage(stage);
 
     const handleToggle = () => setIsMobileOpen(prev => !prev);
     window.addEventListener('toggle-mobile-sidebar', handleToggle);
@@ -47,20 +51,29 @@ export const Sidebar: React.FC = () => {
   
   const allNavItems = [
     { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    { label: assignedStage ? `Job Cards (${assignedStage.replace(/^\d+\.\s*/, '')})` : 'Job Cards & Split', href: '/job-cards', icon: Layers, roles: ['Super Admin', 'Production Manager', 'Stage Operator', 'PROCESS_OPERATOR', 'NORMAL'] },
+    { label: 'Job Movement & Update', href: '/job-cards/movement', icon: Activity, roles: ['Super Admin', 'Production Manager', 'Stage Operator', 'PROCESS_OPERATOR', 'NORMAL', 'Quality Inspector'] },
+    { label: 'Floor Monitor', href: '/floor', icon: Activity, roles: ['Super Admin', 'Production Manager', 'Quality Inspector', 'Stage Operator', 'PROCESS_OPERATOR', 'NORMAL'] },
     { label: 'Customer Master', href: '/customers', icon: Building2, roles: ['Super Admin', 'Production Manager'] },
     { label: 'Product Master (Specs)', href: '/products', icon: Cpu, roles: ['Super Admin', 'Production Manager'] },
     { label: 'Process Master', href: '/processes', icon: Settings2, roles: ['Super Admin', 'Production Manager'] },
     { label: 'Customer POs', href: '/pos', icon: ShoppingCart, roles: ['Super Admin', 'Production Manager', 'Dispatch Manager'] },
-    { label: 'Job Cards & Split', href: '/job-cards', icon: Layers, roles: ['Super Admin', 'Production Manager'] },
-    { label: 'Floor Monitor', href: '/floor', icon: Activity, roles: ['Super Admin', 'Production Manager', 'Quality Inspector'] },
     { label: 'Production Reports', href: '/reports', icon: BarChart3, roles: ['Super Admin', 'Production Manager'] },
-    { label: 'Floor PWA Scanner', href: '/scan', icon: QrCode, roles: ['Super Admin', 'Quality Inspector', 'Production Manager'] },
+    { label: 'Floor PWA Scanner', href: '/scan', icon: QrCode, roles: ['Super Admin', 'Quality Inspector', 'Production Manager', 'Stage Operator', 'PROCESS_OPERATOR', 'NORMAL'] },
     { label: 'Rejection & Rework', href: '/rejections', icon: Activity, roles: ['Super Admin', 'Quality Inspector', 'Production Manager'] },
     { label: 'Dispatch & Delivery', href: '/dispatches', icon: Truck, roles: ['Super Admin', 'Dispatch Manager'] },
     { label: 'User & Stage Linkage', href: '/users', icon: Users, roles: ['Super Admin'] },
   ];
 
-  const navItems = allNavItems.filter(item => !item.roles || item.roles.includes(userRole));
+  const isOperator = userRole.toLowerCase().includes('operator') || Boolean(assignedStage) || userRole === 'NORMAL' || userRole === 'PROCESS_OPERATOR';
+
+  const navItems = allNavItems.filter(item => {
+    if (!item.roles) return true;
+    if (isOperator && (item.roles.includes('Stage Operator') || item.roles.includes('PROCESS_OPERATOR') || item.roles.includes('NORMAL'))) {
+      return true;
+    }
+    return item.roles.includes(userRole);
+  });
 
   const initials = userRole.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 

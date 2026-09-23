@@ -97,37 +97,91 @@ export default function DashboardPage() {
   const [stage, setStage] = useState('');
   const [priority, setPriority] = useState('');
   const [timeline, setTimeline] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [userRole, setUserRole] = useState('Super Admin');
+  const [assignedStage, setAssignedStage] = useState<string | null>(null);
   const [apiData, setApiData] = useState<any>(null);
+  const [operatorJobCards, setOperatorJobCards] = useState<any[]>([]);
+
+  const isOperator = userRole.toLowerCase().includes('operator') || Boolean(assignedStage) || userRole === 'NORMAL' || userRole === 'PROCESS_OPERATOR';
 
   useEffect(() => {
     const role = localStorage.getItem('userRole');
+    const stageVal = localStorage.getItem('assignedStage');
     if (role) setUserRole(role);
+    if (stageVal) setAssignedStage(stageVal);
   }, []);
 
-  useEffect(() => {
-    async function fetchLiveDashboard() {
-      setIsLoading(true);
+  const fetchLiveDashboard = async () => {
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const headers = {
+        'Authorization': `Bearer ${token || ''}`,
+        'Content-Type': 'application/json',
+      };
+
+      // 1. Fetch Executive / General Dashboard Summary
       try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`${getApiBaseUrl()}/reports/dashboard-summary`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        const res = await fetch(`${getApiBaseUrl()}/reports/dashboard-summary`, { headers });
         if (res.ok) {
           const data = await res.json();
           setApiData(data);
         }
       } catch (err) {
-        console.error('Failed to load live dashboard summary:', err);
-      } finally {
-        setIsLoading(false);
+        console.warn('Dashboard summary fetch failed:', err);
       }
+
+      // 2. If Stage Operator or regular user, fetch Stage Scoped Job Cards
+      try {
+        const jcRes = await fetch(`${getApiBaseUrl()}/job-cards`, { headers });
+        if (jcRes.ok) {
+          const jcData = await jcRes.json();
+          if (Array.isArray(jcData)) {
+            // Unpack subJobCards if present or use top-level
+            const unpacked: any[] = [];
+            jcData.forEach((jc: any) => {
+              if (Array.isArray(jc.subJobCards) && jc.subJobCards.length > 0) {
+                jc.subJobCards.forEach((sub: any) => {
+                  unpacked.push({
+                    ...jc,
+                    id: sub.id || jc.id,
+                    jobCardNo: jc.jobCardNo,
+                    subJobCardNo: sub.subJobCardNo || jc.jobCardNo,
+                    totalPcbQty: sub.totalPcbQty || sub.qty || jc.totalPcbQty || 160,
+                    custPnlQty: sub.totalPcbQty || sub.qty || jc.custPnlQty || 80,
+                    custPnlAreaSqm: sub.custPnlAreaSqm || jc.custPnlAreaSqm || 45,
+                    currentStageName: sub.currentStage?.name || jc.currentStageName || jc.currentStage?.name || '1. SHEARING',
+                    stageStatus: sub.status || jc.status || 'IN_PROGRESS',
+                    status: sub.status || jc.status,
+                  });
+                });
+              } else {
+                unpacked.push({
+                  ...jc,
+                  subJobCardNo: jc.jobCardNo,
+                  currentStageName: jc.currentStageName || jc.currentStage?.name || '1. SHEARING',
+                  stageStatus: jc.status || 'IN_PROGRESS',
+                });
+              }
+            });
+            setOperatorJobCards(unpacked);
+          }
+        }
+      } catch (err) {
+        console.warn('Job cards fetch failed:', err);
+      }
+    } catch (err) {
+      console.error('Failed to load live dashboard:', err);
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  useEffect(() => {
     fetchLiveDashboard();
-  }, [customer, productClass, stage, priority, timeline]);
+  }, [customer, productClass, stage, priority, timeline, userRole, assignedStage]);
 
   const clearFilters = () => {
     setCustomer('');
@@ -135,15 +189,16 @@ export default function DashboardPage() {
     setStage('');
     setPriority('');
     setTimeline('');
+    setSearchQuery('');
   };
 
-  const activeFilters = [customer, productClass, stage, priority, timeline].filter(Boolean);
+  const activeFilters = [customer, productClass, stage, priority, timeline, searchQuery].filter(Boolean);
   const filterLabel = activeFilters.length > 0 
     ? `${activeFilters.length} Active Filter${activeFilters.length > 1 ? 's' : ''}` 
     : 'Active Global View';
 
+  // For Admin / Managers
   const jobsList = apiData?.liveJobCards && apiData.liveJobCards.length > 0 ? apiData.liveJobCards : mockJobs;
-
   const filteredJobs = jobsList.filter((job: any) => {
     if (customer && job.customer !== customer) return false;
     if (productClass && job.productClass !== productClass) return false;
@@ -152,81 +207,149 @@ export default function DashboardPage() {
     return true;
   });
 
+  // For Stage Operators
+  const filteredOperatorJobs = operatorJobCards.filter((job: any) => {
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchNo = (job.jobCardNo || '').toLowerCase().includes(q);
+      const matchSub = (job.subJobCardNo || '').toLowerCase().includes(q);
+      const matchCust = (job.customerPO?.customer?.companyName || job.customerCode || '').toLowerCase().includes(q);
+      const matchPart = (job.customerPartNo || job.rfePartCode || '').toLowerCase().includes(q);
+      if (!matchNo && !matchSub && !matchCust && !matchPart) return false;
+    }
+    if (customer) {
+      const cName = job.customerPO?.customer?.companyName || job.customerCode || '';
+      if (!cName.toLowerCase().includes(customer.toLowerCase())) return false;
+    }
+    if (priority) {
+      const p = (job.priority || '').toUpperCase();
+      if (priority.toUpperCase() === 'URGENT' && !['URGENT', 'MOST URGENT', 'HIGH'].includes(p)) return false;
+      if (priority.toUpperCase() === 'NORMAL' && p !== 'NORMAL') return false;
+    }
+    return true;
+  });
+
+  // Operator Stage Stats calculation
+  const stagePcbTotal = filteredOperatorJobs.reduce((acc, j) => acc + (Number(j.totalPcbQty) || Number(j.custPnlQty) || 0), 0);
+  const stageAreaTotal = filteredOperatorJobs.reduce((acc, j) => acc + (Number(j.custPnlAreaSqm) || Number(j.prodPnlAreaSqm) || 0), 0);
+  const stageUrgentCount = filteredOperatorJobs.filter(j => ['MOST URGENT', 'HIGH', 'URGENT'].includes((j.priority || '').toUpperCase())).length;
+
   return (
     <div className="space-y-6 p-6 lg:p-8 max-w-7xl mx-auto">
-      {/* Page Title */}
-      <div className="mb-6">
-        <h3 className="text-2xl font-bold text-blue-600">
-          {userRole === 'Production Manager' ? 'Production Overview & WIP Monitor' : 
-           userRole === 'Quality Inspector' ? 'Quality Control Dashboard' : 
-           userRole === 'Dispatch Manager' ? 'Dispatch & Delivery Dashboard' : 
-           'Factory Overview Dashboard'}
-        </h3>
-        <p className="text-xs text-slate-500 font-semibold tracking-wide uppercase mt-1">
-          {userRole} • FACTORY REAL-TIME METRICS • SHIFT: MORNING (A)
-        </p>
+      {/* Page Title & Stage Context */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-200 pb-5">
+        <div>
+          <div className="flex items-center gap-3">
+            <h3 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">
+              {isOperator 
+                ? (assignedStage ? `⚙️ Stage Work-Queue: ${assignedStage}` : `⚙️ ${userRole} Workbench`)
+                : userRole === 'Production Manager' ? '🏭 Production Overview & WIP Monitor'
+                : userRole === 'Quality Inspector' ? '🔍 Quality Control Dashboard'
+                : userRole === 'Dispatch Manager' ? '🚚 Dispatch & Delivery Dashboard'
+                : '🏭 Factory Overview Dashboard'}
+            </h3>
+            {isOperator && (
+              <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-black tracking-wider uppercase">
+                <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
+                Stage Isolation Active
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-500 font-bold tracking-wide uppercase mt-1 flex items-center gap-2">
+            <span>{userRole}</span>
+            <span>•</span>
+            <span className="text-emerald-600 font-mono">LIVE STATION METRICS</span>
+            <span>•</span>
+            <span>SHIFT: MORNING (A)</span>
+          </p>
+        </div>
+
+        {/* Action button */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => fetchLiveDashboard()}
+            className="flex items-center gap-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg border border-slate-300 transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Refresh Feed</span>
+          </button>
+          {isOperator && (
+            <a
+              href="/job-cards/movement"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-lg shadow-sm transition-all"
+            >
+              <Activity className="w-3.5 h-3.5" />
+              <span>Job Movement</span>
+            </a>
+          )}
+        </div>
       </div>
 
       {/* BEGIN: Filters Section */}
-      <section className="bg-white p-4 rounded-lg shadow-sm border border-slate-200 mb-6" data-purpose="filter-bar">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <section className="bg-white p-4 rounded-xl shadow-xs border border-slate-200" data-purpose="filter-bar">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          {isOperator && (
+            <div className="md:col-span-2">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search Job Card No, WIP Lot, Part..."
+                className="w-full border-slate-200 rounded-lg text-xs focus:ring-blue-500 p-2.5 border bg-slate-50/50 font-medium"
+              />
+            </div>
+          )}
           <select 
-            className="form-select border-slate-200 rounded text-sm focus:ring-blue-500 w-full p-2 border bg-white"
+            className="form-select border-slate-200 rounded-lg text-xs focus:ring-blue-500 w-full p-2.5 border bg-white font-medium"
             value={customer}
             onChange={(e) => setCustomer(e.target.value)}
           >
-            <option value="">Select Customer</option>
+            <option value="">All Customers</option>
             <option value="RF Tech">RF Tech</option>
             <option value="Solar Solutions">Solar Solutions</option>
           </select>
+          {!isOperator && (
+            <>
+              <select 
+                className="form-select border-slate-200 rounded-lg text-xs focus:ring-blue-500 w-full p-2.5 border bg-white font-medium"
+                value={productClass}
+                onChange={(e) => setProductClass(e.target.value)}
+              >
+                <option value="">All Product Classes</option>
+                <option value="Single Sided">Single Sided</option>
+                <option value="Double Sided PTH">Double Sided PTH</option>
+                <option value="Multilayer (4+)">Multilayer (4+)</option>
+              </select>
+              <select 
+                className="form-select border-slate-200 rounded-lg text-xs focus:ring-blue-500 w-full p-2.5 border bg-white font-medium"
+                value={stage}
+                onChange={(e) => setStage(e.target.value)}
+              >
+                <option value="">All Stages</option>
+                <option value="CNC Drilling">CNC Drilling</option>
+                <option value="Plating">Plating</option>
+                <option value="Solder Mask">Solder Mask</option>
+              </select>
+            </>
+          )}
           <select 
-            className="form-select border-slate-200 rounded text-sm focus:ring-blue-500 w-full p-2 border bg-white"
-            value={productClass}
-            onChange={(e) => setProductClass(e.target.value)}
-          >
-            <option value="">Select Product Class</option>
-            <option value="Single Sided">Single Sided</option>
-            <option value="Double Sided PTH">Double Sided PTH</option>
-            <option value="Multilayer (4+)">Multilayer (4+)</option>
-          </select>
-          <select 
-            className="form-select border-slate-200 rounded text-sm focus:ring-blue-500 w-full p-2 border bg-white"
-            value={stage}
-            onChange={(e) => setStage(e.target.value)}
-          >
-            <option value="">Select Stage</option>
-            <option value="CNC Drilling">CNC Drilling</option>
-            <option value="Plating">Plating</option>
-            <option value="Solder Mask">Solder Mask</option>
-          </select>
-          <select 
-            className="form-select border-slate-200 rounded text-sm focus:ring-blue-500 w-full p-2 border bg-white"
+            className="form-select border-slate-200 rounded-lg text-xs focus:ring-blue-500 w-full p-2.5 border bg-white font-medium"
             value={priority}
             onChange={(e) => setPriority(e.target.value)}
           >
-            <option value="">Select Priority</option>
+            <option value="">All Priorities</option>
             <option value="Normal">Normal</option>
-            <option value="Urgent">Urgent</option>
-          </select>
-          <select 
-            className="form-select border-slate-200 rounded text-sm focus:ring-blue-500 w-full p-2 border bg-white"
-            value={timeline}
-            onChange={(e) => setTimeline(e.target.value)}
-          >
-            <option value="">Select Timeline</option>
-            <option value="Today">Today</option>
-            <option value="This Week">This Week</option>
-            <option value="This Month">This Month</option>
+            <option value="Urgent">Urgent / High</option>
           </select>
         </div>
-        <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
           <button 
             onClick={clearFilters}
-            className="bg-slate-100 text-slate-600 px-3 py-1 rounded text-xs font-medium border border-slate-200 hover:bg-slate-200 transition-colors"
+            className="bg-slate-100 text-slate-600 px-3 py-1 rounded text-xs font-semibold border border-slate-200 hover:bg-slate-200 transition-colors"
           >
             Clear Filters
           </button>
-          <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${activeFilters.length > 0 ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+          <span className={`text-xs font-bold px-3 py-1 rounded-full border ${activeFilters.length > 0 ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>
             {filterLabel}
           </span>
         </div>
@@ -247,7 +370,308 @@ export default function DashboardPage() {
 
         <div className={`transition-all duration-300 ${isLoading ? 'opacity-70 pointer-events-none' : ''}`}>
 
-      {/* BEGIN: Metric Cards */}
+      {/* BEGIN: STAGE OPERATOR WORKBENCH SECTION */}
+      {isOperator && (
+        <div className="space-y-8 mb-8 animate-in fade-in duration-300">
+          {/* Stage Metric Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {/* Active Stage Lots */}
+            <div className="bg-white p-5 rounded-xl shadow-xs border border-slate-200 border-l-4 border-l-blue-600 flex flex-col justify-between">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">Stage Active Jobs</p>
+                  <h4 className="text-3xl font-black text-slate-900 mt-2 font-mono">
+                    {filteredOperatorJobs.length}
+                  </h4>
+                </div>
+                <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+                  <Layers className="w-5 h-5" />
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500 font-semibold mt-4">
+                Lots currently waiting or in process at this stage
+              </p>
+            </div>
+
+            {/* Pending WIP PCBs */}
+            <div className="bg-white p-5 rounded-xl shadow-xs border border-slate-200 border-l-4 border-l-indigo-600 flex flex-col justify-between">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">Pending PCB Qty</p>
+                  <h4 className="text-3xl font-black text-indigo-700 mt-2 font-mono">
+                    {stagePcbTotal.toLocaleString()}
+                  </h4>
+                </div>
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                  <Package className="w-5 h-5" />
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500 font-semibold mt-4">
+                Total PCB boards in stage queue
+              </p>
+            </div>
+
+            {/* WIP Area SQM */}
+            <div className="bg-white p-5 rounded-xl shadow-xs border border-slate-200 border-l-4 border-l-emerald-600 flex flex-col justify-between">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">Stage Area Load</p>
+                  <h4 className="text-3xl font-black text-emerald-700 mt-2 font-mono">
+                    {stageAreaTotal.toFixed(2)} <span className="text-sm font-sans font-bold text-slate-500">SQM</span>
+                  </h4>
+                </div>
+                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
+                  <TrendingUp className="w-5 h-5" />
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500 font-semibold mt-4">
+                Total panel surface area in work-queue
+              </p>
+            </div>
+
+            {/* Urgent / Priority Jobs */}
+            <div className="bg-white p-5 rounded-xl shadow-xs border border-slate-200 border-l-4 border-l-amber-500 flex flex-col justify-between">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">Priority / Urgent</p>
+                  <h4 className="text-3xl font-black text-amber-600 mt-2 font-mono">
+                    {stageUrgentCount}
+                  </h4>
+                </div>
+                <div className="p-2 bg-amber-50 text-amber-600 rounded-lg">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500 font-semibold mt-4">
+                High-priority job cards requiring fast turnaround
+              </p>
+            </div>
+          </div>
+
+          {/* Live Stage Work Queue Table */}
+          <div className="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></div>
+                <div>
+                  <h4 className="font-extrabold text-slate-900 text-base">
+                    Active Job Cards at Stage: <span className="text-blue-600">{assignedStage || userRole}</span>
+                  </h4>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Process incoming lots, verify specifications, and move to next manufacturing stage
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-bold bg-blue-100 text-blue-800 px-3 py-1 rounded-full border border-blue-200">
+                  {filteredOperatorJobs.length} Lots in Queue
+                </span>
+                <a
+                  href="/job-cards"
+                  className="text-xs font-bold text-blue-600 hover:text-blue-800 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-white transition-colors"
+                >
+                  View Full Job Cards List →
+                </a>
+              </div>
+            </div>
+
+            {filteredOperatorJobs.length === 0 ? (
+              <div className="p-12 text-center flex flex-col items-center justify-center max-w-md mx-auto">
+                <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-4 border border-emerald-100">
+                  <CheckCircle2 className="w-7 h-7" />
+                </div>
+                <h5 className="text-lg font-black text-slate-800 mb-1">
+                  No Pending Job Cards at Stage: {assignedStage || userRole}
+                </h5>
+                <p className="text-xs text-slate-500 leading-relaxed mb-6">
+                  All job card batches for this stage have been completed and advanced forward. When upstream stages pass lots to {assignedStage || 'your stage'}, they will appear here in real-time.
+                </p>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => fetchLiveDashboard()}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-colors"
+                  >
+                    Refresh Work-Queue
+                  </button>
+                  <a
+                    href="/floor"
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-black transition-colors"
+                  >
+                    Check Factory Floor View
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-100/75 text-slate-700 font-extrabold uppercase text-[11px] tracking-wider border-b border-slate-200">
+                    <tr>
+                      <th className="px-5 py-3.5">Job Card / WIP No</th>
+                      <th className="px-4 py-3.5">Customer & PO</th>
+                      <th className="px-4 py-3.5">Part & Specs</th>
+                      <th className="px-4 py-3.5">Priority</th>
+                      <th className="px-4 py-3.5">Stage WIP Volume</th>
+                      <th className="px-4 py-3.5">Stage Status</th>
+                      <th className="px-5 py-3.5 text-right">Quick Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 text-slate-700">
+                    {filteredOperatorJobs.map((job: any, idx: number) => {
+                      const pcbQty = job.totalPcbQty || job.custPnlQty || 160;
+                      const areaSqm = job.custPnlAreaSqm || job.prodPnlAreaSqm || 45;
+                      const priorityStr = (job.priority || 'NORMAL').toUpperCase();
+                      const isUrgent = ['MOST URGENT', 'URGENT', 'HIGH'].includes(priorityStr);
+                      const activeJobNo = job.subJobCardNo || job.jobCardNo;
+
+                      return (
+                        <tr key={job.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                          {/* Job Card No */}
+                          <td className="px-5 py-4 font-mono">
+                            <div className="flex items-center gap-2">
+                              <span className="font-black text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200 text-xs">
+                                {activeJobNo}
+                              </span>
+                            </div>
+                            {job.subJobCardNo && job.subJobCardNo !== job.jobCardNo && (
+                              <span className="text-[10px] text-slate-400 font-mono block mt-1">
+                                Master: {job.jobCardNo}
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Customer & PO */}
+                          <td className="px-4 py-4">
+                            <p className="font-bold text-slate-800 text-xs">
+                              {job.customerPO?.customer?.companyName || job.customerCode || 'RF Client'}
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                              PO: {job.customerPO?.poNo || 'PO-2026-LIVE'}
+                            </p>
+                          </td>
+
+                          {/* Part & Specs */}
+                          <td className="px-4 py-4">
+                            <p className="font-bold text-slate-800 text-xs truncate max-w-[200px]">
+                              {job.customerPartNo || job.product?.name || 'Standard PCB'}
+                            </p>
+                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                              {job.rfePartCode || job.product?.specCardNo || 'RFE-SPEC'} • {job.product?.layers ? `${job.product.layers}L` : '2L'} • {job.product?.thickness || '1.6mm'}
+                            </p>
+                          </td>
+
+                          {/* Priority */}
+                          <td className="px-4 py-4">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                              isUrgent 
+                                ? 'bg-amber-100 text-amber-800 border border-amber-300' 
+                                : 'bg-slate-100 text-slate-700 border border-slate-200'
+                            }`}>
+                              {isUrgent && <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-ping"></span>}
+                              {priorityStr}
+                            </span>
+                          </td>
+
+                          {/* Volume */}
+                          <td className="px-4 py-4 font-mono">
+                            <p className="font-black text-slate-900 text-xs">{pcbQty} PCBs</p>
+                            <p className="text-[10px] text-slate-500">{areaSqm} SQM</p>
+                          </td>
+
+                          {/* Stage Status */}
+                          <td className="px-4 py-4">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                              {job.stageStatus || 'IN STAGE'}
+                            </span>
+                          </td>
+
+                          {/* Quick Action */}
+                          <td className="px-5 py-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <a
+                                href={`/job-cards/movement?search=${encodeURIComponent(activeJobNo)}`}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-2xs transition-all hover:shadow-xs"
+                              >
+                                <span>Move Stage</span>
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </a>
+                              <a
+                                href="/job-cards"
+                                title="View Traveler Card"
+                                className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg border border-slate-200 transition-colors"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </a>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Quick Stage Shortcuts Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <a
+              href="/job-cards"
+              className="bg-white p-4 rounded-xl border border-slate-200 hover:border-blue-400 hover:shadow-xs transition-all flex items-center gap-3.5 group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+                <Layers className="w-5 h-5" />
+              </div>
+              <div>
+                <h6 className="font-extrabold text-slate-800 text-xs group-hover:text-blue-600 transition-colors">
+                  Job Cards & Lot Splits
+                </h6>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  View traveler cards and lot details for {assignedStage}
+                </p>
+              </div>
+            </a>
+
+            <a
+              href="/job-cards/movement"
+              className="bg-white p-4 rounded-xl border border-slate-200 hover:border-blue-400 hover:shadow-xs transition-all flex items-center gap-3.5 group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+                <Activity className="w-5 h-5" />
+              </div>
+              <div>
+                <h6 className="font-extrabold text-slate-800 text-xs group-hover:text-indigo-600 transition-colors">
+                  Process Movement & Logs
+                </h6>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Record completion, stage params & scrap rejections
+                </p>
+              </div>
+            </a>
+
+            <a
+              href="/floor"
+              className="bg-white p-4 rounded-xl border border-slate-200 hover:border-blue-400 hover:shadow-xs transition-all flex items-center gap-3.5 group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+                <TrendingUp className="w-5 h-5" />
+              </div>
+              <div>
+                <h6 className="font-extrabold text-slate-800 text-xs group-hover:text-emerald-600 transition-colors">
+                  Live Factory Floor Monitor
+                </h6>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  View full factory WIP pipeline and stage queues
+                </p>
+              </div>
+            </a>
+          </div>
+        </div>
+      )}
+      {/* END: STAGE OPERATOR WORKBENCH SECTION */}
+
+      {/* BEGIN: EXECUTIVE MANAGEMENT METRIC CARDS */}
+      {!isOperator && (
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         
         {/* Total WIP Card */}
@@ -343,7 +767,8 @@ export default function DashboardPage() {
         </div>
         )}
       </div>
-      {/* END: Metric Cards */}
+      )}
+      {/* END: EXECUTIVE MANAGEMENT METRIC CARDS */}
 
       {/* BEGIN: Tables and Secondary Info */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
