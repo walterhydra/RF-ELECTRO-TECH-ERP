@@ -2964,75 +2964,61 @@ export default function JobCardsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
         
         {/* LEFT: Top 3 WIP Stages by SQM Area */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs space-y-3.5 flex flex-col justify-between">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-700 border border-purple-200/60 flex items-center justify-center font-bold shadow-2xs">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3 flex flex-col justify-between">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
                 <BarChart3 className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-xs font-black uppercase text-slate-900 tracking-wider">
-                  TOP 3 WIP STAGES (BY AREA)
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                  Top 3 WIP Stages (By Area)
                 </h3>
-                <p className="text-[10px] text-slate-500 font-medium">Highest active Sqm volume in production floor</p>
+                <p className="text-[11px] text-slate-500">Highest active floor volume in production</p>
               </div>
             </div>
-            <span className="text-xs font-extrabold font-mono text-purple-700 bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-200 shadow-2xs">
+            <span className="text-xs font-bold font-mono text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
               {top3WipStages.reduce((acc, curr) => acc + curr.areaSqm, 0).toFixed(1)} Sqm Total
             </span>
           </div>
 
           {/* Stage Progress Items */}
-          <div className="space-y-2.5 flex-1 flex flex-col justify-center">
+          <div className="space-y-2 flex-1 flex flex-col justify-center">
             {top3WipStages.length > 0 ? (
-              top3WipStages.map((stg, idx) => {
-                const rankStyles = [
-                  'bg-amber-100 text-amber-900 border-amber-300 shadow-2xs',
-                  'bg-slate-100 text-slate-800 border-slate-300',
-                  'bg-orange-100 text-orange-900 border-orange-200',
-                ];
-                const barGradients = [
-                  'bg-linear-to-r from-purple-600 to-indigo-600',
-                  'bg-linear-to-r from-blue-600 to-cyan-600',
-                  'bg-linear-to-r from-emerald-600 to-teal-600',
-                ];
-
-                return (
-                  <div
-                    key={stg.stageName}
-                    className="space-y-1.5 bg-slate-50/70 hover:bg-white p-3 rounded-xl border border-slate-200/80 hover:border-purple-200 hover:shadow-xs transition-all"
-                  >
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className={`w-5 h-5 rounded-md text-[10px] font-black flex items-center justify-center border shrink-0 ${rankStyles[idx] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
-                          #{idx + 1}
-                        </span>
-                        <span className="font-bold text-slate-900 font-mono text-xs truncate">
-                          {stg.stageName}
-                        </span>
-                        <span className="text-[10px] font-bold text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200 font-mono shrink-0 hidden sm:inline-block">
-                          {stg.cardCount} Cards
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 font-mono text-xs shrink-0">
-                        <span className="font-black text-slate-900">{stg.areaSqm} Sqm</span>
-                        <span className="text-[11px] text-slate-500 font-semibold">({stg.pcbQty} PCBs)</span>
-                        <span className="text-[10px] font-bold text-purple-700 bg-purple-100/80 px-1.5 py-0.5 rounded border border-purple-200/60 font-mono">
-                          {stg.percentage}%
-                        </span>
-                      </div>
+              top3WipStages.map((stg, idx) => (
+                <div
+                  key={stg.stageName}
+                  className="space-y-1.5 bg-slate-50/60 hover:bg-slate-50 p-2.5 rounded-lg border border-slate-200/80 transition-colors"
+                >
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[11px] font-bold font-mono text-slate-500 w-4 shrink-0">
+                        #{idx + 1}
+                      </span>
+                      <span className="font-bold text-slate-900 font-mono text-xs truncate">
+                        {stg.stageName}
+                      </span>
+                      <span className="text-[11px] text-slate-500 font-mono shrink-0 hidden sm:inline-block">
+                        ({stg.cardCount} Cards • {stg.pcbQty} PCBs)
+                      </span>
                     </div>
-                    <div className="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden flex">
-                      <div
-                        className={`h-full ${barGradients[idx] || 'bg-purple-600'} transition-all duration-500 rounded-full`}
-                        style={{ width: `${Math.max(5, stg.percentage)}%` }}
-                      />
+                    <div className="flex items-center gap-2 font-mono text-xs shrink-0">
+                      <span className="font-bold text-slate-900">{stg.areaSqm} Sqm</span>
+                      <span className="text-[11px] font-semibold text-slate-600 bg-slate-200/70 px-1.5 py-0.2 rounded">
+                        {stg.percentage}%
+                      </span>
                     </div>
                   </div>
-                );
-              })
+                  <div className="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden flex">
+                    <div
+                      className="h-full bg-slate-800 transition-all duration-300 rounded-full"
+                      style={{ width: `${Math.max(5, stg.percentage)}%` }}
+                    />
+                  </div>
+                </div>
+              ))
             ) : (
-              <div className="text-center py-6 text-xs text-slate-400 font-medium bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+              <div className="text-center py-5 text-xs text-slate-400 font-medium bg-slate-50 rounded-lg border border-dashed border-slate-200">
                 No active WIP stages currently running
               </div>
             )}
@@ -3040,29 +3026,29 @@ export default function JobCardsPage() {
         </div>
 
         {/* RIGHT: Top 5 Rejection Job Cards (Live Movement Entries) */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs space-y-3 flex flex-col justify-between">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-700 border border-rose-200/60 flex items-center justify-center font-bold shadow-2xs">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3 flex flex-col justify-between">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
                 <ShieldAlert className="w-4 h-4" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-xs font-black uppercase text-slate-900 tracking-wider">
-                    TOP 5 REJECTION JOB CARDS
+                <div className="flex items-center gap-1.5">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                    Top 5 Rejection Job Cards
                   </h3>
                   <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
                 </div>
-                <p className="text-[10px] text-slate-500 font-medium">Tracked live when operators enter rejections during stage movement</p>
+                <p className="text-[11px] text-slate-500">Live operator defect entries during stage movement</p>
               </div>
             </div>
-            <span className="text-xs font-extrabold font-mono text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200 shadow-2xs">
-              {top5RejectedCards.reduce((acc, curr) => acc + (curr.rejectedPcbQty || 0), 0)} Total Rejections
+            <span className="text-xs font-bold font-mono text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+              {top5RejectedCards.reduce((acc, curr) => acc + (curr.rejectedPcbQty || 0), 0)} Rejections
             </span>
           </div>
 
           {/* Rejection List */}
-          <div className="space-y-2 flex-1">
+          <div className="space-y-1.5 flex-1">
             {top5RejectedCards.length > 0 ? (
               top5RejectedCards.map((jc, idx) => {
                 const lastLog = jc.rejectionLogs?.[jc.rejectionLogs.length - 1];
@@ -3075,28 +3061,28 @@ export default function JobCardsPage() {
                   <div
                     key={jc.id}
                     onClick={() => fetchJobCardHistory(jc)}
-                    title="Click to view full job card history & quality logs"
-                    className="group flex items-center justify-between gap-3 bg-rose-50/40 hover:bg-rose-50/90 border border-rose-100 hover:border-rose-300 p-2.5 rounded-xl transition-all cursor-pointer shadow-2xs"
+                    title="Click to view job card history"
+                    className="group flex items-center justify-between gap-3 bg-slate-50/50 hover:bg-slate-100/80 border border-slate-200/80 p-2 rounded-lg transition-colors cursor-pointer"
                   >
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <span className="w-5 h-5 rounded-md bg-rose-600 text-white font-black text-[10px] flex items-center justify-center shrink-0 shadow-2xs">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className="text-[11px] font-bold font-mono text-slate-400 w-4 text-center shrink-0">
                         #{idx + 1}
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono font-black text-xs text-rose-950 bg-rose-100/90 px-2 py-0.5 rounded border border-rose-200/90 tracking-tight">
+                          <span className="font-mono font-bold text-xs text-slate-900 bg-white px-1.5 py-0.2 rounded border border-slate-200">
                             {jc.jobCardNo}
                           </span>
-                          <span className="text-xs font-bold text-slate-800 truncate">{jc.customerCode}</span>
-                          <span className="text-[10px] text-slate-500 font-mono truncate hidden sm:inline-block">({jc.customerPartNo})</span>
+                          <span className="text-xs font-semibold text-slate-700 truncate">{jc.customerCode}</span>
+                          <span className="text-[11px] text-slate-400 font-mono truncate hidden sm:inline-block">({jc.customerPartNo})</span>
                         </div>
-                        <div className="flex items-center gap-1.5 mt-0.5 text-[10px]">
+                        <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500">
                           {lastLog?.stageName && (
-                            <span className="font-mono font-semibold text-rose-800 bg-rose-100/70 px-1.5 py-0.2 rounded border border-rose-200/60 truncate">
-                              Stage: {lastLog.stageName}
+                            <span className="font-mono font-medium text-slate-700 bg-slate-200/60 px-1.5 py-0.2 rounded">
+                              {lastLog.stageName}
                             </span>
                           )}
-                          <span className="text-slate-600 font-medium truncate">
+                          <span className="truncate">
                             {cleanRemark || 'Stage Movement Rejection'}
                           </span>
                         </div>
@@ -3104,10 +3090,10 @@ export default function JobCardsPage() {
                     </div>
 
                     <div className="text-right shrink-0 font-mono">
-                      <div className="text-xs font-black text-rose-700 bg-white px-2 py-0.5 rounded-md border border-rose-200/90 shadow-2xs">
+                      <div className="text-xs font-bold text-rose-600">
                         {jc.rejectedPcbQty} PCBs
                       </div>
-                      <div className="text-[10px] text-slate-500 font-bold mt-0.5">
+                      <div className="text-[11px] text-slate-500 font-medium">
                         {jc.rejectedAreaSqm || 0} Sqm
                       </div>
                     </div>
@@ -3115,9 +3101,9 @@ export default function JobCardsPage() {
                 );
               })
             ) : (
-              <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-4 text-center text-xs text-emerald-800 font-bold flex items-center justify-center gap-2">
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center text-xs text-slate-600 font-medium flex items-center justify-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>No rejections logged yet across active job cards. Live movement entries will appear here instantly.</span>
+                <span>No rejections logged yet across active job cards.</span>
               </div>
             )}
           </div>
