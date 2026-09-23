@@ -156,7 +156,82 @@ async function main() {
     },
   });
 
-  console.log('✅ Seeded 4 Default Users (Admin, Planner, Operator, QC)');
+  console.log('✅ Seeded 4 Core Users (Admin, Planner, Operator, QC)');
+
+  // 4b. Seed Dedicated Stage Operator Logins for ALL 20 Stages
+  const stageEmailSlugs: Record<string, string> = {
+    'SHEARING': 'stage01.shearing@rfelectro.com',
+    'DRILLING': 'stage02.drilling@rfelectro.com',
+    'DRL-QC': 'stage03.drlqc@rfelectro.com',
+    'DML': 'stage04.dml@rfelectro.com',
+    'PIT': 'stage05.pit@rfelectro.com',
+    'PIT-QC': 'stage06.pitqc@rfelectro.com',
+    'PLATING': 'stage07.plating@rfelectro.com',
+    'ETCHING': 'stage08.etching@rfelectro.com',
+    'PREMASK-QC/AOI': 'stage09.aoi@rfelectro.com',
+    'PISM': 'stage10.pism@rfelectro.com',
+    'PISM-QC': 'stage11.pismqc@rfelectro.com',
+    'HASL': 'stage12.hasl@rfelectro.com',
+    'HASL-QC': 'stage13.haslqc@rfelectro.com',
+    'LEGEND PRINT': 'stage14.legend@rfelectro.com',
+    'ROUTING': 'stage15.routing@rfelectro.com',
+    'VG': 'stage16.vg@rfelectro.com',
+    'BBT': 'stage17.bbt@rfelectro.com',
+    'FQC (AI)': 'stage18.fqc@rfelectro.com',
+    'PDI-AQL': 'stage19.pdi@rfelectro.com',
+    'PACKING': 'stage20.packing@rfelectro.com',
+  };
+
+  for (const stg of stages) {
+    const stageEmail = stageEmailSlugs[stg.name] || `stage${String(stg.defaultOrder).padStart(2, '0')}.${stg.code.toLowerCase()}@rfelectro.com`;
+    const isQc = stg.name.includes('QC') || stg.name.includes('AOI') || stg.name.includes('FQC') || stg.name.includes('PDI');
+    const roleId = isQc ? roleMap[RoleCode.QC_OFFICER] : roleMap[RoleCode.PROCESS_OPERATOR];
+    const deptId = isQc ? deptMap['Quality Assurance'] : deptMap['Production & Engineering'];
+
+    await prisma.user.upsert({
+      where: { email: stageEmail },
+      update: {
+        assignedStageId: stageMap[stg.name],
+        roleId,
+        departmentId: deptId,
+      },
+      create: {
+        name: `Stage-${String(stg.defaultOrder).padStart(2, '0')} (${stg.name}) Operator`,
+        email: stageEmail,
+        phone: `+9198765432${String(stg.defaultOrder).padStart(2, '0')}`,
+        passwordHash: hashPassword('RF-secure-2026!'),
+        roleId,
+        departmentId: deptId,
+        assignedStageId: stageMap[stg.name],
+        isActive: true,
+      },
+    });
+  }
+  console.log('✅ Seeded 20 Dedicated Process Stage Operator Accounts');
+
+  // Additional Convenience Aliases for Quick Logins
+  const extraAliases = [
+    { email: 'production@rfelectro.com', name: 'Production Manager', roleId: roleMap[RoleCode.PRODUCTION_PLANNER], deptId: deptMap['Production & Engineering'] },
+    { email: 'quality@rfelectro.com', name: 'Quality Inspector', roleId: roleMap[RoleCode.QC_OFFICER], deptId: deptMap['Quality Assurance'] },
+    { email: 'dispatch@rfelectro.com', name: 'Dispatch Manager', roleId: roleMap[RoleCode.STORE_DISPATCH], deptId: deptMap['Stores & Dispatch'] },
+    { email: 'pit@rfelectro.com', name: 'PIT Stage Operator', roleId: roleMap[RoleCode.PROCESS_OPERATOR], deptId: deptMap['Production & Engineering'], stageId: stageMap['PIT'] },
+  ];
+
+  for (const alias of extraAliases) {
+    await prisma.user.upsert({
+      where: { email: alias.email },
+      update: { roleId: alias.roleId, departmentId: alias.deptId, assignedStageId: alias.stageId || null },
+      create: {
+        name: alias.name,
+        email: alias.email,
+        passwordHash: hashPassword('RF-secure-2026!'),
+        roleId: alias.roleId,
+        departmentId: alias.deptId,
+        assignedStageId: alias.stageId || null,
+        isActive: true,
+      },
+    });
+  }
 
   // 5. Default Customer & Portal Access
   const customer = await prisma.customer.upsert({

@@ -52,6 +52,7 @@ export class AuthService {
       roleId: user.roleId,
       departmentId: user.departmentId,
       assignedStageId: user.assignedStageId,
+      assignedStageName: user.assignedStage?.name || null,
       permissions,
     };
 
@@ -72,7 +73,14 @@ export class AuthService {
         role: user.role.name,
         roleId: user.roleId,
         department: user.department ? { id: user.department.id, name: user.department.name } : null,
-        assignedStage: user.assignedStage ? { id: user.assignedStage.id, name: user.assignedStage.name } : null,
+        assignedStage: user.assignedStage
+          ? {
+              id: user.assignedStage.id,
+              name: user.assignedStage.name,
+              code: user.assignedStage.code,
+              defaultOrder: user.assignedStage.defaultOrder,
+            }
+          : null,
         permissions,
       },
     };
@@ -108,7 +116,14 @@ export class AuthService {
       role: user.role.name,
       roleId: user.roleId,
       department: user.department ? { id: user.department.id, name: user.department.name } : null,
-      assignedStage: user.assignedStage ? { id: user.assignedStage.id, name: user.assignedStage.name } : null,
+      assignedStage: user.assignedStage
+        ? {
+            id: user.assignedStage.id,
+            name: user.assignedStage.name,
+            code: user.assignedStage.code,
+            defaultOrder: user.assignedStage.defaultOrder,
+          }
+        : null,
       permissions,
     };
   }

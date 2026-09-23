@@ -118,12 +118,29 @@ export default function JobMovementUpdatePage() {
   const [assignedStage, setAssignedStage] = useState<string>('2. DRILLING');
   const [toast, setToast] = useState<string | null>(null);
 
-  // Load stored job cards from localStorage after client mounts to avoid hydration mismatch
+  // Load stored job cards and user role/stage from localStorage
   useEffect(() => {
     setIsMounted(true);
     const stored = getStoredJobCards();
     if (stored !== null && Array.isArray(stored)) {
       setJobs(stored);
+    }
+    if (typeof window !== 'undefined') {
+      const storedRole = localStorage.getItem('userRole');
+      const storedStage = localStorage.getItem('assignedStage');
+      if (storedStage) {
+        setAssignedStage(storedStage);
+      }
+      if (storedRole) {
+        const upper = storedRole.toUpperCase();
+        if (upper.includes('SUPER') || upper.includes('MASTER') || upper.includes('ADMIN')) {
+          setUserRole('MASTER');
+        } else if (upper.includes('PROD') || upper.includes('PLANNER') || upper.includes('MANAGER')) {
+          setUserRole('SUPER_USER');
+        } else {
+          setUserRole('NORMAL');
+        }
+      }
     }
   }, []);
 
@@ -516,7 +533,22 @@ export default function JobMovementUpdatePage() {
     setRemarksText('');
   };
 
+  const normalizeStageSlug = (s: string) => {
+    return String(s || '')
+      .toLowerCase()
+      .replace(/^\d+\.\s*/, '')
+      .replace(/[^a-z0-9]/g, '')
+      .trim();
+  };
+
   const filteredJobs = jobs.filter((j) => {
+    if (userRole === 'NORMAL') {
+      const assignedSlug = normalizeStageSlug(assignedStage);
+      const jobSlug = normalizeStageSlug(j.currentStageName);
+      if (assignedSlug && jobSlug && assignedSlug !== jobSlug) {
+        return false;
+      }
+    }
     const q = searchQuery.toLowerCase();
     return (
       j.jobCardNo.toLowerCase().includes(q) ||
@@ -597,7 +629,26 @@ export default function JobMovementUpdatePage() {
             >
               <option value="MASTER">Master (Full Access)</option>
               <option value="SUPER_USER">Super User</option>
-              <option value="NORMAL">Operator</option>
+              <option value="NORMAL">Stage Operator</option>
+            </select>
+          </div>
+
+          {/* Stage selector */}
+          <div className="flex items-center gap-2 bg-slate-900 border border-amber-500/40 px-3 py-1.5 rounded-xl text-xs">
+            <span className="text-amber-400 font-black text-[10px] font-mono uppercase">STAGE:</span>
+            <select
+              value={assignedStage}
+              onChange={(e) => {
+                setAssignedStage(e.target.value);
+                if (typeof window !== 'undefined') localStorage.setItem('assignedStage', e.target.value);
+              }}
+              className="bg-transparent font-bold text-amber-300 outline-none cursor-pointer text-xs font-mono"
+            >
+              {PF01_STAGES.map((stg) => (
+                <option key={stg} value={stg} className="bg-slate-900 text-white font-sans">
+                  {stg}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -609,6 +660,21 @@ export default function JobMovementUpdatePage() {
           </Link>
         </div>
       </div>
+
+      {/* Stage Lock Banner for Operator Mode */}
+      {userRole === 'NORMAL' && (
+        <div className="bg-gradient-to-r from-amber-950/60 via-slate-900 to-amber-950/60 border border-amber-500/40 p-3 rounded-2xl flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5">
+            <span className="w-3 h-3 rounded-full bg-amber-400 animate-pulse shrink-0" />
+            <span className="font-bold text-amber-200">
+              🔒 Stage Isolation Active: Showing ONLY Job Cards & WIP lots currently pending at <strong className="text-amber-400 underline">{assignedStage}</strong>.
+            </span>
+          </div>
+          <span className="text-[10px] font-mono text-slate-400 shrink-0 hidden sm:inline">
+            Stage Operator View • {filteredJobs.length} Job(s) Available
+          </span>
+        </div>
+      )}
 
       {/* Barcode Gun Scanner Box (Faster Job Movement without manual entry) */}
       <div className="bg-slate-900 border-2 border-amber-500/40 p-4 rounded-3xl space-y-2 shadow-2xl">

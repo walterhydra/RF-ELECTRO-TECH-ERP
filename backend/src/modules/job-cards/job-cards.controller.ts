@@ -18,7 +18,20 @@ export class JobCardsController {
   @Public()
   @ApiOperation({ summary: 'List all Job Cards with optional status and search filters' })
   async findAll(@Query() query: any, @Req() req: any) {
-    return this.jobCardsService.findAll(query, req.user);
+    let user = req.user;
+    if (!user && req.headers?.authorization?.startsWith('Bearer ')) {
+      try {
+        const token = req.headers.authorization.split(' ')[1];
+        const payloadBase64 = token.split('.')[1];
+        if (payloadBase64) {
+          const decoded = JSON.parse(Buffer.from(payloadBase64, 'base64').toString());
+          user = decoded;
+        }
+      } catch (e) {
+        // Ignore token parse error
+      }
+    }
+    return this.jobCardsService.findAll(query, user);
   }
 
   @Post('create')

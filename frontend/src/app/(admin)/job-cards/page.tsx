@@ -2523,6 +2523,14 @@ export default function JobCardsPage() {
     [todayStr]
   );
 
+  const normalizeStageSlug = (s: string) => {
+    return String(s || '')
+      .toLowerCase()
+      .replace(/^\d+\.\s*/, '')
+      .replace(/[^a-z0-9]/g, '')
+      .trim();
+  };
+
   // Filtered Cards based on per-column filters, global search, and radio status
   const filteredCards = jobCards.filter((jc) => {
     const matchesWip = !colFilters.wipNo || jc.jobCardNo.toLowerCase().includes(colFilters.wipNo.toLowerCase());
@@ -2532,7 +2540,20 @@ export default function JobCardsPage() {
 
     const isOperatorUser = userRole === 'NORMAL';
     const effectiveStageFilter = isOperatorUser ? assignedStage : colFilters.stage;
-    const matchesStage = !effectiveStageFilter || (jc.currentStageName || '').toLowerCase().includes(effectiveStageFilter.toLowerCase());
+    let matchesStage = true;
+    if (effectiveStageFilter) {
+      const targetSlug = normalizeStageSlug(effectiveStageFilter);
+      const cardStageSlug = normalizeStageSlug(jc.currentStageName);
+      let foundInSubs = false;
+      if (jc.subJobCards && Array.isArray(jc.subJobCards) && jc.subJobCards.length > 0) {
+        foundInSubs = jc.subJobCards.some((s: any) => {
+          const subSlug = normalizeStageSlug(s.currentStage?.name || '');
+          return subSlug === targetSlug || (s.currentStage?.name || '').toLowerCase().includes(effectiveStageFilter.toLowerCase());
+        });
+      }
+      matchesStage = cardStageSlug === targetSlug || (jc.currentStageName || '').toLowerCase().includes(effectiveStageFilter.toLowerCase()) || foundInSubs;
+    }
+
     const matchesPriority = !colFilters.priority || jc.priority.toLowerCase().includes(colFilters.priority.toLowerCase());
     
     const matchesGlobal =

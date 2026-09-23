@@ -93,6 +93,12 @@ export class JobCardsService {
       customerPoId?: string;
       productId?: string;
       search?: string;
+      stageId?: string;
+      assignedStageId?: string;
+      stageName?: string;
+      stage?: string;
+      assignedStage?: string;
+      [key: string]: any;
     },
     user?: any,
   ) {
@@ -232,53 +238,75 @@ export class JobCardsService {
 
 
 
-    // Filter job cards for Process Operators to ONLY show jobs assigned to their active stage
-    if (user) {
-      const roleName = String(user.roleName || user.role || user.role?.name || user.roleCode || '').toUpperCase();
-      const isOperator =
-        roleName === 'NORMAL_USER' ||
-        roleName === 'PROCESS_OPERATOR' ||
-        roleName === 'NORMAL' ||
-        roleName === 'OPERATOR';
+    // Helper to normalize stage names (e.g. "2. DRILLING", "DRILLING", "drilling" -> "drilling")
+    const normalizeStageSlug = (s: string) => {
+      return String(s || '')
+        .toLowerCase()
+        .replace(/^\d+\.\s*/, '')
+        .replace(/[^a-z0-9]/g, '')
+        .trim();
+    };
 
-      if (isOperator) {
-        const assignedStageId = user.assignedStageId;
-        const assignedStageName = String(user.assignedStageName || user.assignedStage?.name || '').toLowerCase().trim();
+    // Stage filtering criteria: from query or user profile
+    const targetStageId = query?.stageId || query?.assignedStageId || (user?.assignedStageId ?? null);
+    const targetStageRaw = query?.stageName || query?.stage || query?.assignedStage || user?.assignedStageName || user?.assignedStage?.name || (typeof user?.assignedStage === 'string' ? user.assignedStage : null);
+    const targetStageSlug = targetStageRaw ? normalizeStageSlug(targetStageRaw) : null;
 
-        if (assignedStageId || assignedStageName) {
-          return jobCards.filter((jc: any) => {
-            const currentStageName = String(jc.currentStageName || '').toLowerCase().trim();
+    const roleName = String(user?.roleName || user?.role || user?.role?.name || user?.roleCode || '').toUpperCase();
+    const isOperator =
+      roleName === 'NORMAL_USER' ||
+      roleName === 'PROCESS_OPERATOR' ||
+      roleName === 'NORMAL' ||
+      roleName === 'OPERATOR';
 
-            let matches = false;
-            if (assignedStageName && currentStageName) {
-              if (
-                currentStageName === assignedStageName ||
-                currentStageName.includes(assignedStageName) ||
-                assignedStageName.includes(currentStageName)
-              ) {
-                matches = true;
-              }
-            }
+    // Apply strict stage isolation if user is an Operator or if a stage query was explicitly requested
+    if ((isOperator && (targetStageId || targetStageSlug)) || (targetStageId || targetStageSlug)) {
+      const filteredCards = jobCards.map((jc: any) => {
+        const cardStageSlug = normalizeStageSlug(jc.currentStageName);
+        const cardMatches = (targetStageId && jc.currentStageId === targetStageId) || (targetStageSlug && cardStageSlug === targetStageSlug);
 
-            if (!matches && jc.subJobCards && Array.isArray(jc.subJobCards)) {
-              matches = jc.subJobCards.some((s: any) => {
-                if (assignedStageId && s.currentStageId === assignedStageId) return true;
-                const sName = String(s.currentStage?.name || '').toLowerCase().trim();
-                if (
-                  assignedStageName &&
-                  sName &&
-                  (sName === assignedStageName || sName.includes(assignedStageName) || assignedStageName.includes(sName))
-                ) {
-                  return true;
-                }
-                return false;
-              });
-            }
-
-            return matches;
+        // If job card has sub-lots, check if any sub-lot is at this stage
+        if (jc.subJobCards && Array.isArray(jc.subJobCards) && jc.subJobCards.length > 0) {
+          const matchingSubs = jc.subJobCards.filter((s: any) => {
+            if (targetStageId && s.currentStageId === targetStageId) return true;
+            const subStageSlug = normalizeStageSlug(s.currentStage?.name || '');
+            if (targetStageSlug && subStageSlug === targetStageSlug) return true;
+            return false;
           });
+
+          if (matchingSubs.length > 0) {
+            // Recalculate WIP PCB qty & area scoped to this stage's lots only
+            const stagePcbQty = matchingSubs.reduce((acc: number, cur: any) => acc + (cur.totalPcbQty || cur.qty || 0), 0);
+            const stageAreaSqm = Number(
+              matchingSubs.reduce((acc: number, cur: any) => acc + (cur.custPnlAreaSqm || cur.prodPnlAreaSqm || 0), 0).toFixed(2)
+            );
+
+            return {
+              ...jc,
+              subJobCards: matchingSubs,
+              totalPcbQty: stagePcbQty || jc.totalPcbQty,
+              custPnlQty: stagePcbQty || jc.custPnlQty,
+              prodPnlQty: Math.ceil((stagePcbQty || jc.totalPcbQty) / 4),
+              custPnlAreaSqm: stageAreaSqm || jc.custPnlAreaSqm,
+              prodPnlAreaSqm: stageAreaSqm || jc.prodPnlAreaSqm,
+              currentStageName: matchingSubs[0].currentStage?.name || jc.currentStageName,
+              _matchedStage: true,
+            };
+          }
         }
-      }
+
+        // If no sub-lots, check if the parent job card itself is at this stage
+        if (cardMatches) {
+          return {
+            ...jc,
+            _matchedStage: true,
+          };
+        }
+
+        return null;
+      }).filter((jc): jc is any => jc !== null && jc._matchedStage === true);
+
+      return filteredCards;
     }
 
     return jobCards;
