@@ -3225,8 +3225,8 @@ export default function JobCardsPage() {
                 <th className="py-2.5 px-3 border-r border-slate-300 min-w-[90px] whitespace-nowrap">Launch</th>
                 <th className="py-2.5 px-3 border-r border-slate-300 min-w-[90px] whitespace-nowrap">Target</th>
                 <th className="py-2.5 px-3 border-r border-slate-300 min-w-[65px] whitespace-nowrap">Priority</th>
-                <th className="py-2.5 px-3 border-r border-slate-300 min-w-[60px] text-right whitespace-nowrap">Pndg</th>
-                <th className="py-2.5 px-3 border-r border-slate-300 min-w-[80px] text-center whitespace-nowrap text-rose-700 font-extrabold">Rejection</th>
+                <th className="py-2.5 px-3 border-r border-slate-300 min-w-[65px] text-right whitespace-nowrap">Pndg</th>
+                <th className="py-2.5 px-3 border-r border-slate-300 min-w-[65px] text-right whitespace-nowrap">Rejection</th>
                 <th className="py-2.5 px-3 border-r border-slate-300 min-w-[50px] whitespace-nowrap">Unit</th>
                 <th className="py-2.5 px-3 border-r border-slate-300 min-w-[65px] text-right whitespace-nowrap">Area</th>
                 <th className="py-2.5 px-3 border-r border-slate-300 min-w-[110px] whitespace-nowrap">Stage</th>
@@ -3464,21 +3464,10 @@ export default function JobCardsPage() {
                       </td>
 
                       {/* Rejection */}
-                      <td className="py-2.5 px-3 border-r border-slate-200 font-mono text-center whitespace-nowrap">
-                        {Boolean(jc.rejectedPcbQty && jc.rejectedPcbQty > 0) ? (
-                          <span
-                            title={`Total Rejected PCBs: ${jc.rejectedPcbQty} (${jc.rejectedAreaSqm || 0} Sqm) - Click to view history`}
-                            onClick={() => fetchJobCardHistory(jc)}
-                            className="text-[11px] font-black text-rose-700 bg-rose-50 border border-rose-300 px-2 py-0.5 rounded-lg font-mono inline-flex items-center gap-1 shadow-2xs cursor-pointer hover:bg-rose-100 transition-colors"
-                          >
-                            <span>⚠️</span>
-                            <span>{jc.rejectedPcbQty} Rej</span>
-                          </span>
-                        ) : (
-                          <span className="text-[11px] font-mono text-slate-400 font-medium">
-                            0
-                          </span>
-                        )}
+                      <td className="py-2.5 px-3 border-r border-slate-200 font-mono text-right font-bold whitespace-nowrap">
+                        <span className={jc.rejectedPcbQty && jc.rejectedPcbQty > 0 ? 'text-rose-600 font-black' : 'text-slate-900 font-bold'}>
+                          {jc.rejectedPcbQty || 0}
+                        </span>
                       </td>
 
                       {/* Unit */}
