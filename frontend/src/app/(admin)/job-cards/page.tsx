@@ -1182,6 +1182,17 @@ export default function JobCardsPage() {
               if (now - val.timestamp > 30000) inFlightMovements.current.delete(key);
             });
 
+            // If server now has 2 or more sub-cards for a job, clean up temporary in-flight optimistic lot
+            filtered.forEach((m) => {
+              const baseJc = m.jobCardNo.replace(/-[A-Z]$/, '');
+              const matchingServerCards = filtered.filter((c) => c.jobCardNo.startsWith(baseJc));
+              if (matchingServerCards.length > 1) {
+                inFlightMovements.current.forEach((_, k) => {
+                  if (k.startsWith(baseJc)) inFlightMovements.current.delete(k);
+                });
+              }
+            });
+
             const merged = filtered.map((serverCard) => {
               // STRICT ID-ONLY matching: only match by exact UUID (p.id === serverCard.id)
               // Never match by subJobCardNo alone — that caused the split-lot corruption bug

@@ -160,6 +160,8 @@ export default function JobMovementUpdatePage() {
   const [partialQty, setPartialQty] = useState<number | string>(35);
   const [photoLightbox, setPhotoLightbox] = useState<string | null>(null);
 
+  const inFlightMovements = React.useRef<Map<string, { stageIdx: number; stageName: string; timestamp: number }>>(new Map());
+
   const fetchMovementJobs = React.useCallback(() => {
     fetch(`${getApiBaseUrl()}/job-cards`)
       .then((res) => res.json())
@@ -253,23 +255,75 @@ export default function JobMovementUpdatePage() {
               saveJobCardsToStorage(mapped);
               return mapped;
             }
+
+            // Clean up expired in-flight entries (older than 30s)
+            const now = Date.now();
+            inFlightMovements.current.forEach((val, key) => {
+              if (now - val.timestamp > 30000) inFlightMovements.current.delete(key);
+            });
+
+            // If server now has 2 or more sub-cards for a job, clean up temporary in-flight optimistic lot
+            mapped.forEach((m) => {
+              const baseJc = m.jobCardNo.replace(/-[A-Z]$/, '');
+              const matchingServerCards = mapped.filter((c) => c.jobCardNo.startsWith(baseJc));
+              if (matchingServerCards.length > 1) {
+                inFlightMovements.current.forEach((_, k) => {
+                  if (k.startsWith(baseJc)) inFlightMovements.current.delete(k);
+                });
+              }
+            });
+
             const merged = mapped.map((serverCard) => {
-              const localCard = prev.find(
-                (p) =>
-                  p.id === serverCard.id ||
-                  (p.jobCardNo === serverCard.jobCardNo && p.currentStageIndex === serverCard.currentStageIndex)
-              );
+              const hasInFlight = inFlightMovements.current.size > 0 &&
+                Array.from(inFlightMovements.current.keys()).some(
+                  (k) => k.startsWith(serverCard.jobCardNo) || k === serverCard.id
+                );
+
+              let localCard = prev.find((p) => p.id === serverCard.id && !p.id.startsWith('jc-part-'));
+              if (!localCard && !hasInFlight) {
+                localCard = prev.find(
+                  (p) =>
+                    !p.id.startsWith('jc-part-') &&
+                    p.jobCardNo === serverCard.jobCardNo &&
+                    p.currentStageIndex === serverCard.currentStageIndex
+                );
+              }
+
               if (!localCard) return serverCard;
+
               const localStageIdx = localCard.currentStageIndex !== undefined ? localCard.currentStageIndex : PF01_STAGES.indexOf(localCard.currentStageName);
               const serverStageIdx = serverCard.currentStageIndex !== undefined ? serverCard.currentStageIndex : PF01_STAGES.indexOf(serverCard.currentStageName);
 
-              if (localStageIdx > serverStageIdx || localCard.status === 'COMPLETED') {
-                return { ...serverCard, ...localCard };
+              const isLocalFurther = localStageIdx > serverStageIdx;
+              const isLocalCompleted = localCard.status === 'COMPLETED' && serverCard.status !== 'COMPLETED';
+
+              if (isLocalFurther || isLocalCompleted || hasInFlight) {
+                return {
+                  ...serverCard,
+                  currentStageIndex: isLocalFurther ? localCard.currentStageIndex : serverCard.currentStageIndex,
+                  currentStageName: isLocalFurther ? localCard.currentStageName : serverCard.currentStageName,
+                  status: isLocalCompleted ? localCard.status : serverCard.status,
+                  totalPcbQty: (isLocalFurther || hasInFlight) ? localCard.totalPcbQty : serverCard.totalPcbQty,
+                  custPnlQty: (isLocalFurther || hasInFlight) ? localCard.custPnlQty : serverCard.custPnlQty,
+                  prodPnlQty: (isLocalFurther || hasInFlight) ? localCard.prodPnlQty : serverCard.prodPnlQty,
+                  prodPnlAreaSqm: (isLocalFurther || hasInFlight) ? localCard.prodPnlAreaSqm : serverCard.prodPnlAreaSqm,
+                  custPnlAreaSqm: (isLocalFurther || hasInFlight) ? localCard.custPnlAreaSqm : serverCard.custPnlAreaSqm,
+                };
               }
               return serverCard;
             });
-            saveJobCardsToStorage(merged);
-            return merged;
+
+            // Preserve active in-flight optimistic split lots (IDs starting with 'jc-part-')
+            const inFlightOptimisticLots = prev.filter(
+              (p) => p.id.startsWith('jc-part-') && inFlightMovements.current.has(p.id)
+            );
+
+            const finalMerged = inFlightOptimisticLots.length > 0
+              ? [...merged, ...inFlightOptimisticLots]
+              : merged;
+
+            saveJobCardsToStorage(finalMerged);
+            return finalMerged;
           });
         }
       })
@@ -332,7 +386,10 @@ export default function JobMovementUpdatePage() {
     const nextIndex = currentIndex + 1;
     const nextStageName = PF01_STAGES[nextIndex] || '20. PACKING';
 
-    // 1. INSTANT OPTIMISTIC UI & LOCAL STORAGE UPDATE (0ms)
+    // 1. INSTANT OPTIMISTIC UI & IN-FLIGHT TRACKING (0ms)
+    inFlightMovements.current.set(jobId, { stageIdx: nextIndex, stageName: nextStageName, timestamp: Date.now() });
+    if (jobCardNo) inFlightMovements.current.set(jobCardNo, { stageIdx: nextIndex, stageName: nextStageName, timestamp: Date.now() });
+
     let updatedList: JobCard[] = [];
     setJobs((prev) => {
       const otherItems = prev.filter((j) => j.id !== selectedJob.id);
@@ -468,7 +525,7 @@ export default function JobMovementUpdatePage() {
   const [pendingWorkReason, setPendingWorkReason] = useState<string>('Drilling & Hole Check Pending');
   const [customPendingReason, setCustomPendingReason] = useState<string>('');
 
-  const handlePartialJobMovement = async () => {
+  const handlePartialJobMovement = () => {
     if (!selectedJob) return;
     if (!canUserMoveStage(selectedJob.currentStageName)) {
       showToastMsg(`Permission Denied: Operator assigned to "${assignedStage}" cannot move jobs out of "${selectedJob.currentStageName}".`);
@@ -490,47 +547,97 @@ export default function JobMovementUpdatePage() {
     const remArea = Number(Math.max(0, totalArea - sqmMoved).toFixed(2));
     const effectiveReason = pendingWorkReason === 'Other / Custom Pending Reason' ? (customPendingReason || 'Pending PCB Work') : pendingWorkReason;
 
-    try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      const targetEndpoint = encodeURIComponent(
-        selectedJob.id && !selectedJob.id.startsWith('jc-part-')
-          ? selectedJob.id
-          : selectedJob.jobCardNo
-      );
-      await fetch(`${getApiBaseUrl()}/job-cards/${targetEndpoint}/move-partial`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          cardId: selectedJob.id,
-          jobCardNo: selectedJob.jobCardNo,
-          subJobCardNo: selectedJob.jobCardNo,
-          currentStageName: selectedJob.currentStageName,
-          qtyToMove: parsedMoveQty,
-          areaToMove: sqmMoved,
-          pendingWorkReason: effectiveReason,
-          remark: remarksText ? `${effectiveReason} • ${remarksText}` : `Incomplete Movement: ${effectiveReason}`,
-          remarkType: 'INCOMPLETE_MOVEMENT',
-        }),
-      });
-    } catch (e) {
-      console.warn('Backend API unavailable, using local state fallback');
-    }
-
     const currentIndex = PF01_STAGES.indexOf(selectedJob.currentStageName);
     const nextIndex = Math.min(currentIndex + 1, PF01_STAGES.length - 1);
     const nextStageName = PF01_STAGES[nextIndex];
+    const baseJc = selectedJob.jobCardNo;
+    const movedTempId = `jc-part-${Date.now()}-moved`;
+    const movedSubNo = `${baseJc}-A`;
+
+    const movedBatch: JobCard = {
+      ...selectedJob,
+      id: movedTempId,
+      jobCardNo: selectedJob.jobCardNo,
+      prodPnlQty: Math.ceil(parsedMoveQty / 4),
+      custPnlQty: parsedMoveQty,
+      totalPcbQty: parsedMoveQty,
+      prodPnlAreaSqm: sqmMoved,
+      custPnlAreaSqm: sqmMoved,
+      currentStageIndex: nextIndex,
+      currentStageName: nextStageName,
+      status: 'IN_PROGRESS',
+    };
+
+    const remainingBatch: JobCard = {
+      ...selectedJob,
+      prodPnlQty: Math.ceil(remPcb / 4),
+      custPnlQty: remPcb,
+      totalPcbQty: remPcb,
+      prodPnlAreaSqm: remArea,
+      custPnlAreaSqm: remArea,
+    };
+
+    // 1. INSTANT OPTIMISTIC UI & IN-FLIGHT TRACKING (0ms)
+    inFlightMovements.current.set(movedTempId, { stageIdx: nextIndex, stageName: nextStageName, timestamp: Date.now() });
+    inFlightMovements.current.set(movedSubNo, { stageIdx: nextIndex, stageName: nextStageName, timestamp: Date.now() });
+
+    setJobs((prev) => {
+      const otherItems = prev.filter((j) => j.id !== selectedJob.id);
+      const updatedList = [...otherItems, movedBatch, remainingBatch];
+      saveJobCardsToStorage(updatedList);
+      return updatedList;
+    });
 
     showToastMsg(
       `Partial Movement: Moved ${parsedMoveQty} PCBs of Job Card ${selectedJob.jobCardNo} to ${nextStageName} (${sqmMoved} Sqm). ${remPcb} PCBs remain at ${selectedJob.currentStageName} (${remArea} Sqm).`
     );
 
-    await fetchMovementJobs();
+    const targetJobId = selectedJob.id;
+    const targetJobCardNo = selectedJob.jobCardNo;
+    const targetCurrentStage = selectedJob.currentStageName;
+    const remarkToSend = remarksText ? `${effectiveReason} • ${remarksText}` : `Incomplete Movement: ${effectiveReason}`;
+
     setSelectedJob(null);
     setPartialQty(0);
     setRemarksText('');
+
+    // 2. NON-BLOCKING BACKGROUND SYNC
+    (async () => {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        const targetEndpoint = encodeURIComponent(
+          targetJobId && !targetJobId.startsWith('jc-part-')
+            ? targetJobId
+            : targetJobCardNo
+        );
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        await fetch(`${getApiBaseUrl()}/job-cards/${targetEndpoint}/move-partial`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            cardId: targetJobId,
+            jobCardNo: targetJobCardNo,
+            subJobCardNo: targetJobCardNo,
+            currentStageName: targetCurrentStage,
+            qtyToMove: parsedMoveQty,
+            areaToMove: sqmMoved,
+            pendingWorkReason: effectiveReason,
+            remark: remarkToSend,
+            remarkType: 'INCOMPLETE_MOVEMENT',
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        await fetchMovementJobs();
+      } catch (e) {
+        console.warn('Backend move-partial sync background skipped', e);
+      }
+    })();
   };
 
   const normalizeStageSlug = (s: string) => {
