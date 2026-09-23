@@ -42,7 +42,8 @@ import {
   Scan,
   Settings,
   Upload,
-  History
+  History,
+  AlertTriangle
 } from 'lucide-react';
 import { Portal } from '@/components/ui/Portal';
 import { getApiBaseUrl } from '@/lib/utils';
@@ -1363,11 +1364,14 @@ export default function JobCardsPage() {
   const [historyModalJob, setHistoryModalJob] = useState<JobCard | null>(null);
   const [historyLogs, setHistoryLogs] = useState<any[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
+  const [historyFilterType, setHistoryFilterType] = useState<'ALL' | 'FORWARD' | 'REJECTION' | 'INCOMPLETE'>('ALL');
+  const [historyViewMode, setHistoryViewMode] = useState<'timeline' | 'table'>('timeline');
+  const [historyLastUpdated, setHistoryLastUpdated] = useState<string>('');
 
   const fetchJobCardHistory = async (job: JobCard) => {
     setHistoryModalJob(job);
     setIsHistoryLoading(true);
-    setHistoryLogs([]);
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       const headers: Record<string, string> = {
@@ -1399,11 +1403,21 @@ export default function JobCardsPage() {
           subJobCard: { subJobCardNo: job.jobCardNo },
           stage: { name: r.stageName },
           stageName: r.stageName,
-          qtyForwarded: 0,
+          qtyReceived: job.totalPcbQty || 160,
+          qtyForwarded: Math.max(0, (job.totalPcbQty || 160) - (r.rejectedPcbQty || 0)),
+          qtyProcessed: job.totalPcbQty || 160,
           qtyRejected: r.rejectedPcbQty || 0,
+          qtyHold: 0,
+          rejectionReason: r.remark || 'Defect logged during quality inspection',
           remarkType: 'REJECTION',
           remarks: `[DEFECT AT STAGE: ${r.stageName}] ${r.remark} (${r.rejectedPcbQty} PCBs / ${r.rejectedAreaSqm} Sqm)`,
-          createdBy: { name: 'Quality Inspector' },
+          createdBy: {
+            id: 'qc-inspector',
+            name: 'Quality Inspector',
+            email: 'quality@rfelectrotech.com',
+            role: { name: 'QC_INSPECTOR' },
+            department: { name: 'Quality Assurance' },
+          },
         }));
         const existingTimestamps = new Set(rawLogs.map((l: any) => l.createdAt));
         const filteredLocalRej = localRejLogs.filter((l) => !existingTimestamps.has(l.createdAt));
@@ -1414,18 +1428,26 @@ export default function JobCardsPage() {
       if (job.status !== 'UNLAUNCHED') {
         const activeStageName = job.currentStageName || PF01_STAGES[job.currentStageIndex || 0] || '1. SHEARING';
         const hasActiveLog = rawLogs.some((l) => l.stage?.name === activeStageName || String(l.remarks || '').includes(activeStageName));
-        if (!hasActiveLog) {
+        if (!hasActiveLog && rawLogs.length > 0) {
           rawLogs.unshift({
             id: `active-curr-${job.id}`,
             createdAt: new Date().toISOString(),
             subJobCard: { subJobCardNo: job.jobCardNo },
             stage: { name: activeStageName },
+            qtyReceived: job.totalPcbQty || (job.custPnlQty && job.custPnlQty > 50 ? job.custPnlQty : 160),
             qtyForwarded: job.totalPcbQty || (job.custPnlQty && job.custPnlQty > 50 ? job.custPnlQty : 160),
             qtyProcessed: job.totalPcbQty || (job.custPnlQty && job.custPnlQty > 50 ? job.custPnlQty : 160),
-            qtyRejected: job.rejectedPcbQty || 0,
+            qtyRejected: 0,
+            qtyHold: 0,
             remarkType: 'CURRENT_STAGE',
-            remarks: `Active at ${activeStageName} (${job.totalPcbQty || 160} PCBs in production)`,
-            createdBy: { name: 'Production Floor' },
+            remarks: `In active production at stage: ${activeStageName} (${job.totalPcbQty || 160} PCBs)`,
+            createdBy: {
+              id: 'floor-op',
+              name: 'Production Floor',
+              email: 'operator@rfelectrotech.com',
+              role: { name: 'OPERATOR' },
+              department: { name: 'Shop Floor' },
+            },
           });
         }
       }
@@ -1437,16 +1459,25 @@ export default function JobCardsPage() {
           createdAt: job.launchedAt || job.createdAt || new Date().toISOString(),
           subJobCard: { subJobCardNo: job.jobCardNo },
           stage: { name: '1. SHEARING (INITIAL LAUNCH)' },
+          qtyReceived: job.totalPcbQty || 160,
           qtyForwarded: job.totalPcbQty || 160,
           qtyProcessed: job.totalPcbQty || 160,
           qtyRejected: 0,
+          qtyHold: 0,
           remarkType: 'INITIAL_LAUNCH',
           remarks: 'Job Card released to shop floor for production launch',
-          createdBy: { name: 'Production Planner' },
+          createdBy: {
+            id: (job as any).createdById || 'planner',
+            name: 'Production Planner',
+            email: 'planner@rfelectrotech.com',
+            role: { name: 'PLANNER' },
+            department: { name: 'Planning & Control' },
+          },
         });
       }
 
       setHistoryLogs(rawLogs);
+      setHistoryLastUpdated(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     } catch (err) {
       console.error('Failed to fetch job card history', err);
     } finally {
@@ -5521,318 +5552,556 @@ export default function JobCardsPage() {
         </Portal>
       )}
 
-      {/* MODAL 7: JOB CARD TRACEABILITY & STAGE MOVEMENT HISTORY TIMELINE */}
+      {/* MODAL 7: JOB CARD TRACEABILITY & STAGE MOVEMENT HISTORY */}
       {historyModalJob && (
         <Portal>
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[10000] flex items-center justify-center p-3 sm:p-5 overflow-hidden font-sans text-slate-900">
-            <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-5xl max-h-[95vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
+          <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs z-[10000] flex items-center justify-center p-2 sm:p-4 overflow-hidden font-sans text-slate-900">
+            <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-5xl max-h-[92vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
 
-              {/* ── Fixed Header ── */}
-              <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white shrink-0 rounded-t-3xl">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-2xl bg-purple-600/20 border border-purple-500/40 flex items-center justify-center shrink-0">
-                    <History className="w-5 h-5 text-purple-300 stroke-[2.5]" />
+              {/* ── Modal Top Header ── */}
+              <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white shrink-0 border-b border-slate-800">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700/80 flex items-center justify-center shrink-0 shadow-inner">
+                    <History className="w-5 h-5 text-blue-400" />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-black text-white text-base sm:text-lg tracking-tight">Stage Movement History</h3>
-                      <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h3 className="font-bold text-white text-base tracking-tight">Stage Movement & Traceability History</h3>
+                      <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-800 text-blue-300 border border-slate-700 font-mono">
                         {historyModalJob.jobCardNo}
                       </span>
-                      {historyModalJob.rejectedPcbQty && historyModalJob.rejectedPcbQty > 0 ? (
-                        <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-black bg-rose-600/30 text-rose-300 border border-rose-500/40 font-mono flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3" />
-                          {historyModalJob.rejectedPcbQty} Rejected
+                      {historyModalJob.customerCode && (
+                        <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700 font-mono">
+                          {historyModalJob.customerCode}
                         </span>
-                      ) : null}
+                      )}
                     </div>
-                    <p className="text-[11px] text-slate-400 font-medium mt-0.5">
-                      Traceability • Stage Transfers • Operator Timestamps • Quality Rejections
+                    <p className="text-[11px] text-slate-400 mt-0.5 font-sans">
+                      Complete live production log • Operator IDs & timestamps • Stage-by-stage transitions
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => { setHistoryModalJob(null); setHistoryLogs([]); }}
-                  className="text-slate-400 hover:text-white text-sm font-bold p-2 rounded-xl hover:bg-slate-800 cursor-pointer transition-all shrink-0 border border-slate-800 w-9 h-9 flex items-center justify-center"
-                >✕</button>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => fetchJobCardHistory(historyModalJob)}
+                    disabled={isHistoryLoading}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-medium rounded-lg border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                    title="Reload live movement data from server"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isHistoryLoading ? 'animate-spin text-blue-400' : 'text-slate-300'}`} />
+                    <span className="hidden sm:inline">{isHistoryLoading ? 'Syncing...' : 'Refresh'}</span>
+                  </button>
+                  <button
+                    onClick={() => { setHistoryModalJob(null); setHistoryLogs([]); setHistorySearchQuery(''); }}
+                    className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer border border-transparent hover:border-slate-700"
+                    title="Close modal"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
               {/* ── Scrollable Body ── */}
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto bg-slate-50/50">
 
-                {/* Job Card Meta Strip */}
-                <div className="px-5 py-3.5 bg-slate-50 border-b border-slate-200 text-xs font-mono">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">WIP Job No</span>
-                      <strong className="text-slate-900 text-sm font-black">{historyModalJob.jobCardNo}</strong>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Customer Code</span>
-                      <strong className="text-slate-800 font-bold">{historyModalJob.customerCode || '—'}</strong>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Customer Part</span>
-                      <strong className="text-slate-800 font-bold truncate block" title={historyModalJob.customerPartNo}>{historyModalJob.customerPartNo || '—'}</strong>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-bold block uppercase tracking-wider">Current Stage</span>
-                      <span className="inline-block px-2 py-0.5 rounded bg-blue-100 text-blue-900 font-bold text-[11px] border border-blue-200">
-                        {historyModalJob.currentStageName || PF01_STAGES[0]}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3 pt-2.5 mt-2.5 border-t border-slate-200 text-[11px]">
-                    <span className="text-slate-500 font-bold">Volume:
-                      <strong className="text-indigo-700 font-black ml-1">{historyModalJob.totalPcbQty || historyModalJob.custPnlQty || 160} PCBs</strong>
-                    </span>
-                    <span className="text-slate-300">•</span>
-                    <span className="text-slate-500 font-bold">WIP Area:
-                      <strong className="text-emerald-700 font-black ml-1">{Number(historyModalJob.custPnlAreaSqm || historyModalJob.prodPnlAreaSqm || 0).toFixed(2)} SQM</strong>
-                    </span>
-                    {historyModalJob.product && (
-                      <>
-                        <span className="text-slate-300">•</span>
-                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded font-bold text-slate-700">
-                          {historyModalJob.product.layers ? `${historyModalJob.product.layers} Layers` : '2 Layers'}
-                        </span>
-                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded font-bold text-slate-700">
-                          {historyModalJob.product.thicknessMm ? `${historyModalJob.product.thicknessMm} mm` : '1.6 mm'}
-                        </span>
-                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded font-bold text-slate-700">
-                          {historyModalJob.product.copperWeight || '1oz'}
-                        </span>
-                        <span className="px-2 py-0.5 bg-white border border-slate-200 rounded font-bold text-blue-700 truncate max-w-[140px]">
-                          {historyModalJob.product.surfaceFinish || 'HASL Lead-Free'}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className="p-5 space-y-5">
-
-                  {/* ── SECTION 1: REJECTION ANALYTICS ── */}
+                {/* ── 4 Executive KPI Overview Cards ── */}
+                <div className="p-5 pb-3 border-b border-slate-200 bg-white">
                   {(() => {
                     const defectLogs = historyLogs.filter((l: any) => (l.qtyRejected || 0) > 0 || String(l.remarkType || '').toUpperCase().includes('REJECT'));
                     const totalRejFromLogs = defectLogs.reduce((acc: number, l: any) => acc + (l.qtyRejected || 0), 0);
-                    const totalRejPcb = totalRejFromLogs || historyModalJob.rejectedPcbQty || 0;
-                    const totalRejArea = historyModalJob.rejectedAreaSqm || 0;
-                    const hasRejections = totalRejPcb > 0 || defectLogs.length > 0;
-                    if (!hasRejections) return null;
-
-                    const stageMap = new Map<string, { stageName: string; count: number; area: number; remarks: string[]; timestamps: string[] }>();
-                    defectLogs.forEach((dl: any) => {
-                      const sName = dl.stage?.name || dl.stageName || 'Process Stage';
-                      const prev = stageMap.get(sName);
-                      if (prev) {
-                        prev.count += (dl.qtyRejected || 0);
-                        prev.area += (dl.areaRejected || 0);
-                        if (dl.remarks) prev.remarks.push(dl.remarks);
-                        if (dl.createdAt) prev.timestamps.push(dl.createdAt);
-                      } else {
-                        stageMap.set(sName, { stageName: sName, count: dl.qtyRejected || 0, area: dl.areaRejected || 0, remarks: dl.remarks ? [dl.remarks] : [], timestamps: dl.createdAt ? [dl.createdAt] : [] });
-                      }
-                    });
-                    if (historyModalJob.rejectionLogs && historyModalJob.rejectionLogs.length > 0) {
-                      historyModalJob.rejectionLogs.forEach((r) => {
-                        const sName = r.stageName || 'Process Stage';
-                        if (!stageMap.has(sName)) {
-                          stageMap.set(sName, { stageName: sName, count: r.rejectedPcbQty || 0, area: r.rejectedAreaSqm || 0, remarks: r.remark ? [r.remark] : [], timestamps: r.timestamp ? [r.timestamp] : [] });
-                        }
-                      });
-                    }
-                    const stageEntries = Array.from(stageMap.values());
+                    const totalScrapQty = totalRejFromLogs || historyModalJob.rejectedPcbQty || 0;
+                    const totalBatchQty = historyModalJob.totalPcbQty || historyModalJob.custPnlQty || 160;
+                    const goodQty = Math.max(0, totalBatchQty - totalScrapQty);
+                    const yieldPercent = totalBatchQty > 0 ? ((goodQty / totalBatchQty) * 100).toFixed(1) : '100.0';
+                    const activeStage = historyModalJob.currentStageName || PF01_STAGES[historyModalJob.currentStageIndex || 0] || '1. SHEARING';
 
                     return (
-                      <div className="bg-gradient-to-br from-rose-50 via-rose-50/80 to-pink-50/60 border-2 border-rose-200 rounded-2xl overflow-hidden shadow-sm">
-                        <div className="flex items-center justify-between px-4 py-3 bg-rose-600 text-white">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 rounded-xl bg-white/20 flex items-center justify-center">
-                              <AlertCircle className="w-4 h-4 text-white" />
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                          {/* KPI 1: Batch Volume */}
+                          <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 flex flex-col justify-between">
+                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider font-mono">Total Batch Volume</span>
+                            <div className="mt-1 flex items-baseline gap-2">
+                              <span className="text-xl font-extrabold text-slate-900 font-mono">{totalBatchQty}</span>
+                              <span className="text-xs font-semibold text-slate-500">PCBs</span>
                             </div>
-                            <div>
-                              <span className="font-black text-white text-xs uppercase tracking-widest block">Quality Rejection Analytics</span>
-                              <span className="text-[10px] text-rose-200 font-medium">Stage-wise defect breakdown for this Job Card</span>
-                            </div>
+                            <span className="text-[11px] text-slate-500 font-mono mt-1">
+                              Area: {Number(historyModalJob.custPnlAreaSqm || historyModalJob.prodPnlAreaSqm || 0).toFixed(2)} SQM
+                            </span>
                           </div>
-                          <div className="text-right">
-                            <span className="font-black font-mono text-white text-lg block">{totalRejPcb}</span>
-                            <span className="text-[10px] text-rose-200 font-bold uppercase">Total Rejected PCBs</span>
+
+                          {/* KPI 2: Good / In Production */}
+                          <div className="bg-emerald-50/50 border border-emerald-200/80 rounded-xl p-3.5 flex flex-col justify-between">
+                            <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider font-mono">Good / In Production</span>
+                            <div className="mt-1 flex items-baseline gap-2">
+                              <span className="text-xl font-extrabold text-emerald-800 font-mono">{goodQty}</span>
+                              <span className="text-xs font-semibold text-emerald-600">PCBs</span>
+                            </div>
+                            <span className="text-[11px] text-emerald-700 font-mono mt-1 font-semibold">
+                              Yield: {yieldPercent}%
+                            </span>
+                          </div>
+
+                          {/* KPI 3: Rejected / Scrap */}
+                          <div className={`rounded-xl p-3.5 flex flex-col justify-between border ${totalScrapQty > 0 ? 'bg-rose-50/60 border-rose-200' : 'bg-slate-50 border-slate-200/80'}`}>
+                            <span className={`text-[10px] font-bold uppercase tracking-wider font-mono ${totalScrapQty > 0 ? 'text-rose-700' : 'text-slate-500'}`}>
+                              Rejected / Scrap
+                            </span>
+                            <div className="mt-1 flex items-baseline gap-2">
+                              <span className={`text-xl font-extrabold font-mono ${totalScrapQty > 0 ? 'text-rose-800' : 'text-slate-700'}`}>
+                                {totalScrapQty}
+                              </span>
+                              <span className={`text-xs font-semibold ${totalScrapQty > 0 ? 'text-rose-600' : 'text-slate-500'}`}>PCBs</span>
+                            </div>
+                            <span className={`text-[11px] font-mono mt-1 ${totalScrapQty > 0 ? 'text-rose-700 font-semibold' : 'text-slate-400'}`}>
+                              {totalScrapQty > 0 ? `${((totalScrapQty / totalBatchQty) * 100).toFixed(1)}% Defect Rate` : 'Zero scrap logged'}
+                            </span>
+                          </div>
+
+                          {/* KPI 4: Current Stage */}
+                          <div className="bg-blue-50/60 border border-blue-200 rounded-xl p-3.5 flex flex-col justify-between">
+                            <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider font-mono">Active Stage</span>
+                            <div className="mt-1 truncate font-bold text-blue-900 text-sm font-mono" title={activeStage}>
+                              {activeStage}
+                            </div>
+                            <span className="text-[11px] text-blue-600 font-medium mt-1">
+                              Shop Floor Status: Active
+                            </span>
                           </div>
                         </div>
-                        <div className="grid grid-cols-3 gap-0 border-b border-rose-200">
-                          <div className="p-3.5 text-center border-r border-rose-200">
-                            <span className="text-[10px] text-rose-500 font-mono uppercase font-bold block">Total Scrap PCBs</span>
-                            <strong className="text-rose-800 font-black text-xl font-mono block mt-0.5">{totalRejPcb}</strong>
-                            <span className="text-[10px] text-rose-500 font-mono">Units</span>
-                          </div>
-                          <div className="p-3.5 text-center border-r border-rose-200">
-                            <span className="text-[10px] text-rose-500 font-mono uppercase font-bold block">Affected Area</span>
-                            <strong className="text-rose-800 font-black text-xl font-mono block mt-0.5">{Number(totalRejArea).toFixed(2)}</strong>
-                            <span className="text-[10px] text-rose-500 font-mono">Sqm</span>
-                          </div>
-                          <div className="p-3.5 text-center">
-                            <span className="text-[10px] text-rose-500 font-mono uppercase font-bold block">Defect Stages</span>
-                            <strong className="text-rose-800 font-black text-xl font-mono block mt-0.5">{stageEntries.length}</strong>
-                            <span className="text-[10px] text-rose-500 font-mono">Stages</span>
-                          </div>
+
+                        {/* Product Spec Details Strip */}
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-[11px] text-slate-600">
+                          {historyModalJob.customerPartNo && (
+                            <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-700 font-mono font-medium">
+                              Part: <strong>{historyModalJob.customerPartNo}</strong>
+                            </span>
+                          )}
+                          {historyModalJob.product && (
+                            <>
+                              <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-mono">
+                                {historyModalJob.product.layers ? `${historyModalJob.product.layers} Layers` : '2 Layers'}
+                              </span>
+                              <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-mono">
+                                {historyModalJob.product.thicknessMm ? `${historyModalJob.product.thicknessMm} mm` : '1.6 mm'}
+                              </span>
+                              <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-mono">
+                                {historyModalJob.product.copperWeight || '1oz'}
+                              </span>
+                              <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-mono">
+                                {historyModalJob.product.surfaceFinish || 'HASL Lead-Free'}
+                              </span>
+                            </>
+                          )}
+                          {historyLastUpdated && (
+                            <span className="ml-auto text-[10px] text-slate-400 font-mono">
+                              Synced at {historyLastUpdated}
+                            </span>
+                          )}
                         </div>
-                        <div className="p-4 space-y-2.5">
-                          <span className="text-[10px] text-rose-600 font-mono uppercase font-black tracking-wider block">Stage-Wise Defect Occurrence</span>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {stageEntries.map((ds, dIdx) => (
-                              <div key={dIdx} className="bg-white border border-rose-200 rounded-xl p-3 shadow-xs hover:border-rose-400 transition-all">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0 flex-1">
-                                    <span className="text-[9px] text-slate-400 font-mono uppercase font-bold block">Defect Occurred At</span>
-                                    <strong className="text-rose-900 font-mono font-black text-xs block mt-0.5 leading-tight">{ds.stageName}</strong>
-                                    {ds.remarks.length > 0 && (
-                                      <span className="text-[10px] text-slate-500 font-sans block mt-1 leading-snug" title={ds.remarks.join(' | ')}>
-                                        {ds.remarks[0].replace(/^\[REJECTION\]\s*/, '').replace(/^\[DEFECT.*?\]\s*/, '').slice(0, 80)}
-                                      </span>
-                                    )}
-                                    {ds.timestamps.length > 0 && (
-                                      <span className="text-[9px] text-slate-400 font-mono block mt-1">
-                                        {new Date(ds.timestamps[0]).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="text-right shrink-0">
-                                    <span className="font-mono font-black text-rose-700 bg-rose-50 px-2.5 py-1.5 rounded-lg border border-rose-200 text-sm block">⚠️ {ds.count}</span>
-                                    <span className="text-[9px] text-rose-500 font-mono font-bold block mt-0.5">PCBs</span>
-                                  </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div className="p-5 space-y-4">
+
+                  {/* ── Quality Defect Notice (Rendered Only When Defects Exist) ── */}
+                  {(() => {
+                    const defectLogs = historyLogs.filter((l: any) => (l.qtyRejected || 0) > 0 || String(l.remarkType || '').toUpperCase().includes('REJECT'));
+                    if (defectLogs.length === 0 && (!historyModalJob.rejectedPcbQty || historyModalJob.rejectedPcbQty <= 0)) return null;
+
+                    return (
+                      <div className="bg-amber-50 border border-amber-200/90 rounded-xl p-3.5 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                            <span className="text-xs font-bold text-amber-950 uppercase font-mono tracking-wider">Quality Defect Log</span>
+                          </div>
+                          <span className="text-xs font-mono font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded border border-amber-300/80">
+                            {defectLogs.reduce((acc: number, l: any) => acc + (l.qtyRejected || 0), 0) || historyModalJob.rejectedPcbQty || 0} Total Scrapped
+                          </span>
+                        </div>
+                        <div className="space-y-1.5 text-xs">
+                          {defectLogs.map((dl: any, dIdx: number) => {
+                            const dateStr = dl.createdAt ? new Date(dl.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+                            return (
+                              <div key={dIdx} className="bg-white border border-amber-200 rounded-lg px-3 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="font-mono font-bold text-amber-950 bg-amber-100/70 px-1.5 py-0.5 rounded text-[11px] shrink-0">
+                                    {dl.stage?.name || dl.stageName || 'Stage'}
+                                  </span>
+                                  <span className="text-slate-700 text-[11px] truncate font-sans">
+                                    {dl.remarks || dl.rejectionReason || 'Defect logged during quality inspection'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-3 shrink-0 text-right">
+                                  <span className="font-mono font-bold text-rose-700 text-xs">
+                                    {dl.qtyRejected || 1} PCB(s)
+                                  </span>
+                                  {dateStr && <span className="text-[10px] text-slate-400 font-mono">{dateStr}</span>}
                                 </div>
                               </div>
-                            ))}
-                          </div>
+                            );
+                          })}
                         </div>
                       </div>
                     );
                   })()}
 
-                  {/* ── SECTION 2: CHRONOLOGICAL STAGE MOVEMENT LOGS ── */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-xl bg-purple-100 flex items-center justify-center">
-                          <Clock className="w-4 h-4 text-purple-600" />
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-black uppercase text-slate-900 tracking-wider font-mono">Chronological Stage Movement Logs</h4>
-                          <span className="text-[10px] text-slate-400 font-medium">
-                            {isHistoryLoading ? 'Loading...' : `${historyLogs.length} record${historyLogs.length !== 1 ? 's' : ''} from database`}
-                          </span>
-                        </div>
+                  {/* ── Toolbar: Search, Filters, View Switcher & CSV Export ── */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                    {/* Search & Filter */}
+                    <div className="flex items-center gap-2 flex-1 max-w-lg">
+                      <div className="relative flex-1">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={historySearchQuery}
+                          onChange={(e) => setHistorySearchQuery(e.target.value)}
+                          placeholder="Search stage, operator name, user ID, remark..."
+                          className="w-full pl-8.5 pr-7 py-1.5 bg-white border border-slate-200 rounded-lg text-xs placeholder:text-slate-400 focus:outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-300 transition-all font-sans text-slate-800"
+                        />
+                        {historySearchQuery && (
+                          <button
+                            onClick={() => setHistorySearchQuery('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs p-0.5"
+                          >✕</button>
+                        )}
                       </div>
+
+                      {/* Type Filter */}
+                      <select
+                        value={historyFilterType}
+                        onChange={(e) => setHistoryFilterType(e.target.value as any)}
+                        className="px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-700 focus:outline-none focus:border-slate-400 cursor-pointer shrink-0 shadow-2xs"
+                      >
+                        <option value="ALL">All Records</option>
+                        <option value="FORWARD">Stage Forward</option>
+                        <option value="REJECTION">Defects / Rejections</option>
+                        <option value="INCOMPLETE">Incomplete Moves</option>
+                      </select>
+                    </div>
+
+                    {/* View Switcher & CSV Export */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center bg-slate-200/80 p-0.5 rounded-lg text-xs font-mono">
+                        <button
+                          onClick={() => setHistoryViewMode('timeline')}
+                          className={`px-3 py-1 rounded-md transition-all cursor-pointer ${historyViewMode === 'timeline' ? 'bg-white text-slate-900 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+                        >
+                          Timeline
+                        </button>
+                        <button
+                          onClick={() => setHistoryViewMode('table')}
+                          className={`px-3 py-1 rounded-md transition-all cursor-pointer ${historyViewMode === 'table' ? 'bg-white text-slate-900 font-bold shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+                        >
+                          Audit Table
+                        </button>
+                      </div>
+
                       {historyLogs.length > 0 && (
                         <button
                           onClick={() => {
-                            let csvContent = "data:text/csv;charset=utf-8,Timestamp,Job Card No,Sub Lot,Stage,Qty Forwarded,Qty Rejected,Remarks,Operator\n";
+                            let csvContent = "data:text/csv;charset=utf-8,Timestamp,Job Card No,Sub Lot,Stage,Event Type,Qty Received,Qty Forwarded,Qty Rejected,Qty Hold,Operator Name,Operator Role,Operator ID,Remarks\n";
                             historyLogs.forEach((l: any) => {
                               const dateStr = l.createdAt ? new Date(l.createdAt).toLocaleString('en-GB') : '-';
-                              const stageName = l.stage?.name || l.stageName || '-';
+                              const stageName = `"${(l.stage?.name || l.stageName || '-').replace(/"/g, '""')}"`;
                               const subNo = l.subJobCard?.subJobCardNo || historyModalJob.jobCardNo;
-                              const remarkStr = `"${(l.remarks || '').replace(/"/g, '""')}"`;
-                              const userStr = `"${l.createdBy?.name || 'Operator'}"`;
-                              csvContent += `${dateStr},${historyModalJob.jobCardNo},${subNo},${stageName},${l.qtyForwarded || 0},${l.qtyRejected || 0},${remarkStr},${userStr}\n`;
+                              const eventType = l.remarkType || 'STAGE_MOVEMENT';
+                              const opName = `"${(l.createdBy?.name || 'Operator').replace(/"/g, '""')}"`;
+                              const opRole = `"${(l.createdBy?.role?.name || 'Staff').replace(/"/g, '""')}"`;
+                              const opId = l.createdBy?.id || l.createdById || '-';
+                              const remarkStr = `"${(l.remarks || l.rejectionReason || '').replace(/"/g, '""')}"`;
+                              csvContent += `${dateStr},${historyModalJob.jobCardNo},${subNo},${stageName},${eventType},${l.qtyReceived || 0},${l.qtyForwarded || 0},${l.qtyRejected || 0},${l.qtyHold || 0},${opName},${opRole},${opId},${remarkStr}\n`;
                             });
                             const encodedUri = encodeURI(csvContent);
                             const link = document.createElement("a");
                             link.setAttribute("href", encodedUri);
-                            link.setAttribute("download", `history_${historyModalJob.jobCardNo}_${new Date().toISOString().split('T')[0]}.csv`);
+                            link.setAttribute("download", `job_history_${historyModalJob.jobCardNo}_${new Date().toISOString().split('T')[0]}.csv`);
                             document.body.appendChild(link); link.click(); document.body.removeChild(link);
                           }}
-                          className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-purple-200 cursor-pointer shadow-2xs transition-all"
+                          className="px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 font-medium rounded-lg text-xs flex items-center gap-1.5 border border-slate-200 cursor-pointer transition-colors shadow-2xs"
+                          title="Export complete movement history as CSV"
                         >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>Export CSV</span>
+                          <Download className="w-3.5 h-3.5 text-slate-500" />
+                          <span className="hidden sm:inline">Export CSV</span>
                         </button>
                       )}
                     </div>
+                  </div>
 
-                    {isHistoryLoading ? (
-                      <div className="py-14 text-center flex flex-col items-center justify-center gap-3">
-                        <RefreshCw className="w-6 h-6 text-purple-500 animate-spin" />
-                        <span className="text-sm text-slate-500 font-medium">Loading traceability records from database...</span>
-                      </div>
-                    ) : historyLogs.length === 0 ? (
-                      <div className="py-12 text-center bg-slate-50 rounded-2xl border border-slate-200">
-                        <Clock className="w-8 h-8 text-slate-300 mx-auto mb-3" />
-                        <p className="font-semibold text-slate-600 text-sm">No stage movement logs yet.</p>
-                        <p className="text-[11px] text-slate-400 mt-1">Logs appear automatically when an operator advances a stage or logs rejections.</p>
+                  {/* ── Filtered Records Computation ── */}
+                  {(() => {
+                    const filtered = historyLogs.filter((log: any) => {
+                      // Filter by type
+                      if (historyFilterType === 'REJECTION') {
+                        const isRej = (log.qtyRejected || 0) > 0 || String(log.remarkType || '').toUpperCase().includes('REJECT');
+                        if (!isRej) return false;
+                      } else if (historyFilterType === 'INCOMPLETE') {
+                        const isInc = log.remarkType === 'INCOMPLETE_MOVEMENT' || (log.qtyForwarded < log.qtyReceived && log.qtyReceived > 0);
+                        if (!isInc) return false;
+                      } else if (historyFilterType === 'FORWARD') {
+                        const isFwd = (log.qtyForwarded || 0) > 0;
+                        if (!isFwd) return false;
+                      }
+
+                      // Filter by query
+                      if (historySearchQuery.trim()) {
+                        const q = historySearchQuery.toLowerCase();
+                        const stage = String(log.stage?.name || log.stageName || '').toLowerCase();
+                        const opName = String(log.createdBy?.name || '').toLowerCase();
+                        const opEmail = String(log.createdBy?.email || '').toLowerCase();
+                        const opId = String(log.createdBy?.id || log.createdById || '').toLowerCase();
+                        const remarks = String(log.remarks || '').toLowerCase();
+                        const reason = String(log.rejectionReason || '').toLowerCase();
+                        const subNo = String(log.subJobCard?.subJobCardNo || '').toLowerCase();
+                        const idStr = String(log.id || '').toLowerCase();
+                        return stage.includes(q) || opName.includes(q) || opEmail.includes(q) || opId.includes(q) || remarks.includes(q) || reason.includes(q) || subNo.includes(q) || idStr.includes(q);
+                      }
+
+                      return true;
+                    });
+
+                    if (isHistoryLoading) {
+                      return (
+                        <div className="py-16 text-center flex flex-col items-center justify-center gap-2.5 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                          <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
+                          <span className="text-xs text-slate-600 font-medium">Fetching live movement ledger records...</span>
+                        </div>
+                      );
+                    }
+
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="py-12 text-center bg-white rounded-xl border border-slate-200 shadow-2xs space-y-1">
+                          <Clock className="w-6 h-6 text-slate-400 mx-auto mb-1.5" />
+                          <p className="font-semibold text-slate-800 text-xs">No matching movement logs found.</p>
+                          <p className="text-[11px] text-slate-400">
+                            {historySearchQuery ? 'Try clearing the search query or selecting All Records.' : 'Movement entries will appear automatically when operators advance stages on the shop floor.'}
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    return historyViewMode === 'table' ? (
+                      /* ── AUDIT TABLE VIEW ── */
+                      <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse text-xs">
+                            <thead>
+                              <tr className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase font-bold tracking-wider text-slate-500 font-mono">
+                                <th className="py-3 px-3.5">#</th>
+                                <th className="py-3 px-3.5">Timestamp</th>
+                                <th className="py-3 px-3.5">Process Stage</th>
+                                <th className="py-3 px-3.5">Status</th>
+                                <th className="py-3 px-3.5 text-right">Received</th>
+                                <th className="py-3 px-3.5 text-right">Forwarded</th>
+                                <th className="py-3 px-3.5 text-right">Rejected</th>
+                                <th className="py-3 px-3.5">Operator & Authorization</th>
+                                <th className="py-3 px-3.5">Notes / Remarks</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 text-slate-800 font-sans">
+                              {filtered.map((log: any, idx: number) => {
+                                const dateObj = log.createdAt ? new Date(log.createdAt) : null;
+                                const dateStr = dateObj ? dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+                                const timeStr = dateObj ? dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+                                const isRej = (log.qtyRejected || 0) > 0 || String(log.remarkType || '').toUpperCase().includes('REJECT');
+                                const isCurr = String(log.remarkType || '').includes('CURRENT_STAGE');
+                                const isInit = String(log.remarkType || '').includes('INITIAL_LAUNCH');
+                                const isComp = String(log.remarkType || '').includes('JOB_COMPLETED');
+                                const stageName = log.stage?.name || log.stageName || 'Stage';
+                                const opName = log.createdBy?.name || 'Operator';
+                                const opRole = log.createdBy?.role?.name || '';
+                                const opEmail = log.createdBy?.email || '';
+                                const opId = log.createdBy?.id || log.createdById || '';
+
+                                return (
+                                  <tr key={log.id || idx} className={`hover:bg-slate-50/80 transition-colors ${isRej ? 'bg-rose-50/20' : isCurr ? 'bg-blue-50/20' : ''}`}>
+                                    <td className="py-2.5 px-3.5 text-slate-400 font-mono text-[11px]">#{filtered.length - idx}</td>
+                                    <td className="py-2.5 px-3.5 whitespace-nowrap text-slate-600 text-[11px] font-mono">
+                                      <div className="font-semibold text-slate-900">{dateStr}</div>
+                                      <div className="text-[10px] text-slate-400">{timeStr}</div>
+                                    </td>
+                                    <td className="py-2.5 px-3.5 whitespace-nowrap">
+                                      <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-900 border border-slate-200 font-mono font-semibold text-[11px]">
+                                        {stageName}
+                                      </span>
+                                    </td>
+                                    <td className="py-2.5 px-3.5 whitespace-nowrap">
+                                      {isRej ? (
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 font-mono">
+                                          Defect Logged
+                                        </span>
+                                      ) : isCurr ? (
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 font-mono">
+                                          In Production
+                                        </span>
+                                      ) : isInit ? (
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 font-mono">
+                                          Launched
+                                        </span>
+                                      ) : isComp ? (
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono">
+                                          Completed
+                                        </span>
+                                      ) : (
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono">
+                                          Stage Moved
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="py-2.5 px-3.5 text-right font-mono text-slate-700">{log.qtyReceived || 0}</td>
+                                    <td className="py-2.5 px-3.5 text-right font-mono font-bold text-emerald-700">{log.qtyForwarded || 0}</td>
+                                    <td className="py-2.5 px-3.5 text-right font-mono font-bold text-rose-700">{log.qtyRejected || 0}</td>
+                                    <td className="py-2.5 px-3.5 whitespace-nowrap">
+                                      <div className="font-semibold text-slate-900 text-[11px]">{opName}</div>
+                                      <div className="text-[10px] text-slate-400 font-mono">
+                                        {opRole && <span>{opRole} • </span>}
+                                        {opEmail || (opId ? `ID: ${opId.slice(0, 8)}` : '')}
+                                      </div>
+                                    </td>
+                                    <td className="py-2.5 px-3.5 text-[11px] text-slate-600 max-w-xs">
+                                      {log.remarks ? <div className="truncate" title={log.remarks}>{log.remarks}</div> : <span className="text-slate-300">—</span>}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     ) : (
-                      <div className="relative space-y-3">
-                        <div className="absolute left-[18px] top-6 bottom-6 w-0.5 bg-slate-200 hidden sm:block" />
-                        {historyLogs.map((log: any, idx: number) => {
+                      /* ── TIMELINE VIEW ── */
+                      <div className="relative space-y-3.5">
+                        <div className="absolute left-[17px] top-4 bottom-4 w-0.5 bg-slate-200 hidden sm:block" />
+                        {filtered.map((log: any, idx: number) => {
                           const dateObj = log.createdAt ? new Date(log.createdAt) : null;
                           const formattedDate = dateObj ? dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
                           const formattedTime = dateObj ? dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
                           const isRejection = (log.qtyRejected || 0) > 0 || String(log.remarkType || '').toUpperCase().includes('REJECT');
                           const isCurrentActive = String(log.remarkType || '').includes('CURRENT_STAGE');
                           const isInitialLaunch = String(log.remarkType || '').includes('INITIAL_LAUNCH');
+                          const isJobCompleted = String(log.remarkType || '').includes('JOB_COMPLETED');
                           const logStageName = log.stage?.name || log.stageName || 'Process Stage';
                           const subNo = log.subJobCard?.subJobCardNo || historyModalJob.jobCardNo;
+                          const qtyRecv = log.qtyReceived || (log.qtyForwarded || 0) + (log.qtyRejected || 0);
                           const qtyFwd = log.qtyForwarded || log.qtyProcessed || 0;
                           const qtyRej = log.qtyRejected || 0;
+                          const qtyHold = log.qtyHold || 0;
                           const operatorName = log.createdBy?.name || 'Production Operator';
+                          const operatorRole = log.createdBy?.role?.name || (isInitialLaunch ? 'Planner' : 'Operator');
+                          const operatorDept = log.createdBy?.department?.name || '';
+                          const operatorEmail = log.createdBy?.email || '';
+                          const operatorId = log.createdBy?.id || log.createdById || '';
+
                           return (
                             <div key={log.id || idx} className="relative sm:pl-10">
-                              <div className={`absolute left-0 top-3 w-9 h-9 rounded-xl flex items-center justify-center font-black text-[10px] font-mono shrink-0 hidden sm:flex border-2 ${isRejection ? 'bg-rose-600 text-white border-rose-500' : isCurrentActive ? 'bg-blue-600 text-white border-blue-500 ring-2 ring-blue-200' : isInitialLaunch ? 'bg-emerald-600 text-white border-emerald-500' : 'bg-purple-600 text-white border-purple-500'}`}>
-                                #{historyLogs.length - idx}
+                              {/* Step Index Badge */}
+                              <div className={`absolute left-0 top-3 w-8.5 h-8.5 rounded-xl border hidden sm:flex items-center justify-center font-bold text-[11px] font-mono shrink-0 shadow-2xs ${isRejection ? 'bg-rose-50 border-rose-300 text-rose-800' : isCurrentActive ? 'bg-blue-50 border-blue-300 text-blue-800' : 'bg-white border-slate-300 text-slate-700'}`}>
+                                #{filtered.length - idx}
                               </div>
-                              <div className={`rounded-2xl border text-xs transition-all overflow-hidden ${isRejection ? 'bg-rose-50 border-2 border-rose-300 shadow-sm' : isCurrentActive ? 'bg-blue-50 border-2 border-blue-300 shadow-sm' : isInitialLaunch ? 'bg-emerald-50/80 border border-emerald-200' : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'}`}>
-                                <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 border-b ${isRejection ? 'border-rose-200 bg-rose-100/60' : isCurrentActive ? 'border-blue-200 bg-blue-100/60' : isInitialLaunch ? 'border-emerald-200 bg-emerald-100/40' : 'border-slate-100 bg-slate-50/80'}`}>
+
+                              <div className={`rounded-xl border transition-all overflow-hidden bg-white ${isRejection ? 'border-rose-200 ring-1 ring-rose-100' : isCurrentActive ? 'border-blue-200 ring-1 ring-blue-100' : 'border-slate-200/90 shadow-2xs'}`}>
+                                {/* Card Header */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-2.5 bg-slate-50/80 border-b border-slate-100 text-xs">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <span className={`sm:hidden w-6 h-6 rounded-lg font-black text-[10px] flex items-center justify-center font-mono ${isRejection ? 'bg-rose-600 text-white' : isCurrentActive ? 'bg-blue-600 text-white' : 'bg-purple-600 text-white'}`}>#{historyLogs.length - idx}</span>
-                                    <span className="font-mono font-black text-[11px] text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200 shadow-2xs">{subNo}</span>
+                                    <span className="sm:hidden font-mono font-bold text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                                      #{filtered.length - idx}
+                                    </span>
+                                    <span className="font-bold text-slate-900 font-mono text-xs">
+                                      {logStageName}
+                                    </span>
+                                    {subNo && subNo !== historyModalJob.jobCardNo && (
+                                      <span className="font-mono text-[11px] text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
+                                        Sub-Lot: {subNo}
+                                      </span>
+                                    )}
                                     {isRejection ? (
-                                      <span className="font-black text-rose-900 bg-rose-100 border border-rose-300 px-2.5 py-0.5 rounded-lg font-mono text-[11px] inline-flex items-center gap-1">
-                                        <AlertCircle className="w-3 h-3 text-rose-600 shrink-0" /><span>DEFECT AT: {logStageName}</span>
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 font-mono">
+                                        Defect Logged
                                       </span>
                                     ) : isCurrentActive ? (
-                                      <span className="font-black text-blue-900 bg-blue-100 border border-blue-300 px-2.5 py-0.5 rounded-lg font-mono text-[11px] inline-flex items-center gap-1">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" /><span>ACTIVE: {logStageName}</span>
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-mono">
+                                        Active in Production
                                       </span>
                                     ) : isInitialLaunch ? (
-                                      <span className="font-black text-emerald-900 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-lg font-mono text-[11px] inline-flex items-center gap-1">
-                                        <Play className="w-3 h-3 text-emerald-700 fill-current shrink-0" /><span>LAUNCHED → {logStageName}</span>
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-mono">
+                                        Initial Launch
+                                      </span>
+                                    ) : isJobCompleted ? (
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono">
+                                        Completed
                                       </span>
                                     ) : (
-                                      <span className="font-bold text-slate-700 bg-white px-2.5 py-0.5 rounded-lg border border-slate-200 font-mono text-[11px]">{logStageName}</span>
-                                    )}
-                                    {isRejection && qtyRej > 0 && (
-                                      <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-rose-600 text-white font-mono">⚠️ {qtyRej} PCB(s) REJECTED</span>
+                                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono">
+                                        Stage Forwarded
+                                      </span>
                                     )}
                                   </div>
+
                                   <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-500 shrink-0">
                                     <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                                    <span className="font-semibold text-slate-600">{formattedDate}</span>
-                                    <span className="text-slate-400">{formattedTime}</span>
+                                    <span className="font-semibold text-slate-700">{formattedDate}</span>
+                                    <span className="text-slate-400">• {formattedTime}</span>
                                   </div>
                                 </div>
-                                <div className="grid grid-cols-3 divide-x divide-slate-100">
+
+                                {/* Movement Metrics Grid */}
+                                <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-slate-100 text-xs border-b border-slate-100">
                                   <div className="p-3">
-                                    <span className="text-[9px] text-slate-400 font-mono uppercase font-bold block">QTY FORWARDED</span>
-                                    <strong className="text-emerald-700 font-mono font-black text-sm block mt-0.5">{qtyFwd > 0 ? `${qtyFwd} PCBs` : '—'}</strong>
+                                    <span className="text-[9px] text-slate-400 font-mono uppercase font-bold block">Qty Received</span>
+                                    <strong className="text-slate-800 font-mono font-bold text-sm block mt-0.5">{qtyRecv} PCBs</strong>
                                   </div>
-                                  <div className={`p-3 ${isRejection ? 'bg-rose-50/80' : ''}`}>
-                                    <span className={`text-[9px] font-mono uppercase font-bold block ${isRejection ? 'text-rose-600' : 'text-slate-400'}`}>{isRejection ? 'REJECTED / SCRAP' : 'REJECTED QTY'}</span>
-                                    <strong className={`font-mono font-black text-sm block mt-0.5 ${isRejection ? 'text-rose-700' : 'text-slate-500'}`}>
-                                      {qtyRej > 0 ? (<span className="flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />{qtyRej} PCBs</span>) : '0 PCBs'}
+                                  <div className="p-3">
+                                    <span className="text-[9px] text-slate-400 font-mono uppercase font-bold block">Qty Forwarded</span>
+                                    <strong className="text-emerald-700 font-mono font-bold text-sm block mt-0.5">{qtyFwd} PCBs</strong>
+                                  </div>
+                                  <div className={`p-3 ${qtyRej > 0 ? 'bg-rose-50/40' : ''}`}>
+                                    <span className={`text-[9px] font-mono uppercase font-bold block ${qtyRej > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
+                                      Rejected / Scrap
+                                    </span>
+                                    <strong className={`font-mono font-bold text-sm block mt-0.5 ${qtyRej > 0 ? 'text-rose-700' : 'text-slate-400'}`}>
+                                      {qtyRej > 0 ? `${qtyRej} PCBs` : '0'}
                                     </strong>
                                   </div>
                                   <div className="p-3">
-                                    <span className="text-[9px] text-slate-400 font-mono uppercase font-bold block">OPERATOR</span>
-                                    <strong className="text-slate-800 font-bold text-xs block mt-0.5 truncate">{operatorName}</strong>
+                                    <span className="text-[9px] text-slate-400 font-mono uppercase font-bold block">Hold Qty</span>
+                                    <strong className="text-slate-600 font-mono font-medium text-sm block mt-0.5">{qtyHold > 0 ? `${qtyHold} PCBs` : '0'}</strong>
                                   </div>
                                 </div>
-                                {log.remarks && (
-                                  <div className="px-3 pb-3">
-                                    <div className={`px-3 py-2 rounded-xl text-[11px] font-mono border ${isRejection ? 'bg-rose-100/80 text-rose-950 border-rose-200 font-semibold' : 'bg-slate-50 text-slate-600 border-slate-100'}`}>
-                                      <span className="font-black uppercase mr-1 text-[10px]">{isRejection ? 'DEFECT DETAILS:' : 'Remarks:'}</span>{log.remarks}
+
+                                {/* Operator & User Auth Info */}
+                                <div className="px-4 py-2.5 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs border-b border-slate-100">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold">
+                                      {operatorName.charAt(0).toUpperCase()}
                                     </div>
+                                    <div>
+                                      <span className="text-[11px] font-bold text-slate-800">{operatorName}</span>
+                                      <span className="text-[10px] text-slate-500 font-mono ml-2">
+                                        {operatorRole}{operatorDept ? ` • ${operatorDept}` : ''}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 text-[10px] font-mono text-slate-400">
+                                    {operatorEmail && <span>{operatorEmail}</span>}
+                                    {operatorId && <span>(User ID: {operatorId.slice(0, 8)})</span>}
+                                  </div>
+                                </div>
+
+                                {/* Remarks & Defect Details */}
+                                {(log.remarks || log.rejectionReason) && (
+                                  <div className="px-4 py-2.5 text-xs text-slate-700 bg-white">
+                                    <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                                      {isRejection ? 'Defect Reason & Details:' : 'Movement Notes:'}
+                                    </span>
+                                    <p className="font-mono text-[11px] text-slate-800 leading-relaxed bg-slate-50 p-2.5 rounded-lg border border-slate-200/80">
+                                      {log.remarks || log.rejectionReason}
+                                    </p>
                                   </div>
                                 )}
                               </div>
@@ -5840,19 +6109,23 @@ export default function JobCardsPage() {
                           );
                         })}
                       </div>
-                    )}
-                  </div>
+                    );
+                  })()}
 
                 </div>
               </div>
 
-              {/* ── Fixed Footer ── */}
-              <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 bg-slate-50 shrink-0 rounded-b-3xl">
-                <span className="text-slate-400 font-mono text-[10px]">RF ELECTRO TECH ERP • ISO Traceability System</span>
+              {/* ── Modal Footer ── */}
+              <div className="flex items-center justify-between px-6 py-3.5 border-t border-slate-200 bg-white shrink-0">
+                <span className="text-slate-500 font-mono text-xs">
+                  {historyLogs.length} live records in ledger • RF ELECTRO TECH ISO Traceability
+                </span>
                 <button
-                  onClick={() => { setHistoryModalJob(null); setHistoryLogs([]); }}
-                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl text-xs transition-all cursor-pointer active:scale-95"
-                >Close</button>
+                  onClick={() => { setHistoryModalJob(null); setHistoryLogs([]); setHistorySearchQuery(''); }}
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg text-xs transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
               </div>
 
             </div>

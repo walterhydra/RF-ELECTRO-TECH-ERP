@@ -1426,7 +1426,13 @@ export class JobCardsService {
       include: {
         stage: true,
         createdBy: {
-          select: { id: true, name: true, email: true, role: { select: { name: true } } },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: { select: { name: true } },
+            department: { select: { name: true } },
+          },
         },
         subJobCard: {
           select: { id: true, subJobCardNo: true, currentStageId: true },
@@ -1439,7 +1445,7 @@ export class JobCardsService {
       ...l,
       subJobCard: {
         ...l.subJobCard,
-        subJobCardNo: jobCard.jobCardNo, // Keep exact same Job Card number
+        subJobCardNo: l.subJobCard?.subJobCardNo || jobCard.jobCardNo,
       },
     }));
 
@@ -1451,12 +1457,20 @@ export class JobCardsService {
         subJobCard: { subJobCardNo: jobCard.jobCardNo },
         stage: { name: '20. PACKING (COMPLETED)' },
         stageName: '20. PACKING (COMPLETED)',
+        qtyReceived: jobCard.totalPcbQty || jobCard.totalQty || 160,
         qtyForwarded: jobCard.totalPcbQty || jobCard.totalQty || 160,
         qtyProcessed: jobCard.totalPcbQty || jobCard.totalQty || 160,
         qtyRejected: 0,
+        qtyHold: 0,
         remarkType: 'JOB_COMPLETED',
-        remarks: `🎉 JOB CARD COMPLETED: Manufacturing workflow finished successfully and released for dispatch (${jobCard.totalPcbQty || 160} PCBs)`,
-        createdBy: { name: 'Production Floor / Admin' },
+        remarks: `Job Card Completed: Manufacturing workflow finished successfully and released for dispatch (${jobCard.totalPcbQty || 160} PCBs)`,
+        createdBy: {
+          id: 'system',
+          name: 'Production Floor / Admin',
+          email: 'admin@rfelectrotech.com',
+          role: { name: 'ADMIN' },
+          department: { name: 'Management' },
+        },
       });
     }
 
@@ -1467,12 +1481,20 @@ export class JobCardsService {
         createdAt: jobCard.launchedAt || jobCard.createdAt || new Date(),
         subJobCard: { subJobCardNo: jobCard.jobCardNo },
         stage: { name: '1. SHEARING (INITIAL LAUNCH)' },
+        qtyReceived: jobCard.totalPcbQty || jobCard.totalQty || 160,
         qtyForwarded: jobCard.totalPcbQty || jobCard.totalQty || 160,
         qtyProcessed: jobCard.totalPcbQty || jobCard.totalQty || 160,
         qtyRejected: 0,
+        qtyHold: 0,
         remarkType: 'INITIAL_LAUNCH',
-        remarks: `🚀 Job Card Launched into Stage 1 (1. SHEARING) Production Flow`,
-        createdBy: { name: 'Production Planner' },
+        remarks: 'Job Card released to shop floor for production launch',
+        createdBy: {
+          id: jobCard.createdById || 'planner',
+          name: 'Production Planner',
+          email: 'planner@rfelectrotech.com',
+          role: { name: 'PLANNER' },
+          department: { name: 'Planning & Control' },
+        },
       });
     }
 

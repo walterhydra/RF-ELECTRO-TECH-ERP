@@ -61,7 +61,7 @@ interface MovementLog {
   rejectionReason?: string;
   remarks?: string;
   isOverride: boolean;
-  createdBy?: { name: string };
+  createdBy?: { id?: string; name: string; email?: string; role?: { name?: string } };
   createdAt: string;
 }
 
@@ -464,14 +464,14 @@ export default function StageUpdatePage() {
           className="w-full px-4 py-3 flex items-center justify-between text-xs font-mono text-slate-300 hover:bg-slate-800/50 transition-colors"
         >
           <div className="flex items-center gap-2">
-            <History className="w-4 h-4 text-amber-400" />
-            <span>MOVEMENT HISTORY ({history.length} entries)</span>
+            <History className="w-4 h-4 text-slate-400" />
+            <span className="font-bold text-slate-200">MOVEMENT HISTORY ({history.length} entries)</span>
           </div>
-          {showHistory ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          {showHistory ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
         </button>
 
         {showHistory && (
-          <div className="border-t border-slate-800 divide-y divide-slate-800 max-h-[300px] overflow-y-auto">
+          <div className="border-t border-slate-800 divide-y divide-slate-800 max-h-[340px] overflow-y-auto">
             {history.length === 0 ? (
               <div className="p-4 text-center text-[11px] text-slate-500 font-mono">
                 No movement history yet
@@ -479,39 +479,54 @@ export default function StageUpdatePage() {
             ) : (
               history.map((log) => {
                 const isIncomplete = (log as any).remarkType === 'INCOMPLETE_MOVEMENT' || (log.qtyForwarded < log.qtyReceived && log.qtyReceived > 0);
+                const isRejection = log.qtyRejected > 0 || (log as any).remarkType === 'REJECTION';
+                const dateObj = log.createdAt ? new Date(log.createdAt) : null;
+                const formattedDate = dateObj ? dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '-';
+                const formattedTime = dateObj ? dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
                 
                 return (
-                  <div key={log.id} className={`p-3 space-y-1 ${isIncomplete ? 'bg-amber-500/10' : ''}`}>
+                  <div key={log.id} className={`p-3 space-y-1.5 ${isRejection ? 'bg-rose-950/20' : isIncomplete ? 'bg-amber-950/20' : ''}`}>
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono text-amber-400 font-bold flex items-center gap-1.5">
-                        <span>{log.stage?.name || 'Stage'}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[11px] font-mono text-slate-200 font-bold">
+                          {log.stage?.name || 'Stage'}
+                        </span>
                         {isIncomplete && (
-                          <span className="bg-amber-400 text-slate-950 px-1.5 py-0.2 rounded text-[9px] font-black">
+                          <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold">
                             INCOMPLETE
                           </span>
                         )}
-                        {log.isOverride && <span className="ml-1 text-rose-400">[OVERRIDE]</span>}
-                      </span>
-                      <span className="text-[9px] font-mono text-slate-500">
-                        {new Date(log.createdAt).toLocaleString()}
+                        {isRejection && (
+                          <span className="bg-rose-500/20 text-rose-300 border border-rose-500/30 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold">
+                            DEFECT
+                          </span>
+                        )}
+                        {log.isOverride && <span className="text-purple-300 text-[9px] font-mono">[OVERRIDE]</span>}
+                      </div>
+                      <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                        {formattedDate} {formattedTime}
                       </span>
                     </div>
-                    <div className="flex gap-3 text-[10px] font-mono text-slate-400">
-                      <span>R:<span className="text-white">{log.qtyReceived}</span></span>
-                      <span>P:<span className="text-cyan-300">{log.qtyProcessed}</span></span>
-                      <span>F:<span className="text-emerald-300">{log.qtyForwarded}</span></span>
-                      {log.qtyRejected > 0 && <span>X:<span className="text-rose-300">{log.qtyRejected}</span></span>}
-                      {log.qtyHold > 0 && <span>H:<span className="text-amber-300">{log.qtyHold}</span></span>}
+
+                    <div className="flex gap-3 text-[11px] font-mono text-slate-300 bg-slate-950/60 px-2.5 py-1 rounded border border-slate-800">
+                      <span>Recv: <strong className="text-slate-100">{log.qtyReceived}</strong></span>
+                      <span>Fwd: <strong className="text-emerald-400">{log.qtyForwarded}</strong></span>
+                      {log.qtyRejected > 0 && <span>Rej: <strong className="text-rose-400">{log.qtyRejected}</strong></span>}
+                      {log.qtyHold > 0 && <span>Hold: <strong className="text-amber-400">{log.qtyHold}</strong></span>}
                     </div>
+
                     {log.rejectionReason && (
-                      <p className={`text-[10px] font-mono ${isIncomplete ? 'text-amber-300 font-bold' : 'text-rose-300'}`}>
-                        {isIncomplete ? 'Pending Work Reason: ' : 'Reason: '}{log.rejectionReason}
+                      <p className={`text-[10px] font-mono ${isRejection ? 'text-rose-300' : 'text-amber-300'}`}>
+                        Reason: {log.rejectionReason}
                       </p>
                     )}
                     {log.remarks && (
-                      <p className="text-[10px] text-slate-300 font-mono italic">Remarks: {log.remarks}</p>
+                      <p className="text-[10px] text-slate-400 font-mono">Remarks: {log.remarks}</p>
                     )}
-                    <p className="text-[9px] text-slate-500 font-mono">By: {log.createdBy?.name || 'System'}</p>
+                    <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono pt-0.5">
+                      <span>By: <strong className="text-slate-300">{log.createdBy?.name || 'Operator'}</strong> ({log.createdBy?.role?.name || 'Staff'})</span>
+                      {log.createdBy?.id && <span>ID: {log.createdBy.id.slice(0, 8)}</span>}
+                    </div>
                   </div>
                 );
               })

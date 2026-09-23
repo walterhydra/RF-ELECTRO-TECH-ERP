@@ -208,7 +208,13 @@ export class SubJobCardsService {
       include: {
         stage: true,
         createdBy: {
-          select: { id: true, name: true, email: true, role: { select: { name: true } } },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: { select: { name: true } },
+            department: { select: { name: true } },
+          },
         },
       },
       orderBy: { createdAt: 'desc' },

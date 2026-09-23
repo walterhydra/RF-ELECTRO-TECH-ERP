@@ -501,11 +501,14 @@ export default function JobCardDetailPage() {
       </div>
 
       {/* Chronological Traceability Movement History Log */}
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm space-y-4 p-6">
-        <h3 className="text-xs font-bold font-mono text-slate-900 uppercase tracking-wider flex items-center gap-2">
-          <History className="w-4 h-4 text-blue-600" />
-          <span>Full Job Traceability Movement Audit Log ({history.length} Entries)</span>
-        </h3>
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xs space-y-4 p-5 sm:p-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold font-mono text-slate-900 uppercase tracking-wider flex items-center gap-2">
+            <History className="w-4 h-4 text-slate-700" />
+            <span>Job Traceability & Movement Audit Log ({history.length} Records)</span>
+          </h3>
+          <span className="text-[10px] text-slate-400 font-mono">Live Shop Floor Ledger</span>
+        </div>
 
         {history.length === 0 ? (
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center text-slate-400 text-xs font-mono">
@@ -515,65 +518,85 @@ export default function JobCardDetailPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse font-mono text-xs">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
-                  <th className="py-2.5 px-3">Timestamp</th>
+                <tr className="border-b border-slate-200 bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
+                  <th className="py-2.5 px-3">Date & Time</th>
                   <th className="py-2.5 px-3">Sub-Lot #</th>
                   <th className="py-2.5 px-3">Stage</th>
-                  <th className="py-2.5 px-3">Status</th>
+                  <th className="py-2.5 px-3">Event Status</th>
                   <th className="py-2.5 px-3 text-right">Received</th>
                   <th className="py-2.5 px-3 text-right">Forwarded</th>
-                  <th className="py-2.5 px-3 font-sans">Pending Work Reason</th>
-                  <th className="py-2.5 px-3 font-sans">Remarks & Operator</th>
+                  <th className="py-2.5 px-3 text-right">Rej / Hold</th>
+                  <th className="py-2.5 px-3">Operator & ID</th>
+                  <th className="py-2.5 px-3 font-sans">Remarks / Reason</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-800">
-                {history.map((log) => {
+                {history.map((log: any, idx: number) => {
+                  const dateObj = log.createdAt ? new Date(log.createdAt) : null;
+                  const dateStr = dateObj ? dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+                  const timeStr = dateObj ? dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+                  const isRej = (log.qtyRejected || 0) > 0 || String(log.remarkType || '').toUpperCase().includes('REJECT');
                   const isIncomplete = log.remarkType === 'INCOMPLETE_MOVEMENT' || (log.qtyForwarded < log.qtyReceived && log.qtyReceived > 0);
-                  const isScrapHold = log.qtyRejected > 0 || log.qtyHold > 0;
-                  
+                  const isInit = String(log.remarkType || '').includes('INITIAL_LAUNCH');
+                  const isComp = String(log.remarkType || '').includes('JOB_COMPLETED');
+                  const opName = log.createdBy?.name || 'Operator';
+                  const opRole = log.createdBy?.role?.name || '';
+                  const opId = log.createdBy?.id || log.createdById || '';
+
                   return (
-                    <tr key={log.id} className={`hover:bg-slate-50 transition-colors ${isIncomplete ? 'bg-amber-50/40' : ''}`}>
-                      <td className="py-3 px-3 whitespace-nowrap text-slate-500 text-[11px]">
-                        {new Date(log.createdAt).toLocaleString()}
+                    <tr key={log.id || idx} className={`hover:bg-slate-50/80 transition-colors ${isRej ? 'bg-rose-50/30' : isIncomplete ? 'bg-amber-50/30' : ''}`}>
+                      <td className="py-2.5 px-3 whitespace-nowrap text-slate-600 text-[11px]">
+                        <div className="font-semibold text-slate-900">{dateStr}</div>
+                        <div className="text-[10px] text-slate-400">{timeStr}</div>
                       </td>
-                      <td className="py-3 px-3 whitespace-nowrap font-bold text-slate-900">
-                        {log.subJobCard?.subJobCardNo || '—'}
+                      <td className="py-2.5 px-3 whitespace-nowrap font-bold text-slate-900 text-[11px]">
+                        {log.subJobCard?.subJobCardNo || jobCard?.jobCardNo || '—'}
                       </td>
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-900 border border-slate-200 font-bold">
+                      <td className="py-2.5 px-3 whitespace-nowrap">
+                        <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200 font-semibold text-[11px]">
                           {log.stage?.name || 'Stage'}
                         </span>
                       </td>
-                      <td className="py-3 px-3 whitespace-nowrap font-sans">
-                        {isIncomplete ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse"></span>
+                      <td className="py-2.5 px-3 whitespace-nowrap">
+                        {isRej ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                            Defect Logged
+                          </span>
+                        ) : isIncomplete ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
                             Incomplete
                           </span>
-                        ) : isScrapHold ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-900 border border-rose-300">
-                            Scrap / Hold
+                        ) : isInit ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                            Launched
+                          </span>
+                        ) : isComp ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Completed
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-50 text-slate-600 border border-slate-200">
                             Full Moved
                           </span>
                         )}
                       </td>
-                      <td className="py-3 px-3 text-right font-bold">{log.qtyReceived} PCBs</td>
-                      <td className="py-3 px-3 text-right font-bold text-emerald-700">{log.qtyForwarded} PCBs</td>
-                      <td className="py-3 px-3 font-sans">
-                        {log.rejectionReason ? (
-                          <div className="font-bold text-amber-900 bg-amber-100/70 px-2 py-1 rounded border border-amber-200 text-[11px]">
-                            {log.rejectionReason}
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 text-[11px]">N/A</span>
-                        )}
+                      <td className="py-2.5 px-3 text-right font-medium text-slate-700">{log.qtyReceived || 0}</td>
+                      <td className="py-2.5 px-3 text-right font-bold text-emerald-700">{log.qtyForwarded || 0}</td>
+                      <td className="py-2.5 px-3 text-right font-bold text-rose-700">
+                        {log.qtyRejected > 0 ? `${log.qtyRejected}` : (log.qtyHold > 0 ? `Hold: ${log.qtyHold}` : '0')}
                       </td>
-                      <td className="py-3 px-3 font-sans text-xs">
-                        {log.remarks && <div className="text-slate-800 font-medium mb-0.5">{log.remarks}</div>}
-                        <div className="text-[10px] text-slate-500">By: <strong className="text-slate-700">{log.createdBy?.name || 'Operator'}</strong></div>
+                      <td className="py-2.5 px-3 whitespace-nowrap">
+                        <div className="font-semibold text-slate-900 text-[11px]">{opName}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">
+                          {opRole && <span>{opRole}</span>}
+                          {opId && <span> • ID: {opId.slice(0, 8)}</span>}
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 font-sans text-[11px] text-slate-600 max-w-xs">
+                        {log.rejectionReason && (
+                          <div className="text-rose-700 font-medium mb-0.5">Reason: {log.rejectionReason}</div>
+                        )}
+                        {log.remarks ? <div>{log.remarks}</div> : (!log.rejectionReason && <span className="text-slate-300">—</span>)}
                       </td>
                     </tr>
                   );
