@@ -1218,17 +1218,17 @@ export default function JobCardsPage() {
               // 4. If local card has more rejections recorded, preserve rejection logs and quantities
               const hasMoreLocalRejections = (localCard.rejectedPcbQty || 0) > (serverCard.rejectedPcbQty || 0);
 
-              if (isLocalFurther || isLocalCompleted || isLocalLaunched || hasMoreLocalRejections) {
+              if (isLocalFurther || isLocalCompleted || isLocalLaunched || hasMoreLocalRejections || hasInFlight) {
                 return {
                   ...serverCard,
                   currentStageIndex: isLocalFurther ? localCard.currentStageIndex : serverCard.currentStageIndex,
                   currentStageName: isLocalFurther ? localCard.currentStageName : serverCard.currentStageName,
                   status: (isLocalCompleted || isLocalLaunched) ? localCard.status : serverCard.status,
-                  totalPcbQty: (isLocalFurther || hasMoreLocalRejections) ? localCard.totalPcbQty : serverCard.totalPcbQty,
-                  custPnlQty: (isLocalFurther || hasMoreLocalRejections) ? localCard.custPnlQty : serverCard.custPnlQty,
-                  prodPnlQty: (isLocalFurther || hasMoreLocalRejections) ? localCard.prodPnlQty : serverCard.prodPnlQty,
-                  custPnlAreaSqm: (isLocalFurther || hasMoreLocalRejections) ? localCard.custPnlAreaSqm : serverCard.custPnlAreaSqm,
-                  prodPnlAreaSqm: (isLocalFurther || hasMoreLocalRejections) ? localCard.prodPnlAreaSqm : serverCard.prodPnlAreaSqm,
+                  totalPcbQty: (isLocalFurther || hasMoreLocalRejections || hasInFlight) ? localCard.totalPcbQty : serverCard.totalPcbQty,
+                  custPnlQty: (isLocalFurther || hasMoreLocalRejections || hasInFlight) ? localCard.custPnlQty : serverCard.custPnlQty,
+                  prodPnlQty: (isLocalFurther || hasMoreLocalRejections || hasInFlight) ? localCard.prodPnlQty : serverCard.prodPnlQty,
+                  custPnlAreaSqm: (isLocalFurther || hasMoreLocalRejections || hasInFlight) ? localCard.custPnlAreaSqm : serverCard.custPnlAreaSqm,
+                  prodPnlAreaSqm: (isLocalFurther || hasMoreLocalRejections || hasInFlight) ? localCard.prodPnlAreaSqm : serverCard.prodPnlAreaSqm,
                   rejectedPcbQty: Math.max(localCard.rejectedPcbQty || 0, serverCard.rejectedPcbQty || 0),
                   rejectedAreaSqm: Math.max(localCard.rejectedAreaSqm || 0, serverCard.rejectedAreaSqm || 0),
                   rejectionLogs: localCard.rejectionLogs && localCard.rejectionLogs.length > 0 ? localCard.rejectionLogs : serverCard.rejectionLogs,
@@ -1238,8 +1238,18 @@ export default function JobCardsPage() {
               return serverCard;
             });
 
-            saveJobCardsToStorage(merged);
-            return merged;
+            // Preserve active in-flight optimistic split lots (IDs starting with 'jc-part-')
+            // so they are displayed instantly (0ms) without waiting for server network round-trip.
+            const inFlightOptimisticLots = prev.filter(
+              (p) => p.id.startsWith('jc-part-') && inFlightMovements.current.has(p.id)
+            );
+
+            const finalMerged = inFlightOptimisticLots.length > 0
+              ? [...merged, ...inFlightOptimisticLots]
+              : merged;
+
+            saveJobCardsToStorage(finalMerged);
+            return finalMerged;
           });
         }
       } else {
