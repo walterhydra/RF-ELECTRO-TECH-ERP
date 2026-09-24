@@ -3094,40 +3094,39 @@ export default function JobCardsPage() {
   return (
     <div className="space-y-5 p-3 sm:p-5 w-full max-w-[1600px] mx-auto pb-16 bg-slate-50/50 min-h-screen text-slate-900 font-sans">
       
-      {/* 1. TOP HEADER BANNER CARD (Clean & Perfectly Aligned Layout) */}
-
-      <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-        {/* Left: Title & Subtext */}
-        <div className="flex items-start sm:items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center font-bold shrink-0 shadow-2xs">
-            <Layers className="w-6 h-6 stroke-[2.2]" />
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                Job Cards & Movement Flow
-              </h1>
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wider font-mono">
-                PF-01 FLOW
-              </span>
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wider inline-flex items-center gap-1 font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                LIVE
-              </span>
+      {/* 1. TOP HEADER BANNER CARD (Clean, Professional & Perfectly Aligned) */}
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4">
+        {/* Top Row: Title, Badges & Primary Actions */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          {/* Left: Icon, Title & Subtitle */}
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center font-bold shrink-0 shadow-2xs">
+              <Layers className="w-6 h-6 stroke-[2.2]" />
             </div>
-            <p className="text-xs text-slate-500 font-medium">
-              Track PCB Job Cards, scan barcodes, execute full or split stage movement from Launch to Packing.
-            </p>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight whitespace-nowrap">
+                  Job Cards & Movement Flow
+                </h1>
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wider font-mono shrink-0">
+                  PF-01 FLOW
+                </span>
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wider inline-flex items-center gap-1 font-mono shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  LIVE
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Track PCB Job Cards, scan barcodes, execute full or split stage movement from Launch to Packing.
+              </p>
+            </div>
           </div>
-        </div>
 
-        {/* Right: Actions & Controls in clean grid */}
-        <div className="flex flex-col gap-2 w-full xl:w-auto shrink-0">
-          {/* Row 1: Quick Navigation Buttons */}
-          <div className="grid grid-cols-2 gap-2 w-full">
+          {/* Right: Primary Quick Action Buttons */}
+          <div className="flex items-center gap-2.5 flex-wrap shrink-0">
             <Link
               href="/job-cards/launch"
-              className="h-9 px-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all border border-amber-600 whitespace-nowrap cursor-pointer active:scale-95"
+              className="h-9 px-3.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all border border-amber-600 whitespace-nowrap cursor-pointer active:scale-95"
             >
               <Plus className="w-3.5 h-3.5 stroke-[3]" />
               <span>Launch Page ↗</span>
@@ -3135,40 +3134,50 @@ export default function JobCardsPage() {
 
             <Link
               href="/job-cards/movement"
-              className="h-9 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all border border-blue-500/40 whitespace-nowrap cursor-pointer active:scale-95"
+              className="h-9 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all border border-blue-500/40 whitespace-nowrap cursor-pointer active:scale-95"
             >
               <RefreshCw className="w-3.5 h-3.5 stroke-[3] text-amber-400" />
               <span>Job Movement ➔</span>
             </Link>
-          </div>
 
-          {/* Row 2: Selectors & Main Action Buttons */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full">
-            {/* RBAC Role Switcher Pill */}
-            <div className="h-9 flex items-center gap-1.5 bg-slate-100/80 border border-slate-200 px-2.5 rounded-xl text-xs overflow-hidden">
+            <button
+              onClick={() => handleOpenCreateModal()}
+              className="h-9 px-3.5 bg-slate-900 hover:bg-slate-800 text-amber-400 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-slate-950"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[3] text-amber-400" />
+              <span>ADD NEW CARD</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Bottom Row: Role Selector, Stage Filter & WIP Report in neat bar */}
+        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* RBAC Role Switcher */}
+            <div className="h-9 flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 rounded-xl text-xs">
               <UserCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              <span className="text-slate-500 font-medium shrink-0 text-[11px] hidden sm:inline">Role:</span>
+              <span className="text-slate-500 font-bold text-[11px] shrink-0">Role:</span>
               <select
                 value={userRole}
                 onChange={(e: any) => setUserRole(e.target.value)}
-                className="bg-transparent font-bold text-slate-900 cursor-pointer outline-none text-[11px] truncate min-w-0 flex-1"
+                className="bg-transparent font-extrabold text-slate-900 cursor-pointer outline-none text-xs"
               >
-                <option value="MASTER">Master</option>
-                <option value="SUPER_USER">Super User</option>
-                <option value="NORMAL">Operator</option>
+                <option value="MASTER">Master (All Access)</option>
+                <option value="SUPER_USER">Super User (Manager)</option>
+                <option value="NORMAL">Operator (Stage Scoped)</option>
               </select>
             </div>
 
             {/* Stage Operator Login Selector */}
-            <div className="h-9 flex items-center gap-1.5 bg-amber-50 border border-amber-300 px-2.5 rounded-xl text-xs shadow-2xs overflow-hidden">
-              <span className="text-amber-900 font-bold text-[10px] uppercase font-mono shrink-0 hidden sm:inline">Stage:</span>
+            <div className="h-9 flex items-center gap-1.5 bg-amber-50/80 border border-amber-300 px-3 rounded-xl text-xs shadow-2xs">
+              <span className="text-amber-900 font-black text-[10px] uppercase font-mono shrink-0">Stage:</span>
               <select
                 value={assignedStage}
                 onChange={(e) => {
                   setAssignedStage(e.target.value);
                   setUserRole('NORMAL');
                 }}
-                className="bg-transparent font-extrabold text-amber-950 cursor-pointer outline-none text-[11px] font-mono truncate min-w-0 flex-1"
+                className="bg-transparent font-extrabold text-amber-950 cursor-pointer outline-none text-xs font-mono"
                 title="Select Stage Account to view only jobs pending at this stage"
               >
                 <option value="ALL" className="bg-white text-blue-900 font-sans font-bold">
@@ -3181,23 +3190,16 @@ export default function JobCardsPage() {
                 ))}
               </select>
             </div>
+          </div>
 
+          <div className="flex items-center gap-2">
             {/* Report Drawer Button */}
             <button
               onClick={() => setShowReportDrawer(true)}
-              className="h-9 px-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-[11px] flex items-center justify-center gap-1 shadow-2xs transition-all cursor-pointer whitespace-nowrap"
+              className="h-9 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer whitespace-nowrap"
             >
               <BarChart3 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-              <span className="truncate">WIP Report</span>
-            </button>
-
-            {/* Add New Job Card Button */}
-            <button
-              onClick={() => handleOpenCreateModal()}
-              className="h-9 px-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-[11px] flex items-center justify-center gap-1 shadow-xs transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-amber-600"
-            >
-              <Plus className="w-3.5 h-3.5 stroke-[3] shrink-0" />
-              <span className="truncate">ADD NEW CARD</span>
+              <span>WIP Excel Report</span>
             </button>
           </div>
         </div>
