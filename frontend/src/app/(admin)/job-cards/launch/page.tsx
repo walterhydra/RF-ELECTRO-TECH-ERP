@@ -22,7 +22,7 @@ import {
   X
 } from 'lucide-react';
 
-import { getApiBaseUrl } from '@/lib/utils';
+import { getApiBaseUrl, compressImageFile } from '@/lib/utils';
 
 export default function JobCardLaunchPage() {
   const router = useRouter();
@@ -216,17 +216,24 @@ export default function JobCardLaunchPage() {
                       type="file"
                       id="launchPagePhotoFileInput"
                       accept="image/*"
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (file) {
-                          const reader = new FileReader();
-                          reader.onload = (uploadEvt) => {
-                            const res = uploadEvt.target?.result as string;
+                          try {
+                            const res = await compressImageFile(file);
                             if (res) {
                               setLaunchForm({ ...launchForm, photoUrl: res });
                             }
-                          };
-                          reader.readAsDataURL(file);
+                          } catch {
+                            const reader = new FileReader();
+                            reader.onload = (uploadEvt) => {
+                              const res = uploadEvt.target?.result as string;
+                              if (res) {
+                                setLaunchForm({ ...launchForm, photoUrl: res });
+                              }
+                            };
+                            reader.readAsDataURL(file);
+                          }
                         }
                       }}
                       className="hidden"

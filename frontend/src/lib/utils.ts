@@ -78,3 +78,53 @@ export async function fetchApi(urlOrPath: string, options: RequestInit = {}): Pr
   return fetch(fullUrl, { ...options, headers });
 }
 
+/**
+ * Compresses an image file (e.g. from camera/phone or local file upload)
+ * down to max dimensions and JPEG/PNG quality, preventing huge 10MB+ payload transfers
+ * while preserving crystal-clear readability for technical documents and job cards.
+ */
+export function compressImageFile(file: File, maxDimension = 1600, quality = 0.82): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve((e.target?.result as string) || '');
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve((e.target?.result as string) || '');
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        const dataUrl = canvas.toDataURL(mimeType, quality);
+        resolve(dataUrl);
+      };
+      img.onerror = () => resolve((e.target?.result as string) || '');
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+

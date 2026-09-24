@@ -56,7 +56,7 @@ import {
   Factory
 } from 'lucide-react';
 import { Portal } from '@/components/ui/Portal';
-import { getApiBaseUrl } from '@/lib/utils';
+import { getApiBaseUrl, compressImageFile } from '@/lib/utils';
 
 
 // Process Flow PF-01 19 Predefined Stages (Matching Database ProcessStage Master)
@@ -4532,17 +4532,24 @@ export default function JobCardsPage() {
                     type="file"
                     id="jobCardPhotoFileInput"
                     accept="image/*"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (uploadEvt) => {
-                          const res = uploadEvt.target?.result as string;
+                        try {
+                          const res = await compressImageFile(file);
                           if (res) {
                             setLaunchForm({ ...launchForm, photoUrl: res });
                           }
-                        };
-                        reader.readAsDataURL(file);
+                        } catch {
+                          const reader = new FileReader();
+                          reader.onload = (uploadEvt) => {
+                            const res = uploadEvt.target?.result as string;
+                            if (res) {
+                              setLaunchForm({ ...launchForm, photoUrl: res });
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }
                       }
                     }}
                     className="hidden"

@@ -1214,6 +1214,7 @@ export class JobCardsService {
         custPnlQty: Number(data.custPnlQty) || existing.custPnlQty,
         prodPnlAreaSqm: Number(data.prodPnlAreaSqm) || existing.prodPnlAreaSqm,
         custPnlAreaSqm: Number(data.custPnlAreaSqm) || existing.custPnlAreaSqm,
+        photoUrl: data.photoUrl !== undefined ? (data.photoUrl || null) : existing.photoUrl,
         status: data.status ? (data.status === 'UNLAUNCHED' ? JobCardStatus.CREATED : data.status) : existing.status,
       },
     });
