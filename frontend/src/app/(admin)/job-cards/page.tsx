@@ -3266,6 +3266,28 @@ export default function JobCardsPage() {
 
       {activeSectionTab === 'PRODUCTION' && (
         <>
+          {/* Stage Scope Active Indicator Banner */}
+          {assignedStage && assignedStage !== 'ALL' && (
+            <div className="bg-amber-50 border border-amber-300 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping shrink-0" />
+                <span className="text-xs font-bold text-amber-950">
+                  Currently filtered to Stage: <span className="font-black underline">{assignedStage}</span> ({scopedCards.length} job card(s) at this stage out of {jobCards.length} total).
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setAssignedStage('ALL');
+                  setUserRole('MASTER');
+                }}
+                className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl cursor-pointer shadow-xs active:scale-95 transition-all"
+              >
+                ★ Switch to ALL STAGES (View All {jobCards.length} Jobs)
+              </button>
+            </div>
+          )}
+
           {/* 2. SECOND ROW SUMMARY CARDS & BARCODE SCANNER */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-stretch">
         
