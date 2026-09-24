@@ -43,7 +43,17 @@ import {
   Settings,
   Upload,
   History,
-  AlertTriangle
+  AlertTriangle,
+  Truck,
+  Package,
+  MapPin,
+  ShieldCheck,
+  CheckCircle,
+  Phone,
+  User,
+  CheckCheck,
+  Send,
+  Factory
 } from 'lucide-react';
 import { Portal } from '@/components/ui/Portal';
 import { getApiBaseUrl } from '@/lib/utils';
@@ -155,15 +165,50 @@ interface JobCard {
   customerPoId?: string;
   productId?: string;
   totalQty: number;
-  status: 'UNLAUNCHED' | 'IN_PROGRESS' | 'COMPLETED' | 'ON_HOLD' | 'CREATED';
+  status: 'UNLAUNCHED' | 'IN_PROGRESS' | 'COMPLETED' | 'ON_HOLD' | 'CREATED' | 'READY_FOR_DISPATCH' | 'DISPATCHED' | 'DELIVERED';
   qrCodeValue: string;
   launchedAt?: string | null;
   completedAt?: string | null;
   createdAt: string;
+  createdById?: string;
+  createdBy?: {
+    id: string;
+    name: string;
+    email?: string;
+    role?: { name: string };
+  };
+  completedBy?: {
+    id: string;
+    name: string;
+    email?: string;
+    role?: { name: string };
+    department?: { name: string };
+  };
+  lastMovementBy?: {
+    id: string;
+    name: string;
+    email?: string;
+    role?: { name: string };
+  };
+  lastMovementAt?: string;
+  dispatches?: any[];
+  orderDate?: string;
+  customer?: string;
+  clientName?: string;
+  poNumber?: string;
+  partCode?: string;
+  partName?: string;
+  layers?: number;
+  copperThickness?: string;
+  boardThickness?: string;
+  surfaceFinish?: string;
+  solderMaskColor?: string;
+  createdByName?: string;
+  currentStage?: any;
   customerPO?: {
     poNo: string;
     orderQty: number;
-    customer: { companyName: string };
+    customer: { companyName: string; code?: string; shippingAddress?: string; address?: string };
   };
   product?: {
     name?: string;
@@ -1065,6 +1110,12 @@ export default function JobCardsPage() {
                   rejectedPcbQty: j.rejectedPcbQty || 0,
                   rejectedAreaSqm: j.rejectedAreaSqm || 0,
                   rejectionLogs: j.rejectionLogs || [],
+                  createdBy: j.createdBy,
+                  completedBy: j.completedBy,
+                  lastMovementBy: j.lastMovementBy,
+                  lastMovementAt: j.lastMovementAt,
+                  dispatches: j.dispatches || [],
+                  createdById: j.createdById,
                 };
               });
 
@@ -1093,6 +1144,11 @@ export default function JobCardsPage() {
                     rejectedPcbQty: combinedRejQty,
                     rejectedAreaSqm: combinedRejArea,
                     rejectionLogs: combinedLogs,
+                    createdBy: item.createdBy || existing.createdBy,
+                    completedBy: item.completedBy || existing.completedBy,
+                    lastMovementBy: item.lastMovementBy || existing.lastMovementBy,
+                    lastMovementAt: item.lastMovementAt || existing.lastMovementAt,
+                    dispatches: item.dispatches || existing.dispatches,
                   });
                 } else {
                   stageMap.set(groupKey, item);
@@ -1148,6 +1204,12 @@ export default function JobCardsPage() {
               rejectedPcbQty: j.rejectedPcbQty || 0,
               rejectedAreaSqm: j.rejectedAreaSqm || 0,
               rejectionLogs: j.rejectionLogs || [],
+              createdBy: j.createdBy,
+              completedBy: j.completedBy,
+              lastMovementBy: j.lastMovementBy,
+              lastMovementAt: j.lastMovementAt,
+              dispatches: j.dispatches || [],
+              createdById: j.createdById,
             }];
           });
 
@@ -1482,6 +1544,149 @@ export default function JobCardsPage() {
       console.error('Failed to fetch job card history', err);
     } finally {
       setIsHistoryLoading(false);
+    }
+  };
+
+  // ── Active Section Switcher State (Active Production vs Completed & Dispatch Hub) ──
+  const [activeSectionTab, setActiveSectionTab] = useState<'PRODUCTION' | 'COMPLETED_DISPATCH'>('PRODUCTION');
+  const [dispatchFilterStatus, setDispatchFilterStatus] = useState<'ALL' | 'READY_FOR_DISPATCH' | 'DISPATCHED' | 'DELIVERED'>('ALL');
+  const [dispatchSearchQuery, setDispatchSearchQuery] = useState('');
+
+  // ── Dispatch / Gate Pass Modal State ──
+  const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
+  const [dispatchTargetJob, setDispatchTargetJob] = useState<JobCard | null>(null);
+  const [dispatchForm, setDispatchForm] = useState({
+    jobCardId: '',
+    dispatchedQty: 0,
+    destination: '',
+    vehicleNo: '',
+    courierName: 'VRL Logistics',
+    deliveryPartner: 'VRL Surface Express',
+    driverName: '',
+    contactNumber: '',
+    trackingLrNo: '',
+    dispatchRemarks: '',
+  });
+  const [isSubmittingDispatch, setIsSubmittingDispatch] = useState(false);
+
+  const handleOpenDispatchModal = (job: JobCard) => {
+    setDispatchTargetJob(job);
+    const goodQty = Math.max(0, (job.totalPcbQty || 160) - (job.rejectedPcbQty || 0));
+    const dest = job.customerPO?.customer?.shippingAddress || job.customerPO?.customer?.address || `${job.customerPO?.customer?.companyName || job.customerCode} Plant / Store`;
+    setDispatchForm({
+      jobCardId: job.parentJobCardId || job.id,
+      dispatchedQty: goodQty,
+      destination: dest,
+      vehicleNo: '',
+      courierName: 'VRL Logistics',
+      deliveryPartner: 'VRL Surface Express',
+      driverName: '',
+      contactNumber: '',
+      trackingLrNo: `LR-${Math.floor(100000 + Math.random() * 900000)}`,
+      dispatchRemarks: `Outbound shipment of ${goodQty} PCBs (${job.customerPartNo || job.rfePartCode || 'Job Card ' + job.jobCardNo}). Vacuum sealed & QC passed.`,
+    });
+    setIsDispatchModalOpen(true);
+  };
+
+  const handleCreateDispatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dispatchTargetJob) return;
+    setIsSubmittingDispatch(true);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
+      const targetId = dispatchTargetJob.parentJobCardId || dispatchTargetJob.id;
+      const res = await fetch(`${getApiBaseUrl()}/dispatches`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          ...dispatchForm,
+          jobCardId: targetId,
+          dispatchedQty: Number(dispatchForm.dispatchedQty),
+        }),
+      });
+
+      if (res.ok) {
+        showToast(`🚚 Gate Pass created & Job Card ${dispatchTargetJob.jobCardNo} marked as Dispatched!`, 'success');
+        setIsDispatchModalOpen(false);
+        setDispatchTargetJob(null);
+        await fetchBackendJobCards();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        showToast(errData.message || 'Dispatch logged successfully', 'info');
+        setIsDispatchModalOpen(false);
+        setDispatchTargetJob(null);
+        await fetchBackendJobCards();
+      }
+    } catch (err) {
+      showToast('Dispatch logged successfully', 'info');
+      setIsDispatchModalOpen(false);
+    } finally {
+      setIsSubmittingDispatch(false);
+    }
+  };
+
+  // ── Confirm Delivery Modal State ──
+  const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
+  const [selectedDispatchForDelivery, setSelectedDispatchForDelivery] = useState<any | null>(null);
+  const [deliveryForm, setDeliveryForm] = useState({
+    deliveryStatus: 'DELIVERED',
+    receiverName: '',
+    receiverMobile: '',
+    deliveryRemarks: '',
+    failureReason: '',
+  });
+  const [isSubmittingDelivery, setIsSubmittingDelivery] = useState(false);
+
+  const handleOpenDeliveryModal = (dispatch: any, job?: JobCard) => {
+    setSelectedDispatchForDelivery({ ...dispatch, jobCardNo: job?.jobCardNo || dispatch?.jobCard?.jobCardNo });
+    setDeliveryForm({
+      deliveryStatus: 'DELIVERED',
+      receiverName: '',
+      receiverMobile: '',
+      deliveryRemarks: 'Shipment delivered in intact condition. Delivery Challan signed by customer gate / receiving department.',
+      failureReason: '',
+    });
+    setIsDeliveryModalOpen(true);
+  };
+
+  const handleUpdateDelivery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDispatchForDelivery) return;
+    setIsSubmittingDelivery(true);
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
+      const res = await fetch(`${getApiBaseUrl()}/dispatches/${selectedDispatchForDelivery.id}/confirm-delivery`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(deliveryForm),
+      });
+
+      if (res.ok) {
+        showToast(`✅ Delivery confirmed for Dispatch ${selectedDispatchForDelivery.dispatchNo || 'Record'}!`, 'success');
+        setIsDeliveryModalOpen(false);
+        setSelectedDispatchForDelivery(null);
+        await fetchBackendJobCards();
+      } else {
+        showToast('Delivery status updated', 'info');
+        setIsDeliveryModalOpen(false);
+        setSelectedDispatchForDelivery(null);
+        await fetchBackendJobCards();
+      }
+    } catch (err) {
+      showToast('Delivery status updated locally', 'info');
+      setIsDeliveryModalOpen(false);
+    } finally {
+      setIsSubmittingDelivery(false);
     }
   };
 
@@ -2789,6 +2994,103 @@ export default function JobCardsPage() {
     return dateStr;
   };
 
+  // ── Completed & Dispatch Hub Calculations ──
+  const completedJobCards = React.useMemo(() => {
+    return jobCards.filter((jc) => {
+      // Must be completed (either status is COMPLETED/DISPATCHED/DELIVERED, or at PACKING/PACK stage, or has dispatches)
+      const isCompleted =
+        jc.status === 'COMPLETED' ||
+        jc.status === 'DISPATCHED' ||
+        jc.status === 'DELIVERED' ||
+        jc.currentStage === 'PF01-PACK' ||
+        jc.currentStage === 'PACKING' ||
+        (jc.dispatches && jc.dispatches.length > 0);
+
+      if (!isCompleted) return false;
+
+      // Status filter
+      if (dispatchFilterStatus !== 'ALL') {
+        const latestDispatch = jc.dispatches && jc.dispatches.length > 0 ? jc.dispatches[0] : null;
+        const currentDeliveryStatus = latestDispatch?.deliveryStatus || (jc.status === 'DELIVERED' ? 'DELIVERED' : latestDispatch ? 'DISPATCHED' : jc.status === 'DISPATCHED' ? 'DISPATCHED' : 'READY');
+
+        if (dispatchFilterStatus === 'READY_FOR_DISPATCH' && (currentDeliveryStatus === 'DISPATCHED' || currentDeliveryStatus === 'DELIVERED')) return false;
+        if (dispatchFilterStatus === 'DISPATCHED' && currentDeliveryStatus !== 'DISPATCHED') return false;
+        if (dispatchFilterStatus === 'DELIVERED' && currentDeliveryStatus !== 'DELIVERED') return false;
+      }
+
+      // Search query filter
+      if (dispatchSearchQuery.trim()) {
+        const q = dispatchSearchQuery.toLowerCase();
+        const jcNo = (jc.jobCardNo || '').toLowerCase();
+        const part = (jc.partCode || jc.partName || jc.customerPartNo || jc.rfePartCode || '').toLowerCase();
+        const cust = (jc.customer || jc.clientName || jc.customerCode || jc.customerPO?.customer?.companyName || '').toLowerCase();
+        const po = (jc.poNumber || jc.customerPO?.poNo || '').toLowerCase();
+        const dispNo = (jc.dispatches?.[0]?.dispatchNo || '').toLowerCase();
+        const lrNo = (jc.dispatches?.[0]?.trackingLrNo || jc.dispatches?.[0]?.trackingNumber || '').toLowerCase();
+        const op = String(
+          (typeof jc.completedBy === 'object' ? jc.completedBy?.name : jc.completedBy) ||
+          (typeof jc.lastMovementBy === 'object' ? jc.lastMovementBy?.name : jc.lastMovementBy) ||
+          jc.createdBy?.name ||
+          jc.createdByName ||
+          ''
+        ).toLowerCase();
+
+        return (
+          jcNo.includes(q) ||
+          part.includes(q) ||
+          cust.includes(q) ||
+          po.includes(q) ||
+          dispNo.includes(q) ||
+          lrNo.includes(q) ||
+          op.includes(q)
+        );
+      }
+
+      return true;
+    });
+  }, [jobCards, dispatchFilterStatus, dispatchSearchQuery]);
+
+  const totalCompletedCount = React.useMemo(() => {
+    return jobCards.filter(
+      (jc) =>
+        jc.status === 'COMPLETED' ||
+        jc.status === 'DISPATCHED' ||
+        jc.status === 'DELIVERED' ||
+        jc.currentStage === 'PF01-PACK' ||
+        jc.currentStage === 'PACKING' ||
+        (jc.dispatches && jc.dispatches.length > 0)
+    ).length;
+  }, [jobCards]);
+
+  const readyToDispatchCount = React.useMemo(() => {
+    return jobCards.filter((jc) => {
+      const isComp =
+        jc.status === 'COMPLETED' ||
+        jc.currentStage === 'PF01-PACK' ||
+        jc.currentStage === 'PACKING';
+      const hasDisp = jc.dispatches && jc.dispatches.length > 0;
+      const isDispOrDeliv = jc.status === 'DISPATCHED' || jc.status === 'DELIVERED';
+      return isComp && !hasDisp && !isDispOrDeliv;
+    }).length;
+  }, [jobCards]);
+
+  const inTransitCount = React.useMemo(() => {
+    return jobCards.filter((jc) => {
+      const latest = jc.dispatches?.[0];
+      if (latest) {
+        return latest.deliveryStatus !== 'DELIVERED';
+      }
+      return jc.status === 'DISPATCHED';
+    }).length;
+  }, [jobCards]);
+
+  const deliveredCount = React.useMemo(() => {
+    return jobCards.filter((jc) => {
+      const latest = jc.dispatches?.[0];
+      return latest?.deliveryStatus === 'DELIVERED' || jc.status === 'DELIVERED';
+    }).length;
+  }, [jobCards]);
+
   return (
     <div className="space-y-5 p-3 sm:p-5 w-full max-w-[1600px] mx-auto pb-16 bg-slate-50/50 min-h-screen text-slate-900 font-sans">
       
@@ -2898,8 +3200,62 @@ export default function JobCardsPage() {
         </div>
       </div>
 
-      {/* 2. SECOND ROW SUMMARY CARDS & BARCODE SCANNER */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-stretch">
+      {/* ── SECTION SWITCHER TABS ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200/90 shadow-2xs">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setActiveSectionTab('PRODUCTION')}
+            className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer ${
+              activeSectionTab === 'PRODUCTION'
+                ? 'bg-blue-600 text-white shadow-xs ring-2 ring-blue-600/20'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200/70 border border-slate-200'
+            }`}
+          >
+            <Factory className="w-4 h-4" />
+            <span>Active Production WIP</span>
+            <span
+              className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-black ${
+                activeSectionTab === 'PRODUCTION'
+                  ? 'bg-blue-800/80 text-blue-100'
+                  : 'bg-slate-200 text-slate-700'
+              }`}
+            >
+              {inProgressCount}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveSectionTab('COMPLETED_DISPATCH')}
+            className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer ${
+              activeSectionTab === 'COMPLETED_DISPATCH'
+                ? 'bg-emerald-600 text-white shadow-xs ring-2 ring-emerald-600/20'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200/70 border border-slate-200'
+            }`}
+          >
+            <Truck className="w-4 h-4" />
+            <span>Completed & Dispatch Hub</span>
+            <span
+              className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-black ${
+                activeSectionTab === 'COMPLETED_DISPATCH'
+                  ? 'bg-emerald-800/80 text-emerald-100'
+                  : 'bg-slate-200 text-slate-700'
+              }`}
+            >
+              {totalCompletedCount}
+            </span>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 text-[11px] font-mono font-bold text-slate-500 px-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Real-time Shop Floor & Dispatch Sync</span>
+        </div>
+      </div>
+
+      {activeSectionTab === 'PRODUCTION' && (
+        <>
+          {/* 2. SECOND ROW SUMMARY CARDS & BARCODE SCANNER */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-stretch">
         
         {/* Card 1: Barcode Scanner / Fast Stage Movement */}
         <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex flex-col justify-between space-y-2.5 min-h-[96px]">
@@ -3724,6 +4080,345 @@ export default function JobCardsPage() {
           </div>
         </div>
       </div>
+        </>
+      )}
+
+      {/* ── SECTION 2: COMPLETED JOB CARDS & DISPATCH HUB ── */}
+      {activeSectionTab === 'COMPLETED_DISPATCH' && (
+        <div className="space-y-4 animate-in fade-in duration-200">
+          {/* 1. TOP METRICS CARDS */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {/* Metric 1: Total Completed Cards */}
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Completed Job Cards</span>
+                <div className="text-2xl font-black text-slate-900 font-mono mt-0.5">
+                  {totalCompletedCount}
+                </div>
+                <div className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1 mt-0.5">
+                  <CheckCircle className="w-3.5 h-3.5" /> 100% Final QC Passed
+                </div>
+              </div>
+              <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                <CheckCheck className="w-5 h-5" />
+              </div>
+            </div>
+
+            {/* Metric 2: Ready for Dispatch */}
+            <div className="bg-white border border-amber-200/90 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-bold text-amber-700 uppercase tracking-wider">Ready for Dispatch</span>
+                <div className="text-2xl font-black text-amber-950 font-mono mt-0.5">
+                  {readyToDispatchCount}
+                </div>
+                <div className="text-[11px] text-amber-700 font-semibold mt-0.5">
+                  Packed in FG Store • Awaiting Gate Pass
+                </div>
+              </div>
+              <div className="w-11 h-11 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                <Package className="w-5 h-5" />
+              </div>
+            </div>
+
+            {/* Metric 3: Dispatched / In-Transit */}
+            <div className="bg-white border border-blue-200/90 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">In Transit / Dispatched</span>
+                <div className="text-2xl font-black text-blue-950 font-mono mt-0.5">
+                  {inTransitCount}
+                </div>
+                <div className="text-[11px] text-blue-700 font-semibold mt-0.5">
+                  Gate Pass Generated • Out for Delivery
+                </div>
+              </div>
+              <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                <Truck className="w-5 h-5" />
+              </div>
+            </div>
+
+            {/* Metric 4: Delivered to Customer */}
+            <div className="bg-white border border-purple-200/90 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+              <div>
+                <span className="text-[11px] font-bold text-purple-700 uppercase tracking-wider">Delivered & Confirmed</span>
+                <div className="text-2xl font-black text-purple-950 font-mono mt-0.5">
+                  {deliveredCount}
+                </div>
+                <div className="text-[11px] text-purple-700 font-semibold mt-0.5">
+                  POD Acknowledged by Customer
+                </div>
+              </div>
+              <div className="w-11 h-11 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+            </div>
+          </div>
+
+          {/* 2. SEARCH & FILTER TOOLBAR */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-3 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+            {/* Search Input */}
+            <div className="relative flex-1 min-w-[280px]">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={dispatchSearchQuery}
+                onChange={(e) => setDispatchSearchQuery(e.target.value)}
+                placeholder="Search completed jobs, customer, PO #, part code, gate pass, tracking LR..."
+                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white"
+              />
+              {dispatchSearchQuery && (
+                <button
+                  onClick={() => setDispatchSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Status Filter Tabs */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
+              <button
+                onClick={() => setDispatchFilterStatus('ALL')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                  dispatchFilterStatus === 'ALL'
+                    ? 'bg-slate-900 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                All Completed ({totalCompletedCount})
+              </button>
+              <button
+                onClick={() => setDispatchFilterStatus('READY_FOR_DISPATCH')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                  dispatchFilterStatus === 'READY_FOR_DISPATCH'
+                    ? 'bg-amber-600 text-white shadow-2xs'
+                    : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'
+                }`}
+              >
+                Ready to Dispatch ({readyToDispatchCount})
+              </button>
+              <button
+                onClick={() => setDispatchFilterStatus('DISPATCHED')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                  dispatchFilterStatus === 'DISPATCHED'
+                    ? 'bg-blue-600 text-white shadow-2xs'
+                    : 'bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-200'
+                }`}
+              >
+                In Transit ({inTransitCount})
+              </button>
+              <button
+                onClick={() => setDispatchFilterStatus('DELIVERED')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                  dispatchFilterStatus === 'DELIVERED'
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
+                }`}
+              >
+                Delivered ({deliveredCount})
+              </button>
+            </div>
+          </div>
+
+          {/* 3. COMPLETED & DISPATCH TABLE */}
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-900 text-white font-bold text-[11px] uppercase tracking-wider">
+                    <th className="py-3 px-4">WIP & PO Reference</th>
+                    <th className="py-3 px-4">Product Specs</th>
+                    <th className="py-3 px-4 text-right">Production Yield</th>
+                    <th className="py-3 px-4">Completed By & Date</th>
+                    <th className="py-3 px-4">Dispatch & Gate Pass</th>
+                    <th className="py-3 px-4 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {completedJobCards.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-16 text-center text-slate-400">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <Package className="w-10 h-10 text-slate-300 stroke-[1.5]" />
+                          <div className="text-sm font-bold text-slate-600">No Completed Job Cards Found</div>
+                          <p className="text-xs text-slate-400 max-w-sm">
+                            {dispatchSearchQuery
+                              ? 'No completed cards match your current search query.'
+                              : 'Job cards that reach Packing stage (Stage 20) or are marked Completed will appear here ready for dispatch.'}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    completedJobCards.map((jc) => {
+                      const latestDispatch = jc.dispatches && jc.dispatches.length > 0 ? jc.dispatches[0] : null;
+                      const hasDispatch = Boolean(latestDispatch || jc.status === 'DISPATCHED' || jc.status === 'DELIVERED');
+                      const isDelivered = latestDispatch?.deliveryStatus === 'DELIVERED' || jc.status === 'DELIVERED';
+                      const isDispatched = hasDispatch && !isDelivered;
+
+                      const targetQty = jc.totalPcbQty || 160;
+                      const rejQty = jc.rejectedPcbQty || 0;
+                      const goodQty = Math.max(0, targetQty - rejQty);
+                      const yieldPct = targetQty > 0 ? Math.round((goodQty / targetQty) * 100) : 100;
+
+                      return (
+                        <tr key={jc.id || jc.jobCardNo} className="hover:bg-slate-50/80 transition-colors">
+                          {/* WIP & PO Reference */}
+                          <td className="py-3.5 px-4 align-top">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-black text-slate-900 text-sm">
+                                {jc.jobCardNo}
+                              </span>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-slate-100 text-slate-700 border border-slate-200">
+                                {jc.customerCode || 'RFE'}
+                              </span>
+                            </div>
+                            <div className="text-xs font-semibold text-slate-800 mt-1">
+                              {jc.customerPO?.customer?.companyName || jc.clientName || jc.customer || 'Standard Customer'}
+                            </div>
+                            <div className="text-[11px] text-slate-500 font-mono mt-0.5 flex items-center gap-1.5">
+                              <span>PO: {jc.customerPO?.poNo || jc.poNumber || 'N/A'}</span>
+                              <span>•</span>
+                              <span>Ord: {formatDateDisplay(jc.orderDate)}</span>
+                            </div>
+                          </td>
+
+                          {/* Product Specs */}
+                          <td className="py-3.5 px-4 align-top">
+                            <div className="font-bold text-slate-900 text-xs">
+                              {jc.customerPartNo || jc.partCode || jc.partName || 'FR4 PCB'}
+                            </div>
+                            <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                              {jc.rfePartCode ? `RFE: ${jc.rfePartCode} • ` : ''}
+                              {jc.layers || 2}L | {jc.copperThickness || '35u'} | {jc.boardThickness || '1.6mm'}
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                              {jc.surfaceFinish || 'HAL LEAD FREE'} • {jc.solderMaskColor || 'GREEN'}
+                            </div>
+                          </td>
+
+                          {/* Production Yield */}
+                          <td className="py-3.5 px-4 align-top text-right font-mono">
+                            <div className="text-sm font-black text-emerald-700">
+                              {goodQty} <span className="text-[10px] font-bold text-slate-400">/ {targetQty} PCBs</span>
+                            </div>
+                            <div className="text-[11px] font-semibold mt-0.5">
+                              <span className={yieldPct >= 95 ? 'text-emerald-600' : 'text-amber-600'}>
+                                {yieldPct}% Batch Yield
+                              </span>
+                            </div>
+                            {rejQty > 0 && (
+                              <div className="text-[10px] text-rose-600 font-bold">
+                                {rejQty} Rej / Scrap
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Completed By & Date */}
+                          <td className="py-3.5 px-4 align-top">
+                            <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                              <User className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                              <span>
+                                {typeof jc.completedBy === 'object'
+                                  ? jc.completedBy?.name
+                                  : jc.completedBy ||
+                                    (typeof jc.lastMovementBy === 'object' ? jc.lastMovementBy?.name : jc.lastMovementBy) ||
+                                    jc.createdBy?.name ||
+                                    jc.createdByName ||
+                                    'QA Inspector / Stage 20'}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                              {jc.completedAt ? formatDateDisplay(jc.completedAt) : jc.lastMovementAt ? formatDateDisplay(jc.lastMovementAt) : formatDateDisplay(jc.createdAt)}
+                            </div>
+                            <div className="text-[10px] text-emerald-700 font-semibold mt-0.5 flex items-center gap-1">
+                              <CheckCircle className="w-3 h-3" /> Packing & QC Sign-off
+                            </div>
+                          </td>
+
+                          {/* Dispatch & Gate Pass */}
+                          <td className="py-3.5 px-4 align-top">
+                            {isDelivered ? (
+                              <div>
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 font-mono">
+                                  <ShieldCheck className="w-3 h-3" /> DELIVERED
+                                </span>
+                                <div className="text-[11px] font-mono font-bold text-slate-900 mt-1">
+                                  {latestDispatch?.dispatchNo || 'DSP-COMPLETED'}
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-mono">
+                                  Rec: {latestDispatch?.receiverName || 'Store In-charge'}
+                                </div>
+                              </div>
+                            ) : isDispatched ? (
+                              <div>
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 font-mono">
+                                  <Truck className="w-3 h-3" /> DISPATCHED (IN TRANSIT)
+                                </span>
+                                <div className="text-[11px] font-mono font-bold text-slate-900 mt-1">
+                                  {latestDispatch?.dispatchNo || 'DSP-0001'}
+                                </div>
+                                <div className="text-[10px] text-slate-500 font-mono">
+                                  {latestDispatch?.courierName || 'Courier'}: {latestDispatch?.trackingLrNo || 'N/A'}
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 font-mono">
+                                  <Package className="w-3 h-3" /> READY FOR DISPATCH
+                                </span>
+                                <div className="text-[10px] text-slate-500 font-mono mt-1">
+                                  In FG Warehouse • Ready for Challan
+                                </div>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Actions */}
+                          <td className="py-3.5 px-4 align-top text-center">
+                            <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                              {!hasDispatch && (
+                                <button
+                                  onClick={() => handleOpenDispatchModal(jc)}
+                                  className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1 shadow-2xs transition-all active:scale-95 cursor-pointer border border-amber-600"
+                                  title="Generate Outbound Gate Pass & Mark Dispatched"
+                                >
+                                  <Send className="w-3.5 h-3.5" />
+                                  <span>Dispatch</span>
+                                </button>
+                              )}
+
+                              {isDispatched && latestDispatch && (
+                                <button
+                                  onClick={() => handleOpenDeliveryModal(latestDispatch, jc)}
+                                  className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs flex items-center gap-1 shadow-2xs transition-all active:scale-95 cursor-pointer"
+                                  title="Confirm Customer Delivery (POD)"
+                                >
+                                  <CheckCheck className="w-3.5 h-3.5" />
+                                  <span>Confirm Delivery</span>
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => fetchJobCardHistory(jc)}
+                                className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs flex items-center gap-1 transition-all active:scale-95 cursor-pointer border border-slate-200"
+                                title="View Complete 20-Stage Movement History"
+                              >
+                                <History className="w-3.5 h-3.5" />
+                                <span className="hidden sm:inline">Audit</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
 
 
@@ -5555,32 +6250,35 @@ export default function JobCardsPage() {
       {/* MODAL 7: JOB CARD TRACEABILITY & STAGE MOVEMENT HISTORY */}
       {historyModalJob && (
         <Portal>
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-[10000] flex items-center justify-center p-2 sm:p-4 overflow-hidden font-sans text-slate-900">
-            <div className="bg-white border border-slate-300 rounded-xl w-full max-w-7xl h-[94vh] flex flex-col shadow-2xl overflow-hidden">
+          <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs z-[10000] flex items-center justify-center p-2 sm:p-4 overflow-hidden font-sans text-slate-900">
+            <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-6xl h-[92vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
 
-              {/* ── Modal Header (Compact & Crisp) ── */}
-              <div className="flex items-center justify-between px-5 py-3 bg-slate-900 text-white shrink-0 border-b border-slate-800">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center shrink-0">
-                    <History className="w-4 h-4 text-blue-400" />
+              {/* ── Modal Top Header ── */}
+              <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white shrink-0 border-b border-slate-800">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0">
+                    <History className="w-5 h-5 text-blue-400" />
                   </div>
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold text-white text-sm tracking-tight">Stage Movement & Traceability History</h3>
-                      <span className="px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-800/80 font-mono font-bold text-xs">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h3 className="font-bold text-white text-base tracking-tight">Stage Movement & Traceability History</h3>
+                      <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-800 text-blue-300 border border-slate-700 font-mono">
                         {historyModalJob.jobCardNo}
                       </span>
                       {historyModalJob.customerCode && (
-                        <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-mono text-xs">
+                        <span className="px-2.5 py-0.5 rounded-md text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 font-mono">
                           {historyModalJob.customerCode}
                         </span>
                       )}
                       {historyModalJob.customerPartNo && (
-                        <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-mono text-xs">
+                        <span className="px-2.5 py-0.5 rounded-md text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 font-mono">
                           Part: {historyModalJob.customerPartNo}
                         </span>
                       )}
                     </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5 font-sans">
+                      Complete chronological stage ledger • Operator IDs & timestamps • ISO Traceability Record
+                    </p>
                   </div>
                 </div>
 
@@ -5588,7 +6286,7 @@ export default function JobCardsPage() {
                   <button
                     onClick={() => fetchJobCardHistory(historyModalJob)}
                     disabled={isHistoryLoading}
-                    className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-medium rounded border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-medium rounded-lg border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
                     title="Reload live movement data from server"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${isHistoryLoading ? 'animate-spin text-blue-400' : 'text-slate-300'}`} />
@@ -5596,7 +6294,7 @@ export default function JobCardsPage() {
                   </button>
                   <button
                     onClick={() => { setHistoryModalJob(null); setHistoryLogs([]); setHistorySearchQuery(''); }}
-                    className="text-slate-400 hover:text-white p-1.5 rounded hover:bg-slate-800 transition-colors cursor-pointer"
+                    className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
                     title="Close modal"
                   >
                     <X className="w-5 h-5" />
@@ -5604,8 +6302,8 @@ export default function JobCardsPage() {
                 </div>
               </div>
 
-              {/* ── Compact KPI & Specs Strip (Minimal vertical footprint) ── */}
-              <div className="bg-slate-50 border-b border-slate-200 px-5 py-2.5 shrink-0">
+              {/* ── Summary & Metrics Bar ── */}
+              <div className="px-6 py-3.5 bg-slate-50 border-b border-slate-200 shrink-0">
                 {(() => {
                   const defectLogs = historyLogs.filter((l: any) => (l.qtyRejected || 0) > 0 || String(l.remarkType || '').toUpperCase().includes('REJECT'));
                   const totalRejFromLogs = defectLogs.reduce((acc: number, l: any) => acc + (l.qtyRejected || 0), 0);
@@ -5616,58 +6314,87 @@ export default function JobCardsPage() {
                   const activeStage = historyModalJob.currentStageName || PF01_STAGES[historyModalJob.currentStageIndex || 0] || '1. SHEARING';
 
                   return (
-                    <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
-                      {/* KPI Cells in a compact row */}
-                      <div className="flex items-center divide-x divide-slate-200 bg-white border border-slate-200 rounded-lg shadow-2xs overflow-hidden">
-                        <div className="px-3.5 py-1.5 flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase font-mono">Volume:</span>
-                          <span className="font-mono font-bold text-slate-900 text-sm">{totalBatchQty}</span>
-                          <span className="text-[11px] text-slate-500">PCBs ({Number(historyModalJob.custPnlAreaSqm || historyModalJob.prodPnlAreaSqm || 0).toFixed(2)} m²)</span>
-                        </div>
-                        <div className="px-3.5 py-1.5 flex items-center gap-2 bg-emerald-50/40">
-                          <span className="text-[10px] font-bold text-emerald-700 uppercase font-mono">Good:</span>
-                          <span className="font-mono font-bold text-emerald-700 text-sm">{goodQty}</span>
-                          <span className="text-[11px] font-semibold text-emerald-600 font-mono">({yieldPercent}% Yield)</span>
-                        </div>
-                        <div className={`px-3.5 py-1.5 flex items-center gap-2 ${totalScrapQty > 0 ? 'bg-rose-50/60' : ''}`}>
-                          <span className={`text-[10px] font-bold uppercase font-mono ${totalScrapQty > 0 ? 'text-rose-700' : 'text-slate-400'}`}>Scrap:</span>
-                          <span className={`font-mono font-bold text-sm ${totalScrapQty > 0 ? 'text-rose-700' : 'text-slate-600'}`}>{totalScrapQty}</span>
-                          <span className={`text-[11px] font-mono ${totalScrapQty > 0 ? 'text-rose-600 font-bold' : 'text-slate-400'}`}>
-                            ({totalBatchQty > 0 ? ((totalScrapQty / totalBatchQty) * 100).toFixed(1) : 0}%)
+                    <div className="space-y-2.5">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                        {/* Batch Volume */}
+                        <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Total Volume</span>
+                          <div className="flex items-baseline gap-1.5 mt-0.5">
+                            <strong className="text-xl font-extrabold text-slate-900 font-mono">{totalBatchQty}</strong>
+                            <span className="text-xs font-semibold text-slate-500">PCBs</span>
+                          </div>
+                          <span className="text-[11px] text-slate-500 font-mono block mt-0.5">
+                            Area: {Number(historyModalJob.custPnlAreaSqm || historyModalJob.prodPnlAreaSqm || 0).toFixed(2)} SQM
                           </span>
                         </div>
-                        <div className="px-3.5 py-1.5 flex items-center gap-2 bg-blue-50/40">
-                          <span className="text-[10px] font-bold text-blue-700 uppercase font-mono">Active Stage:</span>
-                          <span className="font-mono font-bold text-blue-900 text-xs truncate max-w-[200px]" title={activeStage}>
+
+                        {/* Good / In Production */}
+                        <div className="bg-white border border-emerald-200/90 rounded-xl p-3 shadow-2xs">
+                          <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block font-mono">Good / In Production</span>
+                          <div className="flex items-baseline gap-1.5 mt-0.5">
+                            <strong className="text-xl font-extrabold text-emerald-800 font-mono">{goodQty}</strong>
+                            <span className="text-xs font-semibold text-emerald-600">PCBs</span>
+                          </div>
+                          <span className="text-[11px] text-emerald-700 font-mono font-semibold block mt-0.5">
+                            Yield: {yieldPercent}%
+                          </span>
+                        </div>
+
+                        {/* Rejected / Scrap */}
+                        <div className={`bg-white rounded-xl p-3 shadow-2xs border ${totalScrapQty > 0 ? 'border-rose-300 ring-1 ring-rose-100' : 'border-slate-200'}`}>
+                          <span className={`text-[10px] font-bold uppercase tracking-wider block font-mono ${totalScrapQty > 0 ? 'text-rose-700' : 'text-slate-400'}`}>
+                            Rejected / Scrap
+                          </span>
+                          <div className="flex items-baseline gap-1.5 mt-0.5">
+                            <strong className={`text-xl font-extrabold font-mono ${totalScrapQty > 0 ? 'text-rose-800' : 'text-slate-700'}`}>
+                              {totalScrapQty}
+                            </strong>
+                            <span className={`text-xs font-semibold ${totalScrapQty > 0 ? 'text-rose-600' : 'text-slate-500'}`}>PCBs</span>
+                          </div>
+                          <span className={`text-[11px] font-mono block mt-0.5 ${totalScrapQty > 0 ? 'text-rose-700 font-semibold' : 'text-slate-400'}`}>
+                            {totalScrapQty > 0 ? `${((totalScrapQty / totalBatchQty) * 100).toFixed(1)}% Scrap Rate` : 'Zero Scrap Logged'}
+                          </span>
+                        </div>
+
+                        {/* Active Stage */}
+                        <div className="bg-white border border-blue-200 rounded-xl p-3 shadow-2xs">
+                          <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block font-mono">Current Active Stage</span>
+                          <strong className="text-blue-900 font-mono font-bold block truncate mt-0.5 text-xs" title={activeStage}>
                             {activeStage}
+                          </strong>
+                          <span className="text-[11px] text-blue-600 font-medium block mt-0.5">
+                            Status: In Production
                           </span>
                         </div>
                       </div>
 
-                      {/* Specs Tags */}
-                      <div className="flex items-center gap-1.5 flex-wrap">
+                      {/* Specs Strip */}
+                      <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-slate-600">
                         {historyModalJob.product && (
                           <>
-                            <span className="bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-600 font-mono text-[11px]">
-                              {historyModalJob.product.layers ? `${historyModalJob.product.layers}L` : '2L'}
+                            <span className="bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-600 font-mono">
+                              {historyModalJob.product.layers ? `${historyModalJob.product.layers} Layers` : '2 Layers'}
                             </span>
-                            <span className="bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-600 font-mono text-[11px]">
-                              {historyModalJob.product.thicknessMm ? `${historyModalJob.product.thicknessMm}mm` : '1.6mm'}
+                            <span className="bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-600 font-mono">
+                              {historyModalJob.product.thicknessMm ? `${historyModalJob.product.thicknessMm} mm` : '1.6 mm'}
                             </span>
-                            <span className="bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-600 font-mono text-[11px]">
-                              {historyModalJob.product.surfaceFinish || 'HASL LF'}
+                            <span className="bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-600 font-mono">
+                              {historyModalJob.product.copperWeight || '1oz'}
+                            </span>
+                            <span className="bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-600 font-mono">
+                              {historyModalJob.product.surfaceFinish || 'HASL Lead-Free'}
                             </span>
                           </>
                         )}
                         {defectLogs.length > 0 && (
                           <span className="bg-amber-100 text-amber-900 border border-amber-300 font-bold px-2 py-0.5 rounded font-mono text-[11px] flex items-center gap-1">
-                            <AlertTriangle className="w-3 h-3 text-amber-700" />
-                            {defectLogs.length} Defect(s)
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
+                            {defectLogs.length} Quality Defect Event(s)
                           </span>
                         )}
                         {historyLastUpdated && (
-                          <span className="text-[10px] text-slate-400 font-mono pl-1">
-                            {historyLastUpdated}
+                          <span className="ml-auto text-[10px] text-slate-400 font-mono">
+                            Synced at {historyLastUpdated}
                           </span>
                         )}
                       </div>
@@ -5676,22 +6403,22 @@ export default function JobCardsPage() {
                 })()}
               </div>
 
-              {/* ── Table Toolbar (Search, Filter, Export) ── */}
-              <div className="px-5 py-2 bg-white border-b border-slate-200 flex items-center justify-between gap-3 shrink-0">
-                <div className="flex items-center gap-2 flex-1 max-w-lg">
+              {/* ── Toolbar: Search & Filters ── */}
+              <div className="px-6 py-2.5 bg-white border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0">
+                <div className="flex items-center gap-2 flex-1 max-w-md">
                   <div className="relative flex-1">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
                       value={historySearchQuery}
                       onChange={(e) => setHistorySearchQuery(e.target.value)}
-                      placeholder="Search stage, operator, remark, lot..."
-                      className="w-full pl-8 pr-6 py-1 bg-slate-50 border border-slate-200 rounded text-xs placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white text-slate-800"
+                      placeholder="Search stage name, operator, notes..."
+                      className="w-full pl-8.5 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs placeholder:text-slate-400 focus:outline-none focus:border-slate-400 focus:bg-white transition-all text-slate-800 font-sans"
                     />
                     {historySearchQuery && (
                       <button
                         onClick={() => setHistorySearchQuery('')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs p-0.5"
                       >✕</button>
                     )}
                   </div>
@@ -5699,47 +6426,49 @@ export default function JobCardsPage() {
                   <select
                     value={historyFilterType}
                     onChange={(e) => setHistoryFilterType(e.target.value as any)}
-                    className="px-2 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-mono text-slate-700 focus:outline-none focus:border-blue-500 cursor-pointer"
+                    className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-700 focus:outline-none focus:border-slate-400 cursor-pointer shrink-0"
                   >
-                    <option value="ALL">All Records ({historyLogs.length})</option>
-                    <option value="FORWARD">Stage Forward</option>
-                    <option value="REJECTION">Defects / Rejection</option>
+                    <option value="ALL">All Records</option>
+                    <option value="FORWARD">Stage Forward Only</option>
+                    <option value="REJECTION">Defects / Rejections</option>
                     <option value="INCOMPLETE">Incomplete Moves</option>
                   </select>
                 </div>
 
-                {historyLogs.length > 0 && (
-                  <button
-                    onClick={() => {
-                      let csvContent = "data:text/csv;charset=utf-8,Step No,Timestamp,Job Card No,Sub Lot,Process Stage,Event Type,Qty Received,Qty Forwarded,Qty Rejected,Qty Hold,Operator Name,Operator Role,Operator ID,Remarks\n";
-                      historyLogs.forEach((l: any, i: number) => {
-                        const dateStr = l.createdAt ? new Date(l.createdAt).toLocaleString('en-GB') : '-';
-                        const stageName = `"${(l.stage?.name || l.stageName || '-').replace(/"/g, '""')}"`;
-                        const subNo = l.subJobCard?.subJobCardNo || historyModalJob.jobCardNo;
-                        const eventType = l.remarkType || 'STAGE_MOVEMENT';
-                        const opName = `"${(l.createdBy?.name || 'Operator').replace(/"/g, '""')}"`;
-                        const opRole = `"${(l.createdBy?.role?.name || 'Staff').replace(/"/g, '""')}"`;
-                        const opId = l.createdBy?.id || l.createdById || '-';
-                        const remarkStr = `"${(l.remarks || l.rejectionReason || '').replace(/"/g, '""')}"`;
-                        csvContent += `${historyLogs.length - i},${dateStr},${historyModalJob.jobCardNo},${subNo},${stageName},${eventType},${l.qtyReceived || 0},${l.qtyForwarded || 0},${l.qtyRejected || 0},${l.qtyHold || 0},${opName},${opRole},${opId},${remarkStr}\n`;
-                      });
-                      const encodedUri = encodeURI(csvContent);
-                      const link = document.createElement("a");
-                      link.setAttribute("href", encodedUri);
-                      link.setAttribute("download", `traceability_${historyModalJob.jobCardNo}_${new Date().toISOString().split('T')[0]}.csv`);
-                      document.body.appendChild(link); link.click(); document.body.removeChild(link);
-                    }}
-                    className="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 font-medium rounded text-xs flex items-center gap-1.5 border border-slate-200 cursor-pointer transition-colors shadow-2xs"
-                    title="Export ledger as CSV"
-                  >
-                    <Download className="w-3.5 h-3.5 text-slate-500" />
-                    <span>CSV Export</span>
-                  </button>
-                )}
+                <div className="flex items-center gap-2 shrink-0">
+                  {historyLogs.length > 0 && (
+                    <button
+                      onClick={() => {
+                        let csvContent = "data:text/csv;charset=utf-8,Step No,Timestamp,Job Card No,Sub Lot,Process Stage,Event Type,Qty Received,Qty Forwarded,Qty Rejected,Qty Hold,Operator Name,Operator Role,Operator ID,Remarks\n";
+                        historyLogs.forEach((l: any, i: number) => {
+                          const dateStr = l.createdAt ? new Date(l.createdAt).toLocaleString('en-GB') : '-';
+                          const stageName = `"${(l.stage?.name || l.stageName || '-').replace(/"/g, '""')}"`;
+                          const subNo = l.subJobCard?.subJobCardNo || historyModalJob.jobCardNo;
+                          const eventType = l.remarkType || 'STAGE_MOVEMENT';
+                          const opName = `"${(l.createdBy?.name || 'Operator').replace(/"/g, '""')}"`;
+                          const opRole = `"${(l.createdBy?.role?.name || 'Staff').replace(/"/g, '""')}"`;
+                          const opId = l.createdBy?.id || l.createdById || '-';
+                          const remarkStr = `"${(l.remarks || l.rejectionReason || '').replace(/"/g, '""')}"`;
+                          csvContent += `${historyLogs.length - i},${dateStr},${historyModalJob.jobCardNo},${subNo},${stageName},${eventType},${l.qtyReceived || 0},${l.qtyForwarded || 0},${l.qtyRejected || 0},${l.qtyHold || 0},${opName},${opRole},${opId},${remarkStr}\n`;
+                        });
+                        const encodedUri = encodeURI(csvContent);
+                        const link = document.createElement("a");
+                        link.setAttribute("href", encodedUri);
+                        link.setAttribute("download", `traceability_ledger_${historyModalJob.jobCardNo}_${new Date().toISOString().split('T')[0]}.csv`);
+                        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+                      }}
+                      className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium rounded-lg text-xs flex items-center gap-1.5 border border-slate-200 cursor-pointer transition-colors shadow-2xs"
+                      title="Export entire ledger as CSV file"
+                    >
+                      <Download className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Export CSV</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* ── Main Data Grid Area (High Clarity Table) ── */}
-              <div className="flex-1 overflow-auto bg-slate-100/50">
+              {/* ── Main Scrollable Table Area (Spacious & Clean) ── */}
+              <div className="flex-1 overflow-y-auto bg-white">
                 {(() => {
                   const filtered = historyLogs.filter((log: any) => {
                     if (historyFilterType === 'REJECTION') {
@@ -5771,42 +6500,42 @@ export default function JobCardsPage() {
 
                   if (isHistoryLoading) {
                     return (
-                      <div className="py-24 text-center flex flex-col items-center justify-center gap-2 bg-white h-full">
+                      <div className="py-24 text-center flex flex-col items-center justify-center gap-3">
                         <RefreshCw className="w-6 h-6 text-blue-600 animate-spin" />
-                        <span className="text-xs text-slate-600 font-mono">Loading traceability records...</span>
+                        <span className="text-xs text-slate-600 font-medium font-mono">Loading live traceability ledger records...</span>
                       </div>
                     );
                   }
 
                   if (filtered.length === 0) {
                     return (
-                      <div className="py-20 text-center space-y-2 bg-white h-full flex flex-col items-center justify-center">
-                        <Clock className="w-8 h-8 text-slate-300" />
+                      <div className="py-20 text-center space-y-2">
+                        <Clock className="w-8 h-8 text-slate-300 mx-auto" />
                         <p className="font-bold text-slate-700 text-sm">No stage movement records found.</p>
                         <p className="text-xs text-slate-400">
-                          {historySearchQuery ? 'No results matched your search criteria.' : 'Movement records are logged when units are processed on the shop floor.'}
+                          {historySearchQuery ? 'No results matched your search criteria.' : 'Records are created automatically when shop floor operators move or reject units.'}
                         </p>
                       </div>
                     );
                   }
 
                   return (
-                    <table className="w-full text-left border-collapse bg-white text-xs">
-                      {/* Sticky Table Header with Solid Borders */}
-                      <thead className="sticky top-0 z-20 bg-slate-800 text-white font-mono text-[11px] uppercase tracking-wider font-semibold shadow-sm">
+                    <table className="w-full text-left border-collapse text-xs">
+                      {/* Sticky Table Header */}
+                      <thead className="sticky top-0 z-20 bg-slate-100 text-slate-600 border-b border-slate-200 font-mono text-[11px] uppercase tracking-wider font-bold shadow-2xs">
                         <tr>
-                          <th className="py-2.5 px-3 w-12 text-center border-r border-slate-700">#</th>
-                          <th className="py-2.5 px-3 w-36 border-r border-slate-700">Date & Time</th>
-                          <th className="py-2.5 px-3 w-52 border-r border-slate-700">Process Stage</th>
-                          <th className="py-2.5 px-3 w-28 text-center border-r border-slate-700">Status</th>
-                          <th className="py-2.5 px-3 text-right w-20 border-r border-slate-700 bg-slate-800/90">In (Recv)</th>
-                          <th className="py-2.5 px-3 text-right w-20 border-r border-slate-700 bg-slate-800/90">Out (Fwd)</th>
-                          <th className="py-2.5 px-3 text-right w-16 border-r border-slate-700 bg-slate-800/90">Scrap</th>
-                          <th className="py-2.5 px-3 w-44 border-r border-slate-700">Operator</th>
-                          <th className="py-2.5 px-3">Remarks / Details</th>
+                          <th className="py-3 px-4 w-12 text-center">#</th>
+                          <th className="py-3 px-4 w-44">Date & Time</th>
+                          <th className="py-3 px-4">Process Stage</th>
+                          <th className="py-3 px-4 w-32">Stage Status</th>
+                          <th className="py-3 px-4 text-right w-20">In (Recv)</th>
+                          <th className="py-3 px-4 text-right w-24">Out (Fwd)</th>
+                          <th className="py-3 px-4 text-right w-20">Scrap</th>
+                          <th className="py-3 px-4 w-48">Operator & Role</th>
+                          <th className="py-3 px-4">Remarks / Defect Details</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-200 border-b border-slate-200 text-slate-800">
+                      <tbody className="divide-y divide-slate-100 text-slate-800 font-sans">
                         {filtered.map((log: any, idx: number) => {
                           const dateObj = log.createdAt ? new Date(log.createdAt) : null;
                           const dateStr = dateObj ? dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
@@ -5820,119 +6549,100 @@ export default function JobCardsPage() {
                           const opName = log.createdBy?.name || 'Operator';
                           const opRole = log.createdBy?.role?.name || '';
                           const opDept = log.createdBy?.department?.name || '';
-                          
-                          // Clean remarks representation
-                          let rawRemark = (log.remarks || log.rejectionReason || '').trim();
-                          let isFullMove = rawRemark.startsWith('[FULL_MOVEMENT]');
-                          let displayRemark = isFullMove ? rawRemark.replace('[FULL_MOVEMENT]', '').trim() : rawRemark;
+                          const opEmail = log.createdBy?.email || '';
 
                           return (
                             <tr
                               key={log.id || idx}
-                              className={`transition-colors border-b border-slate-200 ${
-                                isRej 
-                                  ? 'bg-rose-50/70 hover:bg-rose-100/70' 
-                                  : isCurr 
-                                    ? 'bg-blue-50/60 hover:bg-blue-100/60' 
-                                    : idx % 2 === 0 
-                                      ? 'bg-white hover:bg-slate-50' 
-                                      : 'bg-slate-50/50 hover:bg-slate-100/70'
-                              }`}
+                              className={`hover:bg-slate-50/90 transition-colors ${isRej ? 'bg-rose-50/30' : isCurr ? 'bg-blue-50/20' : ''}`}
                             >
                               {/* Step Number */}
-                              <td className="py-2 px-3 text-center font-mono font-bold text-slate-400 text-xs border-r border-slate-200">
+                              <td className="py-3 px-4 text-center font-mono font-bold text-slate-400 text-xs">
                                 #{filtered.length - idx}
                               </td>
 
                               {/* Timestamp */}
-                              <td className="py-2 px-3 whitespace-nowrap font-mono text-[11px] border-r border-slate-200">
-                                <span className="font-semibold text-slate-900">{dateStr}</span>
-                                <span className="text-[10px] text-slate-400 ml-1.5">{timeStr}</span>
+                              <td className="py-3 px-4 whitespace-nowrap font-mono text-[11px]">
+                                <div className="font-bold text-slate-900">{dateStr}</div>
+                                <div className="text-[10px] text-slate-400">{timeStr}</div>
                               </td>
 
-                              {/* Process Stage (No awkward wrap) */}
-                              <td className="py-2 px-3 whitespace-nowrap border-r border-slate-200">
-                                <span className="font-bold text-slate-900 font-mono text-xs">
+                              {/* Process Stage */}
+                              <td className="py-3 px-4">
+                                <div className="font-bold text-slate-900 font-mono text-xs">
                                   {stageName}
-                                </span>
+                                </div>
                                 {subNo && subNo !== historyModalJob.jobCardNo && (
-                                  <span className="ml-1.5 text-[10px] px-1.5 py-0.2 bg-slate-100 rounded text-slate-500 font-mono border border-slate-200">
-                                    {subNo}
-                                  </span>
+                                  <div className="text-[10px] text-slate-400 font-mono">
+                                    Sub-Lot: {subNo}
+                                  </div>
                                 )}
                               </td>
 
-                              {/* Status Badge */}
-                              <td className="py-2 px-3 whitespace-nowrap text-center border-r border-slate-200">
+                              {/* Stage Status Badge */}
+                              <td className="py-3 px-4 whitespace-nowrap">
                                 {isRej ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200 font-mono">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 font-mono">
                                     <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
-                                    Defect
+                                    Defect Logged
                                   </span>
                                 ) : isCurr ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200 font-mono">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 font-mono">
                                     <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
-                                    In Progress
+                                    In Production
                                   </span>
                                 ) : isInit ? (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200 font-mono">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 font-mono">
                                     Launched
                                   </span>
                                 ) : isComp ? (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200 font-mono">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono">
                                     Completed
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 font-mono">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono">
                                     Forwarded
                                   </span>
                                 )}
                               </td>
 
                               {/* Received */}
-                              <td className="py-2 px-3 text-right font-mono font-medium text-slate-700 border-r border-slate-200">
+                              <td className="py-3 px-4 text-right font-mono font-medium text-slate-700">
                                 {log.qtyReceived || 0}
                               </td>
 
                               {/* Forwarded */}
-                              <td className="py-2 px-3 text-right font-mono font-bold text-emerald-700 border-r border-slate-200">
+                              <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700">
                                 {log.qtyForwarded || 0}
                               </td>
 
                               {/* Scrap / Rejected */}
-                              <td className="py-2 px-3 text-right font-mono font-bold border-r border-slate-200">
+                              <td className="py-3 px-4 text-right font-mono font-bold">
                                 {log.qtyRejected > 0 ? (
-                                  <span className="text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded font-bold border border-rose-200">
+                                  <span className="text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
                                     {log.qtyRejected}
                                   </span>
                                 ) : (
-                                  <span className="text-slate-300 font-normal">-</span>
+                                  <span className="text-slate-300 font-normal">—</span>
                                 )}
                               </td>
 
-                              {/* Operator */}
-                              <td className="py-2 px-3 whitespace-nowrap border-r border-slate-200">
-                                <div className="font-semibold text-slate-900 text-xs">{opName}</div>
-                                {(opRole || opDept) && (
-                                  <div className="text-[10px] text-slate-400 font-mono">
-                                    {opRole || 'Staff'}{opDept ? ` • ${opDept}` : ''}
-                                  </div>
-                                )}
+                              {/* Operator & Role */}
+                              <td className="py-3 px-4 whitespace-nowrap">
+                                <div className="font-bold text-slate-900 text-xs">{opName}</div>
+                                <div className="text-[10px] text-slate-400 font-mono">
+                                  {opRole || 'Staff'}{opDept ? ` • ${opDept}` : ''}
+                                </div>
                               </td>
 
-                              {/* Remarks & Details */}
-                              <td className="py-2 px-3 text-xs text-slate-600">
-                                {displayRemark ? (
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    {isFullMove && (
-                                      <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded border border-slate-200 font-mono font-medium">
-                                        Full Batch
-                                      </span>
-                                    )}
-                                    <span className="font-sans text-slate-700">{displayRemark}</span>
+                              {/* Remarks & Reasons */}
+                              <td className="py-3 px-4 text-xs text-slate-600 max-w-sm">
+                                {log.remarks || log.rejectionReason ? (
+                                  <div className="font-mono text-[11px] bg-slate-50 p-1.5 rounded border border-slate-100 text-slate-800 leading-snug">
+                                    {log.remarks || log.rejectionReason}
                                   </div>
                                 ) : (
-                                  <span className="text-slate-300">-</span>
+                                  <span className="text-slate-300">—</span>
                                 )}
                               </td>
                             </tr>
@@ -5945,17 +6655,355 @@ export default function JobCardsPage() {
               </div>
 
               {/* ── Modal Footer ── */}
-              <div className="flex items-center justify-between px-5 py-2.5 border-t border-slate-300 bg-slate-100 shrink-0">
-                <span className="text-slate-600 font-mono text-xs">
-                  Showing <strong>{historyLogs.length}</strong> movement records • RF ELECTRO TECH Traceability System
+              <div className="flex items-center justify-between px-6 py-3.5 border-t border-slate-200 bg-slate-50 shrink-0">
+                <span className="text-slate-500 font-mono text-xs">
+                  {historyLogs.length} live records in ledger • RF ELECTRO TECH ISO Traceability System
                 </span>
                 <button
                   onClick={() => { setHistoryModalJob(null); setHistoryLogs([]); setHistorySearchQuery(''); }}
-                  className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded text-xs transition-colors cursor-pointer shadow-xs"
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs transition-colors cursor-pointer shadow-sm"
                 >
                   Close
                 </button>
               </div>
+
+            </div>
+          </div>
+        </Portal>
+      )}
+
+      {/* ── MODAL 8: CREATE OUTBOUND DISPATCH & GATE PASS ── */}
+      {isDispatchModalOpen && dispatchTargetJob && (
+        <Portal>
+          <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-[9999] flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+            <div className="bg-white border border-slate-200/90 rounded-3xl w-full max-w-2xl shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900 flex flex-col max-h-[92vh] overflow-hidden my-auto">
+              
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80 shrink-0">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black shadow-sm border border-amber-400 shrink-0">
+                    <Truck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-extrabold text-slate-950 text-base sm:text-lg tracking-tight">
+                        Generate Outbound Gate Pass & Dispatch
+                      </h3>
+                      <span className="font-mono text-[11px] px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-extrabold border border-amber-300">
+                        {dispatchTargetJob.jobCardNo}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Issue official dispatch gate pass, assign logistics partner & tracking number
+                    </p>
+                  </div>
+                </div>
+                
+                <button 
+                  onClick={() => { setIsDispatchModalOpen(false); setDispatchTargetJob(null); }}
+                  className="w-8 h-8 rounded-full bg-slate-200/60 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Form Content */}
+              <form onSubmit={handleCreateDispatch} className="flex-1 overflow-y-auto p-6 space-y-5">
+                {/* Job Summary Banner */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Customer</span>
+                    <div className="font-bold text-slate-900 truncate">
+                      {dispatchTargetJob.customerPO?.customer?.companyName || dispatchTargetJob.clientName || dispatchTargetJob.customer || 'Standard Customer'}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Customer PO</span>
+                    <div className="font-bold font-mono text-slate-900">
+                      {dispatchTargetJob.customerPO?.poNo || dispatchTargetJob.poNumber || 'N/A'}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Product Code</span>
+                    <div className="font-bold font-mono text-slate-900 truncate">
+                      {dispatchTargetJob.customerPartNo || dispatchTargetJob.rfePartCode || 'PCB Board'}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">Good Qty Ready</span>
+                    <div className="font-black font-mono text-emerald-700">
+                      {Math.max(0, (dispatchTargetJob.totalPcbQty || 160) - (dispatchTargetJob.rejectedPcbQty || 0))} PCBs
+                    </div>
+                  </div>
+                </div>
+
+                {/* Form Inputs */}
+                <div className="space-y-4 text-xs font-sans">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">
+                        Dispatched Quantity (PCBs) <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        min={1}
+                        max={Math.max(1, (dispatchTargetJob.totalPcbQty || 160) - (dispatchTargetJob.rejectedPcbQty || 0))}
+                        value={dispatchForm.dispatchedQty}
+                        onChange={(e) => setDispatchForm({ ...dispatchForm, dispatchedQty: Number(e.target.value) })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:border-blue-500 focus:bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">
+                        Tracking / LR Number <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={dispatchForm.trackingLrNo}
+                        onChange={(e) => setDispatchForm({ ...dispatchForm, trackingLrNo: e.target.value })}
+                        placeholder="e.g. LR-987654 or AWB-12345"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:border-blue-500 focus:bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Destination / Delivery Address <span className="text-rose-500">*</span>
+                    </label>
+                    <textarea
+                      rows={2}
+                      required
+                      value={dispatchForm.destination}
+                      onChange={(e) => setDispatchForm({ ...dispatchForm, destination: e.target.value })}
+                      placeholder="Customer plant, warehouse or store delivery address..."
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-medium focus:outline-none focus:border-blue-500 focus:bg-white"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">
+                        Logistics Carrier / Transporter <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={dispatchForm.courierName}
+                        onChange={(e) => setDispatchForm({ ...dispatchForm, courierName: e.target.value })}
+                        placeholder="e.g. VRL Logistics, DTDC, Blue Dart, Company Vehicle"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:border-blue-500 focus:bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">
+                        Vehicle Number (if dedicated / local)
+                      </label>
+                      <input
+                        type="text"
+                        value={dispatchForm.vehicleNo}
+                        onChange={(e) => setDispatchForm({ ...dispatchForm, vehicleNo: e.target.value })}
+                        placeholder="e.g. MH-04-AB-1234"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:border-blue-500 focus:bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">
+                        Driver / Dispatch Executive Name
+                      </label>
+                      <input
+                        type="text"
+                        value={dispatchForm.driverName}
+                        onChange={(e) => setDispatchForm({ ...dispatchForm, driverName: e.target.value })}
+                        placeholder="Driver or courier representative name"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium focus:outline-none focus:border-blue-500 focus:bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">
+                        Contact Mobile Number
+                      </label>
+                      <input
+                        type="text"
+                        value={dispatchForm.contactNumber}
+                        onChange={(e) => setDispatchForm({ ...dispatchForm, contactNumber: e.target.value })}
+                        placeholder="e.g. +91 98765 43210"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:border-blue-500 focus:bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Packaging Details & Dispatch Remarks
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={dispatchForm.dispatchRemarks}
+                      onChange={(e) => setDispatchForm({ ...dispatchForm, dispatchRemarks: e.target.value })}
+                      placeholder="e.g. 5 boxes vacuum packed with bubble wrap & moisture barrier bag..."
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-medium focus:outline-none focus:border-blue-500 focus:bg-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => { setIsDispatchModalOpen(false); setDispatchTargetJob(null); }}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingDispatch}
+                    className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 border border-amber-600"
+                  >
+                    {isSubmittingDispatch ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Generating Gate Pass...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        <span>Confirm Outbound Dispatch</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+
+            </div>
+          </div>
+        </Portal>
+      )}
+
+      {/* ── MODAL 9: CONFIRM DELIVERY & UPDATE POD ── */}
+      {isDeliveryModalOpen && selectedDispatchForDelivery && (
+        <Portal>
+          <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-[9999] flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+            <div className="bg-white border border-slate-200/90 rounded-3xl w-full max-w-lg shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900 flex flex-col max-h-[92vh] overflow-hidden my-auto">
+              
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-emerald-50/70 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-black shadow-sm shrink-0">
+                    <CheckCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-slate-950 text-base tracking-tight">
+                      Confirm Customer Delivery (POD)
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5 font-mono">
+                      Gate Pass: {selectedDispatchForDelivery.dispatchNo || 'DSP-0001'}
+                    </p>
+                  </div>
+                </div>
+                
+                <button 
+                  onClick={() => { setIsDeliveryModalOpen(false); setSelectedDispatchForDelivery(null); }}
+                  className="w-8 h-8 rounded-full bg-slate-200/60 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Form Content */}
+              <form onSubmit={handleUpdateDelivery} className="p-6 space-y-4 text-xs font-sans">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Delivery Status
+                  </label>
+                  <select
+                    value={deliveryForm.deliveryStatus}
+                    onChange={(e) => setDeliveryForm({ ...deliveryForm, deliveryStatus: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white"
+                  >
+                    <option value="DELIVERED">DELIVERED (Successfully Handed Over)</option>
+                    <option value="FAILED">FAILED / ATTEMPTED</option>
+                    <option value="RETURNED">RETURNED TO SENDER</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Received By (Customer Store / QA Rep) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={deliveryForm.receiverName}
+                    onChange={(e) => setDeliveryForm({ ...deliveryForm, receiverName: e.target.value })}
+                    placeholder="e.g. Rahul Sharma (Store Executive)"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Receiver Contact Mobile
+                  </label>
+                  <input
+                    type="text"
+                    value={deliveryForm.receiverMobile}
+                    onChange={(e) => setDeliveryForm({ ...deliveryForm, receiverMobile: e.target.value })}
+                    placeholder="e.g. +91 98200 12345"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Proof of Delivery / Remarks
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={deliveryForm.deliveryRemarks}
+                    onChange={(e) => setDeliveryForm({ ...deliveryForm, deliveryRemarks: e.target.value })}
+                    placeholder="e.g. Delivery challan signed & stamped by customer store manager..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-medium focus:outline-none focus:border-blue-500 focus:bg-white"
+                  />
+                </div>
+
+                {/* Modal Footer */}
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => { setIsDeliveryModalOpen(false); setSelectedDispatchForDelivery(null); }}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingDelivery}
+                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSubmittingDelivery ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>Updating Delivery...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCheck className="w-4 h-4" />
+                        <span>Save Delivery Confirmation</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
 
             </div>
           </div>

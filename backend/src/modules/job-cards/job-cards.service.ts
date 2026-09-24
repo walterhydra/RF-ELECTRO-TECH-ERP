@@ -123,6 +123,15 @@ export class JobCardsService {
         },
         product: true,
         processFlowMaster: true,
+        createdBy: {
+          select: { id: true, name: true, email: true, role: true },
+        },
+        dispatches: {
+          include: {
+            createdBy: { select: { id: true, name: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
         subJobCards: {
           include: { currentStage: true },
           orderBy: { subJobCardNo: 'asc' },
@@ -207,6 +216,28 @@ export class JobCardsService {
         (jc as any).rejectedPcbQty = totalRejectedPcb;
         (jc as any).rejectedAreaSqm = Number(totalRejectedArea.toFixed(2));
         (jc as any).rejectionLogs = formattedLogs;
+
+        // Fetch last movement log to know who completed / executed last action
+        const lastMovement = await this.prisma.stageMovementLog.findFirst({
+          where: { subJobCardId: { in: subCardIds } },
+          include: {
+            createdBy: { select: { id: true, name: true, email: true, role: true } },
+            stage: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        }).catch(() => null);
+
+        if (lastMovement) {
+          (jc as any).lastMovementBy = lastMovement.createdBy;
+          (jc as any).lastMovementAt = lastMovement.createdAt;
+          (jc as any).lastMovementStage = lastMovement.stage?.name;
+          if (jc.status === JobCardStatus.COMPLETED || jc.status === 'READY_FOR_DISPATCH' || jc.status === 'DISPATCHED' || jc.status === 'DELIVERED') {
+            (jc as any).completedBy = lastMovement.createdBy;
+            if (!jc.completedAt) {
+              (jc as any).completedAt = lastMovement.createdAt;
+            }
+          }
+        }
 
         // Populate active stage info directly on job card object for client sync
         const sortedSubCards = [...(jc.subJobCards || [])].sort((a: any, b: any) => {
