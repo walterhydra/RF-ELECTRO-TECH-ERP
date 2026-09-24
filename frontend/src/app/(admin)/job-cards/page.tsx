@@ -3178,9 +3178,9 @@ export default function JobCardsPage() {
 
             <button
               onClick={() => handleOpenCreateModal()}
-              className="h-9 px-4 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-amber-600"
+              className="h-9 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-emerald-700"
             >
-              <Plus className="w-4 h-4 stroke-[3] text-slate-950" />
+              <Plus className="w-4 h-4 stroke-[3] text-white" />
               <span>Add New Card</span>
             </button>
           </div>
