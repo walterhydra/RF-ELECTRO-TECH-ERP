@@ -2834,11 +2834,11 @@ export default function JobCardsPage() {
       .trim();
   };
 
-  const isOperatorUser = userRole === 'NORMAL' || !isSuperAdmin;
+  const isOperatorUser = userRole === 'NORMAL';
 
   // Scoped Cards: When logged in as a Stage Operator, strictly isolate to that stage
   const scopedCards = React.useMemo(() => {
-    if (!isOperatorUser || !assignedStage) return jobCards;
+    if (!isOperatorUser || !assignedStage || assignedStage === 'ALL') return jobCards;
     const targetSlug = normalizeStageSlug(assignedStage);
     return jobCards.filter((jc) => {
       const isCardUnlaunched = jc.status === 'UNLAUNCHED' || jc.status === 'CREATED';
@@ -3171,6 +3171,9 @@ export default function JobCardsPage() {
                 className="bg-transparent font-extrabold text-amber-950 cursor-pointer outline-none text-[11px] font-mono truncate min-w-0 flex-1"
                 title="Select Stage Account to view only jobs pending at this stage"
               >
+                <option value="ALL" className="bg-white text-blue-900 font-sans font-bold">
+                  ★ ALL STAGES (View All Jobs)
+                </option>
                 {PF01_STAGES.map((stg) => (
                   <option key={stg} value={stg} className="bg-white text-slate-900 font-sans font-bold">
                     {stg}
