@@ -81,6 +81,22 @@ Neeche diye gaye rules test-proven hain aur system ke core logic ka hissa hain. 
 * Quantity conservation: `Qty Received = Qty Processed + Qty Hold + Qty Rejected`.
 * Kisi bhi stage par movement karte waqt quantity mismatch nahi hona chahiye.
 
+### Rule 5: Role & Stage Scoping Safety (Never Lock Super Admin / All-Stages Views)
+* **Backend RBAC Protection:**
+  * Backend `findAll()` me `Super Admin` / `MASTER` role accounts ko user-profile me linked `assignedStage` se kabhi filter nahi karna hai. Super Admin hamesha 100% cards dekh sakta hai.
+  * Server-side stage filtering sirf tabhi apply hogi jab `isOperator === true` ho ya query parameter me specific non-ALL stage explicitly manga gaya ho.
+* **Frontend Default View:**
+  * Frontend me `assignedStage` hamesha `'ALL'` (`★ ALL STAGES`) par default rahega taaki kisi bhi device par portal open karne par saare cards turant visible hon.
+
+### Rule 6: API URL Normalization & Double Slash Prevention
+* `getApiBaseUrl()` hamesha clean, trailing-slash-free URL return karega (`https://rf-electro-tech-erp.onrender.com/api/v1`).
+* Frontend me `${getApiBaseUrl()}/endpoint` call karte waqt `//api/v1` (double slash) create nahi hona chahiye.
+* Backend `main.ts` me global URL normalization middleware active rahega jo kisi bhi duplicate slash ko clean single slash me convert karega taaki 404 Route Not Found error kabhi na aaye.
+
+### Rule 7: Multi-Device LocalStorage Cache & Cloud Sync Safety
+* **Insecure Localhost Cache Purge:** HTTPS (Vercel) par run karte waqt browser LocalStorage me agar koi purana `http://` ya `localhost` override bacha ho, toh frontend use automatically purge karke Render Cloud backend se connect karega.
+* **1-Click Cloud Sync:** Header me `🔄 Sync Cloud` button available rahega jo local cache reset karke live database se instant 0-delay fetch trigger karta hai.
+
 ---
 
 ## 📋 4. PRE-COMMIT CHECKLIST FOR DEVELOPERS & AI AGENTS
@@ -98,6 +114,10 @@ Har code change ke baad commit karne se pehle ye check karein:
 ## 🚫 5. COMMON PITFALLS TO AVOID (Ye Galatiyan Kabhi Mat Karna)
 
 1. **Mass Overwriting Files:** Puraane working functions ko copy-paste karke replace karte waqt purane bug-fixes ko overwrite na karein.
+2. **Hardcoding Initial Stage to Single Stage:** Component state me `assignedStage` ko `'2. DRILLING'` ya kisi single stage par hardcode na karein, hamesha `'ALL'` default rakhein.
+3. **Double Slash URL Construction:** `${getApiBaseUrl()}/api/v1` ya `//api/v1` banana band karein.
+4. **Backend Server-Side User Profile Stage Filtering on Super Admins:** User profile ka stage super admin ke job-cards listing ko restrict na kare.
+
 2. **Regex Over-generalization:** Kisi specific case ko fix karne ke liye aisi regex na banayein jo baaki cases ko corrupt kar de.
 3. **Global State for Local Modals:** Modal ya item-level actions ke liye hamesha item ID track karein, global boolean nahi.
 4. **Skipping Typecheck:** Code likhne ke baad bina typecheck kiye push karna strictly prohibited hai.
