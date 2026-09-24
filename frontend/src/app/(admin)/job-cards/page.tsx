@@ -4319,25 +4319,31 @@ export default function JobCardsPage() {
           </div>
 
           {/* 3. COMPLETED & DISPATCH TABLE */}
-          <div className="bg-white border border-slate-300/80 rounded-2xl shadow-xs overflow-hidden">
+          <div className="border border-slate-300/80 rounded-2xl overflow-hidden shadow-xs bg-white">
             <div className="w-full overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse font-sans">
+              <table className="w-full text-left border-collapse text-xs font-sans">
                 <thead>
-                  <tr className="bg-slate-900 text-white font-bold text-[11px] uppercase tracking-wider">
-                    <th className="py-3 px-3.5 border-r border-slate-700/60 min-w-[145px]">WIP Job No.</th>
-                    <th className="py-3 px-3.5 border-r border-slate-700/60 min-w-[175px]">Customer & PO</th>
-                    <th className="py-3 px-3.5 border-r border-slate-700/60 min-w-[160px]">Product & Part</th>
-                    <th className="py-3 px-3.5 border-r border-slate-700/60 min-w-[170px]">Build Specifications</th>
-                    <th className="py-3 px-3.5 border-r border-slate-700/60 text-right min-w-[130px]">Completed Yield</th>
-                    <th className="py-3 px-3.5 border-r border-slate-700/60 min-w-[165px]">QC Sign-off & Date</th>
-                    <th className="py-3 px-3.5 border-r border-slate-700/60 min-w-[195px]">Dispatch & Tracking</th>
-                    <th className="py-3 px-3.5 text-center min-w-[140px]">Actions</th>
+                  <tr className="bg-slate-100 border-b border-slate-300 text-[11px] font-bold text-slate-700">
+                    <th className="py-2.5 px-3 border-r border-slate-300 min-w-[140px] whitespace-nowrap">WIP No.</th>
+                    <th className="py-2.5 px-3 border-r border-slate-300 min-w-[180px]">Product</th>
+                    <th className="py-2.5 px-3 border-r border-slate-300 min-w-[100px] whitespace-nowrap">Product Code</th>
+                    <th className="py-2.5 px-3 border-r border-slate-300 min-w-[110px] whitespace-nowrap">Customer</th>
+                    <th className="py-2.5 px-3 border-r border-slate-300 min-w-[90px] whitespace-nowrap">Launch</th>
+                    <th className="py-2.5 px-3 border-r border-slate-300 min-w-[90px] whitespace-nowrap">Target</th>
+                    <th className="py-2.5 px-3 border-r border-slate-300 min-w-[65px] whitespace-nowrap">Priority</th>
+                    <th className="py-2.5 px-3 border-r border-slate-300 min-w-[65px] text-right whitespace-nowrap">Qty</th>
+                    <th className="py-2.5 px-3 border-r border-slate-300 min-w-[65px] text-right whitespace-nowrap">Rejection</th>
+                    <th className="py-2.5 px-3 border-r border-slate-300 min-w-[50px] whitespace-nowrap">Unit</th>
+                    <th className="py-2.5 px-3 border-r border-slate-300 min-w-[65px] text-right whitespace-nowrap">Area</th>
+                    <th className="py-2.5 px-3 border-r border-slate-300 min-w-[170px] whitespace-nowrap">Stage</th>
+                    <th className="py-2.5 px-3 border-r border-slate-300 min-w-[100px] whitespace-nowrap">Progress</th>
+                    <th className="py-2.5 px-3 text-center min-w-[140px] whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200/80 font-medium">
+                <tbody className="divide-y divide-slate-200 font-medium">
                   {completedJobCards.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-16 text-center text-slate-400">
+                      <td colSpan={14} className="py-16 text-center text-slate-400">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <Package className="w-10 h-10 text-slate-300 stroke-[1.5]" />
                           <div className="text-sm font-bold text-slate-600">No Completed Job Cards Found</div>
@@ -4350,7 +4356,7 @@ export default function JobCardsPage() {
                       </td>
                     </tr>
                   ) : (
-                    completedJobCards.map((jc, index) => {
+                    completedJobCards.map((jc, idx) => {
                       const latestDispatch = jc.dispatches && jc.dispatches.length > 0 ? jc.dispatches[0] : null;
                       const hasDispatch = Boolean(latestDispatch || jc.status === 'DISPATCHED' || jc.status === 'DELIVERED');
                       const isDelivered = latestDispatch?.deliveryStatus === 'DELIVERED' || jc.status === 'DELIVERED';
@@ -4359,187 +4365,131 @@ export default function JobCardsPage() {
                       const targetQty = jc.totalPcbQty || 160;
                       const rejQty = jc.rejectedPcbQty || 0;
                       const goodQty = Math.max(0, targetQty - rejQty);
-                      const yieldPct = targetQty > 0 ? Math.round((goodQty / targetQty) * 100) : 100;
-
-                      const inspectorName = typeof jc.completedBy === 'object'
-                        ? jc.completedBy?.name
-                        : jc.completedBy ||
-                          (typeof jc.lastMovementBy === 'object' ? jc.lastMovementBy?.name : jc.lastMovementBy) ||
-                          jc.createdBy?.name ||
-                          jc.createdByName ||
-                          'QA Sign-off / Stage 20';
 
                       return (
                         <tr 
                           key={jc.id || jc.jobCardNo} 
-                          className={`hover:bg-blue-50/30 transition-colors border-b border-slate-200/70 ${
-                            index % 2 === 1 ? 'bg-slate-50/40' : 'bg-white'
+                          className={`hover:bg-amber-50/50 transition-colors ${
+                            idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'
                           }`}
                         >
-                          {/* 1. WIP Job No. */}
-                          <td className="py-3 px-3.5 align-top border-r border-slate-200/80">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-mono font-black text-slate-900 text-sm tracking-tight">
-                                {jc.jobCardNo}
-                              </span>
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-slate-100 text-slate-700 border border-slate-300/80">
-                                {jc.customerCode || 'RFE'}
-                              </span>
-                            </div>
-                            <div className="mt-1 flex items-center gap-1 text-[10px] font-mono text-slate-400">
-                              <span>WIP-PASS</span>
-                              <span>•</span>
-                              <span>ST-20</span>
+                          {/* 1. WIP No. with Printer Button */}
+                          <td className="py-2.5 px-3 border-r border-slate-200 font-mono font-bold text-slate-900 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => setShowQrModal(jc)}
+                                title="Print QR Sticker Tag"
+                                className="text-amber-800 hover:text-amber-950 cursor-pointer p-0.5 shrink-0"
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                              </button>
+                              <span>{jc.subJobCardNo || jc.jobCardNo}</span>
                             </div>
                           </td>
 
-                          {/* 2. Customer & PO */}
-                          <td className="py-3 px-3.5 align-top border-r border-slate-200/80">
-                            <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                              <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                              <span className="truncate max-w-[160px]" title={jc.customerPO?.customer?.companyName || jc.clientName || jc.customer || 'Standard Customer'}>
-                                {jc.customerPO?.customer?.companyName || jc.clientName || jc.customer || 'Standard Customer'}
-                              </span>
-                            </div>
-                            <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-                              <span className="px-1.5 py-0.5 bg-blue-50 text-blue-800 rounded text-[10px] font-mono font-bold border border-blue-200">
-                                PO: {jc.customerPO?.poNo || jc.poNumber || 'N/A'}
-                              </span>
-                            </div>
-                            <div className="text-[11px] text-slate-500 font-mono mt-1 flex items-center gap-1">
-                              <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
-                              <span>Ord: {formatDateDisplay(jc.orderDate)}</span>
-                            </div>
+                          {/* 2. Product */}
+                          <td className="py-2.5 px-3 border-r border-slate-200 text-slate-900 truncate max-w-[200px]" title={jc.customerPartNo || jc.partCode || jc.partName}>
+                            {jc.customerPartNo || jc.partCode || jc.partName || 'FR4 PCB'}
                           </td>
 
-                          {/* 3. Product & Part */}
-                          <td className="py-3 px-3.5 align-top border-r border-slate-200/80">
-                            <div className="font-bold text-slate-900 text-xs truncate max-w-[155px]" title={jc.customerPartNo || jc.partCode || jc.partName || 'FR4 PCB'}>
-                              {jc.customerPartNo || jc.partCode || jc.partName || 'FR4 PCB'}
-                            </div>
-                            <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-                              {jc.rfePartCode && (
-                                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-800 rounded text-[10px] font-mono font-bold border border-slate-200">
-                                  RFE: {jc.rfePartCode}
-                                </span>
-                              )}
-                              <span className="px-1.5 py-0.5 bg-amber-50 text-amber-900 rounded text-[10px] font-mono font-black border border-amber-200">
-                                {jc.layers || 2}L
-                              </span>
-                            </div>
+                          {/* 3. Product Code */}
+                          <td className="py-2.5 px-3 border-r border-slate-200 font-mono font-bold text-slate-800 whitespace-nowrap">
+                            {jc.rfePartCode || 'D001'}
                           </td>
 
-                          {/* 4. Build Specifications */}
-                          <td className="py-3 px-3.5 align-top border-r border-slate-200/80 font-mono">
-                            <div className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
-                              <span>{jc.boardThickness || '1.6mm'}</span>
-                              <span className="text-slate-300">|</span>
-                              <span>{jc.copperThickness || '35µ'}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                              <span className="px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded text-[9px] font-bold uppercase border border-slate-200">
-                                {jc.surfaceFinish || 'HAL LF'}
-                              </span>
-                              <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-800 rounded text-[9px] font-bold uppercase border border-emerald-200">
-                                {jc.solderMaskColor || 'GREEN'}
-                              </span>
-                            </div>
+                          {/* 4. Customer */}
+                          <td className="py-2.5 px-3 border-r border-slate-200 text-slate-700 font-medium whitespace-nowrap truncate max-w-[130px]" title={jc.customerPO?.customer?.companyName || jc.clientName || jc.customer || jc.customerCode}>
+                            {jc.customerCode || jc.clientName || jc.customer || 'RFE'}
                           </td>
 
-                          {/* 5. Production Yield */}
-                          <td className="py-3 px-3.5 align-top border-r border-slate-200/80 text-right font-mono">
-                            <div className="text-sm font-black text-emerald-700">
-                              {goodQty} <span className="text-[10px] font-bold text-slate-400">/ {targetQty}</span>
-                            </div>
-                            <div className="mt-1">
-                              <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-black ${
-                                yieldPct >= 95 
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
-                                  : 'bg-amber-100 text-amber-800 border border-amber-200'
-                              }`}>
-                                {yieldPct}% Yield
-                              </span>
-                            </div>
-                            {rejQty > 0 && (
-                              <div className="text-[10px] text-rose-600 font-bold mt-1">
-                                ⚠️ {rejQty} Scrap
-                              </div>
-                            )}
+                          {/* 5. Launch */}
+                          <td className="py-2.5 px-3 border-r border-slate-200 font-mono text-[11px] text-slate-600 whitespace-nowrap">
+                            {formatDateDisplay(jc.launchedAt || jc.createdAt)}
                           </td>
 
-                          {/* 6. QC Sign-off & Date */}
-                          <td className="py-3 px-3.5 align-top border-r border-slate-200/80">
-                            <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                              <User className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                              <span className="truncate max-w-[145px]" title={inspectorName}>
-                                {inspectorName}
-                              </span>
-                            </div>
-                            <div className="text-[11px] text-slate-500 font-mono mt-1 flex items-center gap-1">
-                              <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
-                              <span>
-                                {jc.completedAt 
-                                  ? formatDateDisplay(jc.completedAt) 
-                                  : jc.lastMovementAt 
-                                  ? formatDateDisplay(jc.lastMovementAt) 
-                                  : formatDateDisplay(jc.createdAt)}
-                              </span>
-                            </div>
-                            <div className="mt-1.5">
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-bold">
-                                <CheckCircle className="w-3 h-3 text-emerald-600" /> Stage 20 Sign-off
-                              </span>
-                            </div>
+                          {/* 6. Target */}
+                          <td className="py-2.5 px-3 border-r border-slate-200 font-mono text-[11px] text-slate-600 whitespace-nowrap">
+                            {formatDateDisplay(jc.targetDate || jc.completedAt)}
                           </td>
 
-                          {/* 7. Dispatch & Tracking */}
-                          <td className="py-3 px-3.5 align-top border-r border-slate-200/80">
+                          {/* 7. Priority */}
+                          <td className="py-2.5 px-3 border-r border-slate-200 whitespace-nowrap">
+                            <span
+                              className={`font-bold text-[11px] ${
+                                jc.priority === 'MOST URGENT' || jc.priority === 'HIGH'
+                                  ? 'text-rose-600'
+                                  : 'text-slate-700'
+                              }`}
+                            >
+                              {jc.priority === 'MOST URGENT' ? 'Top' : jc.priority || 'NORMAL'}
+                            </span>
+                          </td>
+
+                          {/* 8. Qty */}
+                          <td className="py-2.5 px-3 border-r border-slate-200 font-mono text-right font-bold text-slate-900 whitespace-nowrap">
+                            <span className="text-slate-900 font-black">{goodQty}</span>
+                          </td>
+
+                          {/* 9. Rejection */}
+                          <td className="py-2.5 px-3 border-r border-slate-200 font-mono text-right font-bold whitespace-nowrap">
+                            <span className={rejQty > 0 ? 'text-rose-600 font-black' : 'text-slate-900 font-bold'}>
+                              {rejQty}
+                            </span>
+                          </td>
+
+                          {/* 10. Unit */}
+                          <td className="py-2.5 px-3 border-r border-slate-200 text-slate-600 whitespace-nowrap">
+                            PCBs
+                          </td>
+
+                          {/* 11. Area */}
+                          <td className="py-2.5 px-3 border-r border-slate-200 font-mono text-right font-bold text-emerald-700 whitespace-nowrap">
+                            {jc.custPnlAreaSqm ? jc.custPnlAreaSqm.toFixed(2) : (jc.prodPnlAreaSqm ? jc.prodPnlAreaSqm.toFixed(2) : '45.00')}
+                          </td>
+
+                          {/* 12. Stage */}
+                          <td className="py-2.5 px-3 border-r border-slate-200 font-bold text-slate-900 whitespace-nowrap">
                             {isDelivered ? (
-                              <div className="space-y-1">
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-100 text-purple-800 border border-purple-300 font-mono">
-                                  <ShieldCheck className="w-3.5 h-3.5 text-purple-700" /> DELIVERED
-                                </span>
-                                <div className="text-xs font-mono font-bold text-slate-900">
-                                  {latestDispatch?.dispatchNo || 'DSP-COMPLETED'}
-                                </div>
-                                <div className="text-[10px] text-slate-500">
-                                  Rec: <span className="font-semibold text-slate-800">{latestDispatch?.receiverName || 'Store In-charge'}</span>
-                                </div>
-                              </div>
+                              <span className="px-2.5 py-1 rounded-lg text-[11px] font-extrabold bg-purple-100 text-purple-900 border border-purple-300 font-mono inline-flex items-center gap-1.5 shadow-2xs">
+                                <ShieldCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                                DELIVERED ({latestDispatch?.receiverName || 'STORE'})
+                              </span>
                             ) : isDispatched ? (
-                              <div className="space-y-1">
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-800 border border-blue-300 font-mono">
-                                  <Truck className="w-3.5 h-3.5 text-blue-700" /> IN TRANSIT
-                                </span>
-                                <div className="text-xs font-mono font-bold text-slate-900">
-                                  {latestDispatch?.dispatchNo || 'DSP-0001'}
-                                </div>
-                                <div className="text-[10px] text-slate-500 font-mono">
-                                  {latestDispatch?.courierName || 'Courier'}: <span className="font-bold text-slate-800">{latestDispatch?.trackingLrNo || 'N/A'}</span>
-                                </div>
-                              </div>
+                              <span className="px-2.5 py-1 rounded-lg text-[11px] font-extrabold bg-blue-100 text-blue-900 border border-blue-300 font-mono inline-flex items-center gap-1.5 shadow-2xs">
+                                <Truck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                IN TRANSIT ({latestDispatch?.dispatchNo || 'DSP'})
+                              </span>
                             ) : (
-                              <div className="space-y-1">
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 font-mono">
-                                  <Package className="w-3.5 h-3.5 text-amber-700" /> READY FOR DISPATCH
-                                </span>
-                                <div className="text-[11px] text-slate-500 font-medium">
-                                  In FG Warehouse • Ready for Challan
-                                </div>
-                              </div>
+                              <span className="px-2.5 py-1 rounded-lg text-[11px] font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300 font-mono inline-flex items-center gap-1.5 shadow-2xs">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                20. PACKING (DONE)
+                              </span>
                             )}
                           </td>
 
-                          {/* 8. Actions */}
-                          <td className="py-3 px-3.5 align-top text-center">
-                            <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                          {/* 13. Progress */}
+                          <td className="py-2.5 px-3 border-r border-slate-200 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-14 bg-slate-200 rounded-full h-3 overflow-hidden p-0.5 border border-slate-300">
+                                <div
+                                  className="h-full rounded-full transition-all duration-300 bg-emerald-600"
+                                  style={{ width: '100%' }}
+                                />
+                              </div>
+                              <span className="text-[10px] font-mono font-black text-emerald-700">100%</span>
+                            </div>
+                          </td>
+
+                          {/* 14. Actions */}
+                          <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                            <div className="flex items-center justify-center gap-1.5">
                               {!hasDispatch && (
                                 <button
                                   onClick={() => handleOpenDispatchModal(jc)}
-                                  className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1 shadow-2xs transition-all active:scale-95 cursor-pointer border border-amber-600"
+                                  className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-[11px] flex items-center gap-1 shadow-2xs transition-all active:scale-95 cursor-pointer border border-amber-600"
                                   title="Generate Outbound Gate Pass & Mark Dispatched"
                                 >
-                                  <Send className="w-3.5 h-3.5" />
+                                  <Send className="w-3 h-3" />
                                   <span>Dispatch</span>
                                 </button>
                               )}
@@ -4547,20 +4497,20 @@ export default function JobCardsPage() {
                               {isDispatched && latestDispatch && (
                                 <button
                                   onClick={() => handleOpenDeliveryModal(latestDispatch, jc)}
-                                  className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs flex items-center gap-1 shadow-2xs transition-all active:scale-95 cursor-pointer"
+                                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] flex items-center gap-1 shadow-2xs transition-all active:scale-95 cursor-pointer"
                                   title="Confirm Customer Delivery (POD)"
                                 >
-                                  <CheckCheck className="w-3.5 h-3.5" />
-                                  <span>Confirm Delivery</span>
+                                  <CheckCheck className="w-3 h-3" />
+                                  <span>Confirm</span>
                                 </button>
                               )}
 
                               <button
                                 onClick={() => fetchJobCardHistory(jc)}
-                                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs flex items-center gap-1 transition-all active:scale-95 cursor-pointer border border-slate-200"
+                                className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[11px] flex items-center gap-1 transition-all active:scale-95 cursor-pointer border border-slate-200"
                                 title="View Complete 20-Stage Movement History"
                               >
-                                <History className="w-3.5 h-3.5" />
+                                <History className="w-3 h-3" />
                                 <span>Audit</span>
                               </button>
                             </div>
