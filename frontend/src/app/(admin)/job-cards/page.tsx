@@ -3169,70 +3169,19 @@ export default function JobCardsPage() {
             </button>
 
             <button
-              onClick={() => handleOpenCreateModal()}
-              className="h-9 px-3.5 bg-slate-900 hover:bg-slate-800 text-amber-400 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-slate-950"
-            >
-              <Plus className="w-3.5 h-3.5 stroke-[3] text-amber-400" />
-              <span>ADD NEW CARD</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Bottom Row: Role Selector, Stage Filter & WIP Report in neat bar */}
-        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* RBAC Role Switcher */}
-            <div className="h-9 flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 rounded-xl text-xs">
-              <UserCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              <span className="text-slate-500 font-bold text-[11px] shrink-0">Role:</span>
-              <select
-                value={userRole}
-                onChange={(e: any) => setUserRole(e.target.value)}
-                className="bg-transparent font-extrabold text-slate-900 cursor-pointer outline-none text-xs"
-              >
-                <option value="MASTER">Master (All Access)</option>
-                <option value="SUPER_USER">Super User (Manager)</option>
-                <option value="NORMAL">Operator (Stage Scoped)</option>
-              </select>
-            </div>
-
-            {/* Stage Operator Login Selector */}
-            <div className="h-9 flex items-center gap-1.5 bg-amber-50/80 border border-amber-300 px-3 rounded-xl text-xs shadow-2xs">
-              <span className="text-amber-900 font-black text-[10px] uppercase font-mono shrink-0">Stage:</span>
-              <select
-                value={assignedStage}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setAssignedStage(val);
-                  if (val !== 'ALL') {
-                    setUserRole('NORMAL');
-                  } else {
-                    setUserRole('MASTER');
-                  }
-                }}
-                className="bg-transparent font-extrabold text-amber-950 cursor-pointer outline-none text-xs font-mono"
-                title="Select Stage Account to view only jobs pending at this stage"
-              >
-                <option value="ALL" className="bg-white text-blue-900 font-sans font-bold">
-                  ★ ALL STAGES (View All Jobs)
-                </option>
-                {PF01_STAGES.map((stg) => (
-                  <option key={stg} value={stg} className="bg-white text-slate-900 font-sans font-bold">
-                    {stg}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Report Drawer Button */}
-            <button
               onClick={() => setShowReportDrawer(true)}
               className="h-9 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer whitespace-nowrap"
             >
               <BarChart3 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
               <span>WIP Excel Report</span>
+            </button>
+
+            <button
+              onClick={() => handleOpenCreateModal()}
+              className="h-9 px-3.5 bg-slate-900 hover:bg-slate-800 text-amber-400 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-slate-950"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[3] text-amber-400" />
+              <span>ADD NEW CARD</span>
             </button>
           </div>
         </div>
