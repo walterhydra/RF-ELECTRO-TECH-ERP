@@ -7,6 +7,14 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
 
+  // Normalize multiple consecutive slashes in request URL to prevent 404 from '//api/v1'
+  app.use((req: any, res: any, next: any) => {
+    if (req.url && req.url.startsWith('//')) {
+      req.url = req.url.replace(/^\/+/, '/');
+    }
+    next();
+  });
+
   // Enable global API prefixing per spec (excluding root and health for cloud monitoring)
   app.setGlobalPrefix('api/v1', { exclude: ['/', 'health'] });
 
