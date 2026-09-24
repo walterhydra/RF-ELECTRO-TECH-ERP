@@ -115,7 +115,7 @@ export default function JobMovementUpdatePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedJob, setSelectedJob] = useState<JobCard | null>(null);
   const [userRole, setUserRole] = useState<'MASTER' | 'SUPER_USER' | 'NORMAL'>('MASTER');
-  const [assignedStage, setAssignedStage] = useState<string>('2. DRILLING');
+  const [assignedStage, setAssignedStage] = useState<string>('ALL');
   const [toast, setToast] = useState<string | null>(null);
 
   // Load stored job cards and user role/stage from localStorage
@@ -130,6 +130,8 @@ export default function JobMovementUpdatePage() {
       const storedStage = localStorage.getItem('assignedStage');
       if (storedStage) {
         setAssignedStage(storedStage);
+      } else {
+        setAssignedStage('ALL');
       }
       if (storedRole) {
         const upper = storedRole.toUpperCase();

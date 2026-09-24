@@ -705,7 +705,7 @@ export default function JobCardsPage() {
 
   // RBAC Role State
   const [userRole, setUserRole] = useState<'MASTER' | 'SUPER_USER' | 'NORMAL'>('MASTER');
-  const [assignedStage, setAssignedStage] = useState<string>('2. DRILLING');
+  const [assignedStage, setAssignedStage] = useState<string>('ALL');
 
   // Modals & Lightbox
   const [showGenerateModal, setShowGenerateModal] = useState(false);
@@ -781,14 +781,16 @@ export default function JobCardsPage() {
       const storedStage = localStorage.getItem('assignedStage');
       if (storedStage) {
         setAssignedStage(storedStage);
+      } else {
+        setAssignedStage('ALL');
       }
       const upper = stored.toUpperCase();
-      if (upper.includes('OPERATOR') || Boolean(storedStage) || upper === 'NORMAL' || upper === 'PROCESS_OPERATOR') {
+      if (upper.includes('OPERATOR') || upper === 'NORMAL' || upper === 'PROCESS_OPERATOR') {
         setUserRole('NORMAL');
-      } else if (upper.includes('SUPER') || upper.includes('ADMIN')) {
-        setUserRole('MASTER');
       } else if (upper.includes('PROD') || upper.includes('MANAGER')) {
         setUserRole('SUPER_USER');
+      } else {
+        setUserRole('MASTER');
       }
     }
   }, []);
@@ -3174,8 +3176,13 @@ export default function JobCardsPage() {
               <select
                 value={assignedStage}
                 onChange={(e) => {
-                  setAssignedStage(e.target.value);
-                  setUserRole('NORMAL');
+                  const val = e.target.value;
+                  setAssignedStage(val);
+                  if (val !== 'ALL') {
+                    setUserRole('NORMAL');
+                  } else {
+                    setUserRole('MASTER');
+                  }
                 }}
                 className="bg-transparent font-extrabold text-amber-950 cursor-pointer outline-none text-xs font-mono"
                 title="Select Stage Account to view only jobs pending at this stage"
@@ -3798,9 +3805,47 @@ export default function JobCardsPage() {
               {filteredCards.length === 0 ? (
                 <tr>
                   <td colSpan={14} className="py-12 text-center text-slate-400 text-xs font-mono">
-                    <div className="flex flex-col items-center justify-center gap-3 py-4">
-                      <p className="text-slate-600 font-sans font-semibold text-sm">No job cards found matching current filters.</p>
-                      <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-center justify-center gap-3 py-4 max-w-md mx-auto">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center font-bold">
+                        <Layers className="w-6 h-6" />
+                      </div>
+                      <p className="text-slate-700 font-sans font-bold text-sm">
+                        {jobCards.length > 0
+                          ? `Total ${jobCards.length} Job Card(s) exist in database, but hidden by current filters (Stage: ${assignedStage}, Status: ${statusRadio}).`
+                          : 'No job cards found in the system.'}
+                      </p>
+                      <div className="flex items-center gap-2 flex-wrap justify-center">
+                        {jobCards.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAssignedStage('ALL');
+                              setUserRole('MASTER');
+                              setStatusRadio('All');
+                              setGlobalSearch('');
+                              setShowColFilters(false);
+                              setColFilters({
+                                wipNo: '',
+                                product: '',
+                                productCode: '',
+                                customer: '',
+                                launch: '',
+                                target: '',
+                                priority: '',
+                                pndg: '',
+                                rejection: '',
+                                unit: '',
+                                area: '',
+                                stage: '',
+                                progress: '',
+                              });
+                            }}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            <span>Reset Filters (Show All {jobCards.length} Jobs)</span>
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={handleOpenCreateModal}
