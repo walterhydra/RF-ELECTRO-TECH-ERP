@@ -811,6 +811,23 @@ export default function JobCardsPage() {
     }, 4000);
   };
 
+  const handleForceCloudSync = async () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('rf_electro_job_cards_v3');
+      localStorage.removeItem('assignedStage');
+      localStorage.removeItem('assignedStageId');
+    }
+    setAssignedStage('ALL');
+    setUserRole('MASTER');
+    setStatusRadio('All');
+    setGlobalSearch('');
+    setShowColFilters(false);
+    forceFreshOnNextPoll.current = true;
+    showToast('🔄 Synchronizing live database from cloud server...', 'info');
+    await fetchBackendJobCards();
+    showToast('✅ Cloud synchronization complete!', 'success');
+  };
+
   const handleDeleteJobCard = async (target: JobCard | string) => {
     if (!target) return;
 
@@ -3141,6 +3158,15 @@ export default function JobCardsPage() {
               <RefreshCw className="w-3.5 h-3.5 stroke-[3] text-amber-400" />
               <span>Job Movement ➔</span>
             </Link>
+
+            <button
+              onClick={handleForceCloudSync}
+              className="h-9 px-3 bg-blue-50 hover:bg-blue-100 text-blue-800 font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all border border-blue-200 whitespace-nowrap cursor-pointer active:scale-95"
+              title="Purge local cache and force-sync live cards from cloud database"
+            >
+              <RefreshCw className="w-3.5 h-3.5 stroke-[2.5] text-blue-600" />
+              <span>Sync Cloud</span>
+            </button>
 
             <button
               onClick={() => handleOpenCreateModal()}
