@@ -2855,15 +2855,28 @@ export default function JobCardsPage() {
 
   const isOperatorUser = userRole === 'NORMAL';
 
-  // Scoped Cards: When logged in as a Stage Operator, strictly isolate to that stage
+  // Helper to identify 100% completed or dispatched job cards
+  const isCardCompleted = useCallback((jc: JobCard) => {
+    return (
+      jc.status === 'COMPLETED' ||
+      jc.status === 'DISPATCHED' ||
+      jc.status === 'DELIVERED' ||
+      jc.currentStage === 'PF01-PACK' ||
+      jc.currentStage === 'PACKING' ||
+      Boolean(jc.dispatches && jc.dispatches.length > 0)
+    );
+  }, []);
+
+  // Scoped Cards: When on Active Production WIP tab, strictly isolate to active (uncompleted) cards
   const scopedCards = React.useMemo(() => {
-    if (!isOperatorUser || !assignedStage || assignedStage === 'ALL') return jobCards;
+    // 1. Strictly exclude 100% completed / dispatched jobs from WIP so they only appear in Completed & Dispatch Hub
+    const activeOnly = jobCards.filter((jc) => !isCardCompleted(jc));
+
+    if (!isOperatorUser || !assignedStage || assignedStage === 'ALL') return activeOnly;
     const targetSlug = normalizeStageSlug(assignedStage);
-    return jobCards.filter((jc) => {
+    return activeOnly.filter((jc) => {
       const isCardUnlaunched = jc.status === 'UNLAUNCHED' || jc.status === 'CREATED';
-      const isCardCompleted = jc.status === 'COMPLETED';
       if (isCardUnlaunched) return targetSlug === 'shearing' || targetSlug === '1shearing';
-      if (isCardCompleted) return targetSlug === 'packing' || targetSlug === '20packing';
 
       const cardStageSlug = normalizeStageSlug(jc.currentStageName);
       if (cardStageSlug === targetSlug || (jc.currentStageName || '').toLowerCase().includes(assignedStage.toLowerCase())) {
@@ -2878,7 +2891,7 @@ export default function JobCardsPage() {
       }
       return false;
     });
-  }, [jobCards, isOperatorUser, assignedStage]);
+  }, [jobCards, isOperatorUser, assignedStage, isCardCompleted]);
 
   // Filtered Cards based on per-column filters, global search, and radio status
   const filteredCards = scopedCards.filter((jc) => {
@@ -2922,7 +2935,7 @@ export default function JobCardsPage() {
         : statusRadio === 'Unstarted'
         ? jc.status === 'UNLAUNCHED' || jc.status === 'CREATED'
         : statusRadio === 'Done'
-        ? jc.status === 'COMPLETED'
+        ? false
         : statusRadio === 'Overdue'
         ? isCardOverdue(jc)
         : true;
@@ -3017,14 +3030,7 @@ export default function JobCardsPage() {
   const completedJobCards = React.useMemo(() => {
     return jobCards.filter((jc) => {
       // Must be completed (either status is COMPLETED/DISPATCHED/DELIVERED, or at PACKING/PACK stage, or has dispatches)
-      const isCompleted =
-        jc.status === 'COMPLETED' ||
-        jc.status === 'DISPATCHED' ||
-        jc.status === 'DELIVERED' ||
-        jc.currentStage === 'PF01-PACK' ||
-        jc.currentStage === 'PACKING' ||
-        (jc.dispatches && jc.dispatches.length > 0);
-
+      const isCompleted = isCardCompleted(jc);
       if (!isCompleted) return false;
 
       // Status filter
@@ -3067,19 +3073,11 @@ export default function JobCardsPage() {
 
       return true;
     });
-  }, [jobCards, dispatchFilterStatus, dispatchSearchQuery]);
+  }, [jobCards, dispatchFilterStatus, dispatchSearchQuery, isCardCompleted]);
 
   const totalCompletedCount = React.useMemo(() => {
-    return jobCards.filter(
-      (jc) =>
-        jc.status === 'COMPLETED' ||
-        jc.status === 'DISPATCHED' ||
-        jc.status === 'DELIVERED' ||
-        jc.currentStage === 'PF01-PACK' ||
-        jc.currentStage === 'PACKING' ||
-        (jc.dispatches && jc.dispatches.length > 0)
-    ).length;
-  }, [jobCards]);
+    return jobCards.filter((jc) => isCardCompleted(jc)).length;
+  }, [jobCards, isCardCompleted]);
 
   const readyToDispatchCount = React.useMemo(() => {
     return jobCards.filter((jc) => {
@@ -3609,16 +3607,13 @@ export default function JobCardsPage() {
           </button>
 
           <button
-            onClick={() => setStatusRadio('Done')}
-            className={`h-8 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
-              statusRadio === 'Done'
-                ? 'bg-amber-500 text-slate-950 shadow-2xs font-black'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
+            onClick={() => setActiveSectionTab('COMPLETED_DISPATCH')}
+            className="h-8 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
+            title="Switch to Completed & Dispatch Hub"
           >
-            <span>COMPLETED</span>
-            <span className="px-1.5 py-0.2 bg-slate-950/10 rounded font-mono text-[10px]">
-              {jobCards.filter((j) => j.status === 'COMPLETED').length}
+            <span>COMPLETED & DISPATCH ➔</span>
+            <span className="px-1.5 py-0.2 bg-emerald-200 text-emerald-950 rounded font-mono text-[10px] font-black">
+              {totalCompletedCount}
             </span>
           </button>
 
