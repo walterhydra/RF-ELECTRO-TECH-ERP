@@ -3142,46 +3142,46 @@ export default function JobCardsPage() {
           </div>
 
           {/* Right: Primary Quick Action Buttons */}
-          <div className="flex items-center gap-2.5 flex-wrap shrink-0">
-            <Link
-              href="/job-cards/launch"
-              className="h-9 px-3.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all border border-amber-600 whitespace-nowrap cursor-pointer active:scale-95"
-            >
-              <Plus className="w-3.5 h-3.5 stroke-[3]" />
-              <span>Launch Page ↗</span>
-            </Link>
-
-            <Link
-              href="/job-cards/movement"
-              className="h-9 px-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all border border-blue-500/40 whitespace-nowrap cursor-pointer active:scale-95"
-            >
-              <RefreshCw className="w-3.5 h-3.5 stroke-[3] text-amber-400" />
-              <span>Job Movement ➔</span>
-            </Link>
-
-            <button
-              onClick={handleForceCloudSync}
-              className="h-9 px-3 bg-blue-50 hover:bg-blue-100 text-blue-800 font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all border border-blue-200 whitespace-nowrap cursor-pointer active:scale-95"
-              title="Purge local cache and force-sync live cards from cloud database"
-            >
-              <RefreshCw className="w-3.5 h-3.5 stroke-[2.5] text-blue-600" />
-              <span>Sync Cloud</span>
-            </button>
-
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
             <button
               onClick={() => setShowReportDrawer(true)}
-              className="h-9 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer whitespace-nowrap"
+              className="h-9 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer whitespace-nowrap active:scale-95"
             >
               <BarChart3 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
               <span>WIP Excel Report</span>
             </button>
 
             <button
-              onClick={() => handleOpenCreateModal()}
-              className="h-9 px-3.5 bg-slate-900 hover:bg-slate-800 text-amber-400 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-slate-950"
+              onClick={handleForceCloudSync}
+              className="h-9 px-3 bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all border border-blue-200 whitespace-nowrap cursor-pointer active:scale-95"
+              title="Purge local cache and force-sync live cards from cloud database"
             >
-              <Plus className="w-3.5 h-3.5 stroke-[3] text-amber-400" />
-              <span>ADD NEW CARD</span>
+              <RefreshCw className="w-3.5 h-3.5 stroke-[2.5] text-blue-600" />
+              <span>Sync Cloud</span>
+            </button>
+
+            <Link
+              href="/job-cards/launch"
+              className="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all border border-slate-300/80 whitespace-nowrap cursor-pointer active:scale-95"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[2.5] text-slate-700" />
+              <span>Launch Page ↗</span>
+            </Link>
+
+            <Link
+              href="/job-cards/movement"
+              className="h-9 px-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all border border-blue-700 whitespace-nowrap cursor-pointer active:scale-95"
+            >
+              <RefreshCw className="w-3.5 h-3.5 stroke-[2.5] text-white" />
+              <span>Job Movement ➔</span>
+            </Link>
+
+            <button
+              onClick={() => handleOpenCreateModal()}
+              className="h-9 px-4 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-amber-600"
+            >
+              <Plus className="w-4 h-4 stroke-[3] text-slate-950" />
+              <span>Add New Card</span>
             </button>
           </div>
         </div>
