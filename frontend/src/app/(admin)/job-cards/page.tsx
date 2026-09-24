@@ -4319,23 +4319,25 @@ export default function JobCardsPage() {
           </div>
 
           {/* 3. COMPLETED & DISPATCH TABLE */}
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
+          <div className="bg-white border border-slate-300/80 rounded-2xl shadow-xs overflow-hidden">
+            <div className="w-full overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse font-sans">
                 <thead>
                   <tr className="bg-slate-900 text-white font-bold text-[11px] uppercase tracking-wider">
-                    <th className="py-3 px-4">WIP & PO Reference</th>
-                    <th className="py-3 px-4">Product Specs</th>
-                    <th className="py-3 px-4 text-right">Production Yield</th>
-                    <th className="py-3 px-4">Completed By & Date</th>
-                    <th className="py-3 px-4">Dispatch & Gate Pass</th>
-                    <th className="py-3 px-4 text-center">Actions</th>
+                    <th className="py-3 px-3.5 border-r border-slate-700/60 min-w-[145px]">WIP Job No.</th>
+                    <th className="py-3 px-3.5 border-r border-slate-700/60 min-w-[175px]">Customer & PO</th>
+                    <th className="py-3 px-3.5 border-r border-slate-700/60 min-w-[160px]">Product & Part</th>
+                    <th className="py-3 px-3.5 border-r border-slate-700/60 min-w-[170px]">Build Specifications</th>
+                    <th className="py-3 px-3.5 border-r border-slate-700/60 text-right min-w-[130px]">Completed Yield</th>
+                    <th className="py-3 px-3.5 border-r border-slate-700/60 min-w-[165px]">QC Sign-off & Date</th>
+                    <th className="py-3 px-3.5 border-r border-slate-700/60 min-w-[195px]">Dispatch & Tracking</th>
+                    <th className="py-3 px-3.5 text-center min-w-[140px]">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
+                <tbody className="divide-y divide-slate-200/80 font-medium">
                   {completedJobCards.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-16 text-center text-slate-400">
+                      <td colSpan={8} className="py-16 text-center text-slate-400">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <Package className="w-10 h-10 text-slate-300 stroke-[1.5]" />
                           <div className="text-sm font-bold text-slate-600">No Completed Job Cards Found</div>
@@ -4348,7 +4350,7 @@ export default function JobCardsPage() {
                       </td>
                     </tr>
                   ) : (
-                    completedJobCards.map((jc) => {
+                    completedJobCards.map((jc, index) => {
                       const latestDispatch = jc.dispatches && jc.dispatches.length > 0 ? jc.dispatches[0] : null;
                       const hasDispatch = Boolean(latestDispatch || jc.status === 'DISPATCHED' || jc.status === 'DELIVERED');
                       const isDelivered = latestDispatch?.deliveryStatus === 'DELIVERED' || jc.status === 'DELIVERED';
@@ -4359,121 +4361,177 @@ export default function JobCardsPage() {
                       const goodQty = Math.max(0, targetQty - rejQty);
                       const yieldPct = targetQty > 0 ? Math.round((goodQty / targetQty) * 100) : 100;
 
+                      const inspectorName = typeof jc.completedBy === 'object'
+                        ? jc.completedBy?.name
+                        : jc.completedBy ||
+                          (typeof jc.lastMovementBy === 'object' ? jc.lastMovementBy?.name : jc.lastMovementBy) ||
+                          jc.createdBy?.name ||
+                          jc.createdByName ||
+                          'QA Sign-off / Stage 20';
+
                       return (
-                        <tr key={jc.id || jc.jobCardNo} className="hover:bg-slate-50/80 transition-colors">
-                          {/* WIP & PO Reference */}
-                          <td className="py-3.5 px-4 align-top">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-black text-slate-900 text-sm">
+                        <tr 
+                          key={jc.id || jc.jobCardNo} 
+                          className={`hover:bg-blue-50/30 transition-colors border-b border-slate-200/70 ${
+                            index % 2 === 1 ? 'bg-slate-50/40' : 'bg-white'
+                          }`}
+                        >
+                          {/* 1. WIP Job No. */}
+                          <td className="py-3 px-3.5 align-top border-r border-slate-200/80">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-mono font-black text-slate-900 text-sm tracking-tight">
                                 {jc.jobCardNo}
                               </span>
-                              <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-slate-100 text-slate-700 border border-slate-200">
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-slate-100 text-slate-700 border border-slate-300/80">
                                 {jc.customerCode || 'RFE'}
                               </span>
                             </div>
-                            <div className="text-xs font-semibold text-slate-800 mt-1">
-                              {jc.customerPO?.customer?.companyName || jc.clientName || jc.customer || 'Standard Customer'}
-                            </div>
-                            <div className="text-[11px] text-slate-500 font-mono mt-0.5 flex items-center gap-1.5">
-                              <span>PO: {jc.customerPO?.poNo || jc.poNumber || 'N/A'}</span>
+                            <div className="mt-1 flex items-center gap-1 text-[10px] font-mono text-slate-400">
+                              <span>WIP-PASS</span>
                               <span>•</span>
+                              <span>ST-20</span>
+                            </div>
+                          </td>
+
+                          {/* 2. Customer & PO */}
+                          <td className="py-3 px-3.5 align-top border-r border-slate-200/80">
+                            <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                              <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <span className="truncate max-w-[160px]" title={jc.customerPO?.customer?.companyName || jc.clientName || jc.customer || 'Standard Customer'}>
+                                {jc.customerPO?.customer?.companyName || jc.clientName || jc.customer || 'Standard Customer'}
+                              </span>
+                            </div>
+                            <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                              <span className="px-1.5 py-0.5 bg-blue-50 text-blue-800 rounded text-[10px] font-mono font-bold border border-blue-200">
+                                PO: {jc.customerPO?.poNo || jc.poNumber || 'N/A'}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 font-mono mt-1 flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
                               <span>Ord: {formatDateDisplay(jc.orderDate)}</span>
                             </div>
                           </td>
 
-                          {/* Product Specs */}
-                          <td className="py-3.5 px-4 align-top">
-                            <div className="font-bold text-slate-900 text-xs">
+                          {/* 3. Product & Part */}
+                          <td className="py-3 px-3.5 align-top border-r border-slate-200/80">
+                            <div className="font-bold text-slate-900 text-xs truncate max-w-[155px]" title={jc.customerPartNo || jc.partCode || jc.partName || 'FR4 PCB'}>
                               {jc.customerPartNo || jc.partCode || jc.partName || 'FR4 PCB'}
                             </div>
-                            <div className="text-[11px] text-slate-500 font-mono mt-0.5">
-                              {jc.rfePartCode ? `RFE: ${jc.rfePartCode} • ` : ''}
-                              {jc.layers || 2}L | {jc.copperThickness || '35u'} | {jc.boardThickness || '1.6mm'}
-                            </div>
-                            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                              {jc.surfaceFinish || 'HAL LEAD FREE'} • {jc.solderMaskColor || 'GREEN'}
+                            <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                              {jc.rfePartCode && (
+                                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-800 rounded text-[10px] font-mono font-bold border border-slate-200">
+                                  RFE: {jc.rfePartCode}
+                                </span>
+                              )}
+                              <span className="px-1.5 py-0.5 bg-amber-50 text-amber-900 rounded text-[10px] font-mono font-black border border-amber-200">
+                                {jc.layers || 2}L
+                              </span>
                             </div>
                           </td>
 
-                          {/* Production Yield */}
-                          <td className="py-3.5 px-4 align-top text-right font-mono">
-                            <div className="text-sm font-black text-emerald-700">
-                              {goodQty} <span className="text-[10px] font-bold text-slate-400">/ {targetQty} PCBs</span>
+                          {/* 4. Build Specifications */}
+                          <td className="py-3 px-3.5 align-top border-r border-slate-200/80 font-mono">
+                            <div className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
+                              <span>{jc.boardThickness || '1.6mm'}</span>
+                              <span className="text-slate-300">|</span>
+                              <span>{jc.copperThickness || '35µ'}</span>
                             </div>
-                            <div className="text-[11px] font-semibold mt-0.5">
-                              <span className={yieldPct >= 95 ? 'text-emerald-600' : 'text-amber-600'}>
-                                {yieldPct}% Batch Yield
+                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                              <span className="px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded text-[9px] font-bold uppercase border border-slate-200">
+                                {jc.surfaceFinish || 'HAL LF'}
+                              </span>
+                              <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-800 rounded text-[9px] font-bold uppercase border border-emerald-200">
+                                {jc.solderMaskColor || 'GREEN'}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* 5. Production Yield */}
+                          <td className="py-3 px-3.5 align-top border-r border-slate-200/80 text-right font-mono">
+                            <div className="text-sm font-black text-emerald-700">
+                              {goodQty} <span className="text-[10px] font-bold text-slate-400">/ {targetQty}</span>
+                            </div>
+                            <div className="mt-1">
+                              <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-black ${
+                                yieldPct >= 95 
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
+                                  : 'bg-amber-100 text-amber-800 border border-amber-200'
+                              }`}>
+                                {yieldPct}% Yield
                               </span>
                             </div>
                             {rejQty > 0 && (
-                              <div className="text-[10px] text-rose-600 font-bold">
-                                {rejQty} Rej / Scrap
+                              <div className="text-[10px] text-rose-600 font-bold mt-1">
+                                ⚠️ {rejQty} Scrap
                               </div>
                             )}
                           </td>
 
-                          {/* Completed By & Date */}
-                          <td className="py-3.5 px-4 align-top">
-                            <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                          {/* 6. QC Sign-off & Date */}
+                          <td className="py-3 px-3.5 align-top border-r border-slate-200/80">
+                            <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                               <User className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                              <span>
-                                {typeof jc.completedBy === 'object'
-                                  ? jc.completedBy?.name
-                                  : jc.completedBy ||
-                                    (typeof jc.lastMovementBy === 'object' ? jc.lastMovementBy?.name : jc.lastMovementBy) ||
-                                    jc.createdBy?.name ||
-                                    jc.createdByName ||
-                                    'QA Inspector / Stage 20'}
+                              <span className="truncate max-w-[145px]" title={inspectorName}>
+                                {inspectorName}
                               </span>
                             </div>
-                            <div className="text-[11px] text-slate-500 font-mono mt-0.5">
-                              {jc.completedAt ? formatDateDisplay(jc.completedAt) : jc.lastMovementAt ? formatDateDisplay(jc.lastMovementAt) : formatDateDisplay(jc.createdAt)}
+                            <div className="text-[11px] text-slate-500 font-mono mt-1 flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                              <span>
+                                {jc.completedAt 
+                                  ? formatDateDisplay(jc.completedAt) 
+                                  : jc.lastMovementAt 
+                                  ? formatDateDisplay(jc.lastMovementAt) 
+                                  : formatDateDisplay(jc.createdAt)}
+                              </span>
                             </div>
-                            <div className="text-[10px] text-emerald-700 font-semibold mt-0.5 flex items-center gap-1">
-                              <CheckCircle className="w-3 h-3" /> Packing & QC Sign-off
+                            <div className="mt-1.5">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-bold">
+                                <CheckCircle className="w-3 h-3 text-emerald-600" /> Stage 20 Sign-off
+                              </span>
                             </div>
                           </td>
 
-                          {/* Dispatch & Gate Pass */}
-                          <td className="py-3.5 px-4 align-top">
+                          {/* 7. Dispatch & Tracking */}
+                          <td className="py-3 px-3.5 align-top border-r border-slate-200/80">
                             {isDelivered ? (
-                              <div>
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 font-mono">
-                                  <ShieldCheck className="w-3 h-3" /> DELIVERED
+                              <div className="space-y-1">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-100 text-purple-800 border border-purple-300 font-mono">
+                                  <ShieldCheck className="w-3.5 h-3.5 text-purple-700" /> DELIVERED
                                 </span>
-                                <div className="text-[11px] font-mono font-bold text-slate-900 mt-1">
+                                <div className="text-xs font-mono font-bold text-slate-900">
                                   {latestDispatch?.dispatchNo || 'DSP-COMPLETED'}
                                 </div>
-                                <div className="text-[10px] text-slate-500 font-mono">
-                                  Rec: {latestDispatch?.receiverName || 'Store In-charge'}
+                                <div className="text-[10px] text-slate-500">
+                                  Rec: <span className="font-semibold text-slate-800">{latestDispatch?.receiverName || 'Store In-charge'}</span>
                                 </div>
                               </div>
                             ) : isDispatched ? (
-                              <div>
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 font-mono">
-                                  <Truck className="w-3 h-3" /> DISPATCHED (IN TRANSIT)
+                              <div className="space-y-1">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-800 border border-blue-300 font-mono">
+                                  <Truck className="w-3.5 h-3.5 text-blue-700" /> IN TRANSIT
                                 </span>
-                                <div className="text-[11px] font-mono font-bold text-slate-900 mt-1">
+                                <div className="text-xs font-mono font-bold text-slate-900">
                                   {latestDispatch?.dispatchNo || 'DSP-0001'}
                                 </div>
                                 <div className="text-[10px] text-slate-500 font-mono">
-                                  {latestDispatch?.courierName || 'Courier'}: {latestDispatch?.trackingLrNo || 'N/A'}
+                                  {latestDispatch?.courierName || 'Courier'}: <span className="font-bold text-slate-800">{latestDispatch?.trackingLrNo || 'N/A'}</span>
                                 </div>
                               </div>
                             ) : (
-                              <div>
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 font-mono">
-                                  <Package className="w-3 h-3" /> READY FOR DISPATCH
+                              <div className="space-y-1">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300 font-mono">
+                                  <Package className="w-3.5 h-3.5 text-amber-700" /> READY FOR DISPATCH
                                 </span>
-                                <div className="text-[10px] text-slate-500 font-mono mt-1">
+                                <div className="text-[11px] text-slate-500 font-medium">
                                   In FG Warehouse • Ready for Challan
                                 </div>
                               </div>
                             )}
                           </td>
 
-                          {/* Actions */}
-                          <td className="py-3.5 px-4 align-top text-center">
+                          {/* 8. Actions */}
+                          <td className="py-3 px-3.5 align-top text-center">
                             <div className="flex items-center justify-center gap-1.5 flex-wrap">
                               {!hasDispatch && (
                                 <button
@@ -4499,11 +4557,11 @@ export default function JobCardsPage() {
 
                               <button
                                 onClick={() => fetchJobCardHistory(jc)}
-                                className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs flex items-center gap-1 transition-all active:scale-95 cursor-pointer border border-slate-200"
+                                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs flex items-center gap-1 transition-all active:scale-95 cursor-pointer border border-slate-200"
                                 title="View Complete 20-Stage Movement History"
                               >
                                 <History className="w-3.5 h-3.5" />
-                                <span className="hidden sm:inline">Audit</span>
+                                <span>Audit</span>
                               </button>
                             </div>
                           </td>
