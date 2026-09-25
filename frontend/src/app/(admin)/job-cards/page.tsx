@@ -57,6 +57,7 @@ import {
 } from 'lucide-react';
 import { Portal } from '@/components/ui/Portal';
 import { getApiBaseUrl, compressImageFile } from '@/lib/utils';
+import { LiveCameraScannerModal, parseScannedJobCode } from '@/components/scanner/LiveCameraScannerModal';
 
 
 // Process Flow PF-01 19 Predefined Stages (Matching Database ProcessStage Master)
@@ -718,6 +719,7 @@ export default function JobCardsPage() {
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   const [serverHost, setServerHost] = useState<string>('rf-electro-tech-erp.onrender.com');
   const [photoLightbox, setPhotoLightbox] = useState<string | null>(null);
+  const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
   const [unitPcbAreaSqm, setUnitPcbAreaSqm] = useState<number>(0.28125);
 
   // Server Connection Diagnostic State
@@ -1410,22 +1412,24 @@ export default function JobCardsPage() {
   const [hasRejectionInMovement, setHasRejectionInMovement] = useState(false);
   const [partialMoveQty, setPartialMoveQty] = useState<number | string>(35);
 
-  // Barcode Lookup Trigger
-  const handleBarcodeSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const rawInput = barcodeInput.trim();
-    if (!rawInput) return;
+  // Camera Scanner & Barcode Lookup Trigger
+  const handleLookupAndOpenJob = async (rawInput: string) => {
+    const cleanInput = parseScannedJobCode(rawInput);
+    if (!cleanInput) return;
 
+    // 1. Search in local state first (case-insensitive & sub-card support)
+    const lower = cleanInput.toLowerCase();
     const matched = jobCards.find(
       (j) =>
-        j.jobCardNo.toLowerCase() === rawInput.toLowerCase() ||
-        j.id.toLowerCase() === rawInput.toLowerCase() ||
-        rawInput.toLowerCase().includes(j.jobCardNo.toLowerCase()) ||
-        rawInput.toLowerCase().includes(j.id.toLowerCase())
+        j.jobCardNo.toLowerCase() === lower ||
+        j.id.toLowerCase() === lower ||
+        (j.subJobCards && j.subJobCards.some((s: any) => (s.subJobCardNo || '').toLowerCase() === lower)) ||
+        lower.includes(j.jobCardNo.toLowerCase()) ||
+        j.jobCardNo.toLowerCase().includes(lower)
     );
 
     if (matched) {
-      runWithLoading(`Scanning QR/Barcode & Loading Job Card ${matched.jobCardNo}...`, () => {
+      runWithLoading(`⚡ Scanned & Loading Job Card ${matched.jobCardNo}...`, () => {
         setSelectedMovementJob(matched);
         setHasRejectionInMovement(false);
         setFullMoveRejectQty(0);
@@ -1434,11 +1438,73 @@ export default function JobCardsPage() {
         setPartialMoveQty(Math.max(1, Math.floor((matched.totalPcbQty || 160) / 2)));
         setMovementTab('VIEW');
         setBarcodeInput('');
-        showToast(`Scanned Job Card ${matched.jobCardNo} successfully`, 'info');
+        showToast(`⚡ Scanned Job Card ${matched.jobCardNo} successfully`, 'info');
       });
-    } else {
-      showToast(`No Job Card found matching Scanned Data "${rawInput}"`, 'error');
+      return;
     }
+
+    // 2. Remote API Fallback: Fetch directly from backend if not found on current page
+    try {
+      const baseUrl = getApiBaseUrl();
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
+      const res = await fetch(`${baseUrl}/job-cards/${encodeURIComponent(cleanInput)}`, { credentials: 'omit', headers });
+      if (res.ok) {
+        const remoteData = await res.json();
+        if (remoteData && remoteData.id) {
+          const mappedJob: JobCard = {
+            id: remoteData.id,
+            jobCardNo: remoteData.jobCardNo,
+            customerPartNo: remoteData.customerPartNo || '',
+            rfePartCode: remoteData.rfePartCode || '',
+            customerCode: remoteData.customerCode || remoteData.customerPO?.customer?.code || '',
+            targetDate: remoteData.targetDate ? remoteData.targetDate.split('T')[0] : '',
+            priority: remoteData.priority || 'NORMAL',
+            prodPnlQty: remoteData.prodPnlQty || 40,
+            custPnlQty: remoteData.custPnlQty || 80,
+            totalPcbQty: remoteData.totalPcbQty || 160,
+            prodPnlAreaSqm: remoteData.prodPnlAreaSqm || 50,
+            custPnlAreaSqm: remoteData.custPnlAreaSqm || 45,
+            jobFlowSelection: remoteData.processFlowMaster?.name || 'PF-01 Standard Flow',
+            currentStageIndex: 0,
+            currentStageName: remoteData.subJobCards?.[0]?.currentStage?.name || PF01_STAGES[0],
+            totalQty: remoteData.totalQty || remoteData.totalPcbQty || 160,
+            status: remoteData.status || 'IN_PROGRESS',
+            photoUrl: remoteData.photoUrl || '',
+            rejectedPcbQty: 0,
+            createdAt: remoteData.createdAt || new Date().toISOString(),
+            qrCodeValue: remoteData.qrCodeValue || `RFE-JC-${remoteData.jobCardNo}`,
+            subJobCards: remoteData.subJobCards || [],
+            product: remoteData.product,
+          };
+
+          setSelectedMovementJob(mappedJob);
+          setHasRejectionInMovement(false);
+          setFullMoveRejectQty(0);
+          setFullMoveRemarks('');
+          setFullMoveRemarkType('Clear Movement');
+          setPartialMoveQty(Math.max(1, Math.floor((mappedJob.totalPcbQty || 160) / 2)));
+          setMovementTab('VIEW');
+          setBarcodeInput('');
+          showToast(`⚡ Scanned & Loaded: ${mappedJob.jobCardNo} from Database`, 'info');
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('Remote scan lookup error:', err);
+    }
+
+    showToast(`No Job Card found matching Scanned Data "${cleanInput}"`, 'error');
+  };
+
+  const handleBarcodeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!barcodeInput.trim()) return;
+    handleLookupAndOpenJob(barcodeInput);
   };
 
   // Traceability & Movement History State
@@ -3259,26 +3325,44 @@ export default function JobCardsPage() {
           {/* 2. SECOND ROW SUMMARY CARDS & BARCODE SCANNER */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-stretch">
         
-        {/* Card 1: Barcode Scanner / Fast Stage Movement */}
-        <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex flex-col justify-between space-y-2.5 min-h-[96px]">
+        {/* Card 1: Barcode & Mobile Camera Scanner / Fast Stage Movement */}
+        <div className="bg-gradient-to-br from-white via-white to-blue-50/50 border border-blue-200/90 rounded-2xl p-3.5 shadow-xs flex flex-col justify-between space-y-2 min-h-[96px] hover:border-blue-300 transition-colors">
           <div className="flex items-center justify-between gap-1">
-            <div className="flex items-center gap-1 text-[11px] font-black text-blue-900 uppercase tracking-wider shrink-0">
+            <div className="flex items-center gap-1.5 text-[11px] font-black text-blue-950 uppercase tracking-wider shrink-0">
               <Scan className="w-4 h-4 text-blue-600 shrink-0" />
               <span className="whitespace-nowrap">⚡ STAGE SCANNER</span>
             </div>
-            <span className="text-[10px] font-mono font-bold text-slate-400 shrink-0 bg-slate-100 px-1.5 py-0.5 rounded hidden sm:inline-block">
-              26-27-1729
-            </span>
+            
+            {/* Live Camera Scanner Button */}
+            <button
+              type="button"
+              onClick={() => setIsCameraScannerOpen(true)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white font-black text-[11px] rounded-xl shadow-sm shadow-blue-500/20 active:scale-95 transition-all cursor-pointer border border-blue-400/30"
+              title="Open Mobile Camera Scanner (QR Code & 1D Barcode)"
+            >
+              <Camera className="w-3.5 h-3.5 text-amber-300" />
+              <span>Camera Scan</span>
+            </button>
           </div>
 
-          <form onSubmit={handleBarcodeSubmit} className="flex items-center gap-2">
-            <input
-              type="text"
-              value={barcodeInput}
-              onChange={(e) => setBarcodeInput(e.target.value)}
-              placeholder="Scan QR or Job No..."
-              className="flex-1 min-w-0 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white placeholder-slate-400 shadow-2xs"
-            />
+          <form onSubmit={handleBarcodeSubmit} className="flex items-center gap-1.5">
+            <div className="relative flex-1 min-w-0">
+              <input
+                type="text"
+                value={barcodeInput}
+                onChange={(e) => setBarcodeInput(e.target.value)}
+                placeholder="Scan QR / Barcode..."
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-2.5 pr-7 py-1.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white placeholder-slate-400 shadow-2xs"
+              />
+              <button
+                type="button"
+                onClick={() => setIsCameraScannerOpen(true)}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
+                title="Open Camera Scanner"
+              >
+                <Camera className="w-3.5 h-3.5" />
+              </button>
+            </div>
             <button
               type="submit"
               className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl transition-all cursor-pointer shadow-xs inline-flex items-center gap-1 shrink-0 active:scale-95"
@@ -7061,6 +7145,15 @@ export default function JobCardsPage() {
           </div>
         </Portal>
       )}
+
+      {/* MODAL 8: LIVE MOBILE CAMERA SCANNER (QR & 1D BARCODES) */}
+      <LiveCameraScannerModal
+        isOpen={isCameraScannerOpen}
+        onClose={() => setIsCameraScannerOpen(false)}
+        onScanSuccess={(scannedCode) => handleLookupAndOpenJob(scannedCode)}
+        title="Shop Floor Mobile Scanner"
+        subtitle="Point camera at printed Job Card QR Code or 1D Barcode"
+      />
 
     </div>
   );
