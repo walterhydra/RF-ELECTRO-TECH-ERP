@@ -77,6 +77,7 @@ class MainActivity : AppCompatActivity() {
         swipeRefreshLayout.setOnRefreshListener {
             if (isNetworkAvailable()) {
                 showErrorLayout(false)
+                webView.clearCache(true)
                 webView.reload()
             } else {
                 swipeRefreshLayout.isRefreshing = false
@@ -87,6 +88,7 @@ class MainActivity : AppCompatActivity() {
         btnRetry.setOnClickListener {
             if (isNetworkAvailable()) {
                 showErrorLayout(false)
+                webView.clearCache(true)
                 webView.loadUrl(webView.url ?: ERP_TARGET_URL)
             } else {
                 Toast.makeText(this, "No internet connection detected.", Toast.LENGTH_SHORT).show()
@@ -200,6 +202,16 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     progressBar.visibility = View.VISIBLE
                     progressBar.progress = newProgress
+                }
+            }
+
+            override fun onPermissionRequest(request: PermissionRequest?) {
+                runOnUiThread {
+                    try {
+                        request?.grant(request.resources)
+                    } catch (e: Exception) {
+                        super.onPermissionRequest(request)
+                    }
                 }
             }
 
