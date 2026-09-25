@@ -15,7 +15,7 @@ import {
   HelpCircle,
   Sparkles,
   Search,
-  Maximize2,
+  ShieldCheck,
   Lock,
   ArrowRight
 } from 'lucide-react';
@@ -118,11 +118,11 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [isScanningActive, setIsScanningActive] = useState(false);
   const [scannedResult, setScannedResult] = useState<string | null>(null);
   const [manualInput, setManualInput] = useState('');
   const [cameras, setCameras] = useState<any[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
+  const [isScanningFile, setIsScanningFile] = useState(false);
 
   const scannerRef = useRef<any>(null);
   const readerElementId = 'html5qr-code-video-reader';
@@ -139,15 +139,15 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
 
     setScannedResult(cleanCode);
 
-    // Give visual confirmation for 400ms then call parent callback and close
+    // Give visual confirmation for 450ms then call parent callback and close
     setTimeout(() => {
       onScanSuccess(cleanCode, decodedText);
       onClose();
     }, 450);
   }, [onScanSuccess, onClose]);
 
-  // Request media stream directly (triggers native browser permission dialog)
-  const requestCameraPermissionAndStart = useCallback(async (cameraIdToUse?: string) => {
+  // Start / restart scanner instance
+  const startScanner = useCallback(async (cameraIdToUse?: string) => {
     if (typeof window === 'undefined') return;
     setIsInitializing(true);
     setErrorMessage(null);
@@ -155,7 +155,7 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
     try {
       const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
 
-      // Stop previous instance if running
+      // If existing scanner is active, stop and clear first
       if (scannerRef.current) {
         try {
           if (scannerRef.current.isScanning) {
@@ -163,7 +163,7 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
           }
           scannerRef.current.clear();
         } catch (e) {
-          console.warn('Stopping previous scanner instance:', e);
+          console.warn('Stopping previous scanner instance', e);
         }
       }
 
@@ -196,15 +196,15 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
       });
       scannerRef.current = html5QrCode;
 
-      // Direct camera config (environment = back camera on mobile phones)
-      const cameraConfig = cameraIdToUse
-        ? { deviceId: { exact: cameraIdToUse } }
+      // Start directly with environment camera facing mode (mobile back camera)
+      const cameraConfig = cameraIdToUse 
+        ? { deviceId: { exact: cameraIdToUse } } 
         : { facingMode: 'environment' };
 
       await html5QrCode.start(
         cameraConfig,
         {
-          fps: 18,
+          fps: 15,
           qrbox: (viewfinderWidth, viewfinderHeight) => {
             const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
             return {
@@ -218,15 +218,14 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
           handleSuccess(decodedText);
         },
         () => {
-          // Frame search ongoing
+          // Frame search tick
         }
       );
 
       setHasCameraPermission(true);
-      setIsScanningActive(true);
       setIsInitializing(false);
 
-      // Populate camera devices after stream has started
+      // Once camera stream is successfully active, enumerate devices for switcher
       try {
         const devices = await Html5Qrcode.getCameras();
         if (devices && devices.length > 0) {
@@ -235,50 +234,40 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
       } catch {}
 
     } catch (err: any) {
-      console.warn('Primary camera stream start failed:', err);
-
-      // Fallback: Try with basic video constraints
-      try {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          const testStream = await navigator.mediaDevices.getUserMedia({ video: true });
-          testStream.getTracks().forEach((track) => track.stop());
-          setHasCameraPermission(true);
-          
-          // Re-attempt html5QrCode start with simple constraints
-          if (scannerRef.current) {
-            await scannerRef.current.start(
-              { facingMode: 'environment' },
-              { fps: 15, qrbox: 260 },
-              (decodedText: string) => handleSuccess(decodedText),
-              () => {}
-            );
-            setIsScanningActive(true);
-            setIsInitializing(false);
-            return;
-          }
-        }
-      } catch (fallbackErr: any) {
-        console.error('Fallback camera permission failed:', fallbackErr);
-      }
-
+      console.warn('Camera start error:', err);
       setHasCameraPermission(false);
-      setIsScanningActive(false);
-      setErrorMessage(
-        err?.name === 'NotAllowedError' || err?.message?.includes('Permission')
-          ? 'Camera permission is blocked in your browser. Please tap the lock/settings icon in the address bar to allow camera access, or use "Take Photo with Phone Camera" below.'
-          : (err?.message || 'Could not access camera. Please check browser permissions or use the Photo Snapshot button.')
-      );
+      setErrorMessage(err?.message || 'Camera access was not granted by browser or phone settings.');
       setIsInitializing(false);
     }
   }, [scanMode, handleSuccess]);
+
+  // Explicit user permission request triggered by button click
+  const handleRequestPermission = async () => {
+    setIsInitializing(true);
+    setErrorMessage(null);
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: { ideal: 'environment' } } 
+        });
+        // Release test stream
+        stream.getTracks().forEach((t) => t.stop());
+      }
+      await startScanner();
+    } catch (err: any) {
+      setHasCameraPermission(false);
+      setErrorMessage(err?.message || 'Camera permission was denied. Please allow camera access in your browser settings.');
+      setIsInitializing(false);
+    }
+  };
 
   // Handle Modal Open / Close lifecycle
   useEffect(() => {
     if (isOpen) {
       setScannedResult(null);
       const timer = setTimeout(() => {
-        requestCameraPermissionAndStart();
-      }, 150);
+        startScanner();
+      }, 100);
       return () => clearTimeout(timer);
     } else {
       if (scannerRef.current) {
@@ -291,33 +280,45 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
           console.warn('Cleanup error', e);
         }
       }
-      setIsScanningActive(false);
     }
-  }, [isOpen, scanMode, requestCameraPermissionAndStart]);
+  }, [isOpen, scanMode, startScanner]);
 
-  // Handle Photo File Upload / Snapshot (Works 100% on any mobile device without live stream permission)
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (scannerRef.current) {
+        try {
+          if (scannerRef.current.isScanning) {
+            scannerRef.current.stop();
+          }
+        } catch {}
+      }
+    };
+  }, []);
+
+  // Handle Photo File Upload / Camera Snapshot
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setIsScanningFile(true);
     try {
-      setIsInitializing(true);
       const { Html5Qrcode } = await import('html5-qrcode');
-      
-      let tempScanner = scannerRef.current;
-      if (!tempScanner) {
-        tempScanner = new Html5Qrcode(readerElementId, { verbose: false });
-        scannerRef.current = tempScanner;
+      let localQr = scannerRef.current;
+      if (!localQr) {
+        localQr = new Html5Qrcode(readerElementId, { verbose: false });
+        scannerRef.current = localQr;
       }
 
-      const decodedText = await tempScanner.scanFile(file, true);
+      const decodedText = await localQr.scanFile(file, true);
       if (decodedText) {
         handleSuccess(decodedText);
       }
     } catch (err: any) {
-      setErrorMessage('Could not decode a valid QR Code or Barcode from this photo. Please make sure the barcode or QR code is well-lit and in focus.');
+      console.warn('File decode error', err);
+      alert('Could not detect a clear QR Code or Barcode in this photo. Please make sure the barcode/QR is well-lit and in focus, or try scanning live.');
     } finally {
-      setIsInitializing(false);
+      setIsScanningFile(false);
     }
   };
 
@@ -333,12 +334,12 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
 
   return (
     <Portal>
-      <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/90 backdrop-blur-md animate-in fade-in duration-200">
         
-        <div className="relative w-full max-w-lg bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+        <div className="relative w-full max-w-lg bg-slate-900 border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[94vh]">
           
-          {/* 1. Header */}
-          <div className="flex items-center justify-between px-5 py-4 bg-slate-950 border-b border-slate-800 shrink-0">
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-3.5 bg-slate-950 border-b border-slate-800 shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/20">
                 <Scan className="w-5 h-5 stroke-[2.5]" />
@@ -346,11 +347,9 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
               <div>
                 <h3 className="font-extrabold text-white text-base tracking-tight flex items-center gap-2">
                   <span>{title}</span>
-                  {isScanningActive && (
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                  )}
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
                 </h3>
-                <p className="text-xs text-slate-400 font-medium">
+                <p className="text-xs text-slate-400 font-medium truncate max-w-[230px] sm:max-w-xs">
                   {subtitle}
                 </p>
               </div>
@@ -365,53 +364,53 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
             </button>
           </div>
 
-          {/* 2. Mode Switcher Tabs */}
-          <div className="px-5 pt-3 pb-2 bg-slate-900/90 border-b border-slate-800/80 shrink-0">
+          {/* Mode Switcher Tabs */}
+          <div className="px-4 pt-3 pb-2 bg-slate-900 border-b border-slate-800/80 shrink-0">
             <div className="grid grid-cols-3 gap-1.5 bg-slate-950 p-1 rounded-2xl border border-slate-800">
               
               <button
                 type="button"
                 onClick={() => setScanMode('ALL')}
-                className={`py-2 px-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                className={`py-2 px-1.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                   scanMode === 'ALL'
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
                 }`}
               >
                 <Zap className="w-3.5 h-3.5 fill-current text-amber-300" />
-                <span>Auto (All)</span>
+                <span className="truncate">Auto (Both)</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setScanMode('QR')}
-                className={`py-2 px-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                className={`py-2 px-1.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                   scanMode === 'QR'
                     ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
                 }`}
               >
                 <QrCode className="w-3.5 h-3.5" />
-                <span>QR Only</span>
+                <span className="truncate">QR Code</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setScanMode('BARCODE')}
-                className={`py-2 px-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                className={`py-2 px-1.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                   scanMode === 'BARCODE'
                     ? 'bg-amber-600 text-white shadow-md shadow-amber-600/30'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
                 }`}
               >
                 <Barcode className="w-3.5 h-3.5" />
-                <span>Barcode Only</span>
+                <span className="truncate">Barcode 1D</span>
               </button>
 
             </div>
           </div>
 
-          {/* 3. Camera Viewfinder / Scanner Feed */}
+          {/* Camera Viewfinder & Scanner Body */}
           <div className="relative flex-1 bg-black flex flex-col items-center justify-center min-h-[290px] overflow-hidden">
             
             {/* HTML5 QR Code Container */}
@@ -421,12 +420,12 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
             />
 
             {/* Target Laser Viewfinder Overlay */}
-            {!scannedResult && hasCameraPermission !== false && isScanningActive && (
+            {!scannedResult && hasCameraPermission === true && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                 <div className={`relative border-2 border-dashed ${
                   scanMode === 'BARCODE' 
                     ? 'w-72 sm:w-80 h-28 border-amber-400' 
-                    : 'w-64 sm:w-72 h-64 sm:h-72 border-blue-400'
+                    : 'w-60 sm:w-72 h-60 sm:h-72 border-blue-400'
                 } rounded-3xl transition-all duration-300 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]`}>
                   
                   {/* Corner Targets */}
@@ -439,8 +438,8 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
                   <div className="absolute inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-red-500 to-transparent shadow-[0_0_12px_#ef4444] animate-pulse top-1/2 -translate-y-1/2" />
                   
                   <div className="absolute -bottom-7 inset-x-0 text-center">
-                    <span className="text-[11px] font-bold text-white bg-slate-900/90 px-3 py-1 rounded-full border border-slate-700 shadow-md">
-                      Align {scanMode === 'BARCODE' ? 'Barcode' : scanMode === 'QR' ? 'QR Code' : 'QR / Barcode'} within box
+                    <span className="text-[11px] font-bold text-white bg-slate-900/90 px-3 py-1 rounded-full border border-slate-700 shadow-md whitespace-nowrap">
+                      Align {scanMode === 'BARCODE' ? 'Barcode' : scanMode === 'QR' ? 'QR Code' : 'QR / Barcode'} inside
                     </span>
                   </div>
                 </div>
@@ -457,37 +456,35 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
                   {scannedResult}
                 </h4>
                 <p className="text-xs font-bold text-emerald-300 mt-1">
-                  Job Card Detected! Loading shop floor details...
+                  Job Card Detected! Opening shop floor details...
                 </p>
               </div>
             )}
 
-            {/* Permission Denied or Camera Error State */}
+            {/* Permission Denied or Camera Help State */}
             {hasCameraPermission === false && (
-              <div className="absolute inset-0 bg-slate-900 p-6 flex flex-col items-center justify-center text-center space-y-4 z-10 overflow-y-auto">
-                <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center">
-                  <Camera className="w-7 h-7" />
-                </div>
+              <div className="absolute inset-0 bg-slate-900 p-5 flex flex-col items-center justify-center text-center space-y-3.5 z-10 overflow-y-auto">
                 
-                <div className="max-w-xs space-y-1.5">
-                  <h4 className="font-extrabold text-white text-base">Grant Camera Access</h4>
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    {errorMessage || 'Tap Allow when your phone browser asks for camera permission.'}
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center shrink-0">
+                  <Camera className="w-6 h-6 animate-pulse" />
+                </div>
+
+                <div className="max-w-xs space-y-1">
+                  <h4 className="font-black text-white text-sm">Allow Camera Access</h4>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    Tap the button below or allow camera in browser when prompted.
                   </p>
                 </div>
 
-                {/* Primary Action 1: Native Phone Camera Snapshot (Always Works 100%) */}
-                <div className="w-full max-w-xs space-y-2.5 pt-1">
+                {/* Direct Action Buttons */}
+                <div className="flex flex-col gap-2 w-full max-w-xs pt-1">
                   
-                  <label
-                    htmlFor="nativeCameraSnapshotInput"
-                    className="w-full py-3 px-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white rounded-2xl text-xs font-black shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all text-center border border-blue-400/30"
-                  >
-                    <Camera className="w-4 h-4 text-amber-300" />
-                    <span>📸 Take Photo with Phone Camera</span>
+                  {/* Native Phone Camera Snapshot Button (100% Reliable without permissions) */}
+                  <label className="w-full py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-600/30 active:scale-95 transition-all">
+                    <Camera className="w-4 h-4 text-white" />
+                    <span>📸 Snap Photo with Phone Camera</span>
                     <input
                       type="file"
-                      id="nativeCameraSnapshotInput"
                       accept="image/*"
                       capture="environment"
                       onChange={handleFileUpload}
@@ -495,42 +492,37 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
                     />
                   </label>
 
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => requestCameraPermissionAndStart()}
-                      className="flex-1 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
-                      <span>Retry Permission</span>
-                    </button>
+                  {/* Browser Live Stream Request */}
+                  <button
+                    type="button"
+                    onClick={handleRequestPermission}
+                    className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-95"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Enable Live Video Scanner</span>
+                  </button>
 
-                    <label
-                      htmlFor="galleryPhotoFileInput"
-                      className="flex-1 py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95 text-center"
-                    >
-                      <Upload className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Choose Photo</span>
-                      <input
-                        type="file"
-                        id="galleryPhotoFileInput"
-                        accept="image/*"
-                        onChange={handleFileUpload}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
+                  {/* Gallery Pick */}
+                  <label className="w-full py-2 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer text-center">
+                    <Upload className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Choose from Photo Gallery</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
 
-                  {/* Browser Permission Tip */}
-                  <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-2.5 text-left text-[11px] text-slate-400 space-y-1">
-                    <div className="flex items-center gap-1.5 text-slate-300 font-bold">
-                      <Lock className="w-3 h-3 text-emerald-400" />
-                      <span>How to unblock camera in Chrome:</span>
-                    </div>
-                    <p className="text-[10px] text-slate-400">
-                      Tap the lock 🔒 or site settings icon in the address bar at the top → Permissions → Set Camera to <b>Allow</b>.
-                    </p>
+                {/* Help Note for Chrome/Safari */}
+                <div className="text-[10px] text-slate-400 bg-slate-950/80 p-2.5 rounded-xl border border-slate-800 text-left max-w-xs space-y-1">
+                  <div className="flex items-center gap-1 text-slate-300 font-bold">
+                    <Lock className="w-3 h-3 text-amber-400" />
+                    <span>How to enable in Browser:</span>
                   </div>
+                  <p>1. Tap the <strong>🔒 lock / tune icon</strong> in address bar next to URL.</p>
+                  <p>2. Tap <strong>Permissions ➔ Camera ➔ Allow</strong>.</p>
                 </div>
 
               </div>
@@ -538,27 +530,30 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
 
             {/* Initializing Spinner */}
             {isInitializing && (
-              <div className="absolute top-4 right-4 z-10 bg-slate-900/80 border border-slate-700 text-slate-300 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 shadow-lg backdrop-blur-sm">
+              <div className="absolute top-4 right-4 z-10 bg-slate-900/90 border border-slate-700 text-slate-200 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-2 shadow-lg backdrop-blur-sm">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-400" />
                 <span>Starting camera...</span>
               </div>
             )}
+
+            {/* Scanning File Overlay */}
+            {isScanningFile && (
+              <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm z-30 flex flex-col items-center justify-center text-center p-4">
+                <RefreshCw className="w-8 h-8 animate-spin text-emerald-400 mb-2" />
+                <p className="text-xs font-bold text-white">Analyzing photo for QR / Barcode...</p>
+              </div>
+            )}
           </div>
 
-          {/* 4. Native Phone Snapshot & Gallery Options Strip */}
-          <div className="px-5 py-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
+          {/* Action Toolbar: Native Camera Capture & Gallery */}
+          <div className="px-4 py-2.5 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-2 shrink-0">
             
-            {/* Native Mobile Camera Snap Input */}
-            <label
-              htmlFor="nativeMobileCameraInput"
-              className="py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border border-slate-700 active:scale-95 shadow-sm"
-              title="Snap photo with native phone camera"
-            >
-              <Camera className="w-3.5 h-3.5 text-blue-400" />
-              <span>Take Camera Photo</span>
+            {/* Quick Snap with Phone Camera */}
+            <label className="py-1.5 px-3 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer">
+              <Camera className="w-3.5 h-3.5 text-emerald-400" />
+              <span>📸 Quick Snap</span>
               <input
                 type="file"
-                id="nativeMobileCameraInput"
                 accept="image/*"
                 capture="environment"
                 onChange={handleFileUpload}
@@ -566,6 +561,7 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
               />
             </label>
 
+            {/* Camera Switcher if multiple video inputs */}
             {cameras.length > 1 && (
               <button
                 type="button"
@@ -574,24 +570,21 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
                   const nextIndex = (currentIndex + 1) % cameras.length;
                   const nextCamera = cameras[nextIndex];
                   setSelectedCameraId(nextCamera.id);
-                  requestCameraPermissionAndStart(nextCamera.id);
+                  startScanner(nextCamera.id);
                 }}
-                className="py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border border-slate-700"
+                className="py-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer border border-slate-700"
               >
-                <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
-                <span>Flip ({cameras.length})</span>
+                <RefreshCw className="w-3 h-3 text-blue-400" />
+                <span>Switch ({cameras.length})</span>
               </button>
             )}
 
-            <label
-              htmlFor="galleryUploadInput"
-              className="py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border border-slate-700 ml-auto"
-            >
-              <Upload className="w-3.5 h-3.5 text-emerald-400" />
+            {/* Gallery Upload */}
+            <label className="py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border border-slate-700 ml-auto">
+              <Upload className="w-3.5 h-3.5 text-amber-400" />
               <span>Gallery</span>
               <input
                 type="file"
-                id="galleryUploadInput"
                 accept="image/*"
                 onChange={handleFileUpload}
                 className="hidden"
@@ -599,8 +592,8 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
             </label>
           </div>
 
-          {/* 5. Bottom Manual Entry Fallback */}
-          <div className="p-4 bg-slate-900 border-t border-slate-800/80 shrink-0">
+          {/* Bottom Manual Search Fallback */}
+          <div className="p-3.5 bg-slate-900 border-t border-slate-800/80 shrink-0">
             <form onSubmit={handleManualSubmit} className="flex gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -608,17 +601,17 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
                   type="text"
                   value={manualInput}
                   onChange={(e) => setManualInput(e.target.value)}
-                  placeholder="Or type Job Card No. (e.g. 26-27-3781)..."
+                  placeholder="Or enter Job No. (e.g. 26-27-3781)..."
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-3 py-2 text-xs font-mono text-white placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
                 />
               </div>
               <button
                 type="submit"
                 disabled={!manualInput.trim()}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-md inline-flex items-center gap-1.5 shrink-0 active:scale-95"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-md inline-flex items-center gap-1.5 shrink-0"
               >
                 <Zap className="w-3.5 h-3.5 fill-current text-amber-400" />
-                <span>Find</span>
+                <span>Open</span>
               </button>
             </form>
           </div>
