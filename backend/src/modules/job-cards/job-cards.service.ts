@@ -435,6 +435,37 @@ export class JobCardsService {
     }
 
     if (!jobCard) {
+      // Check if scanned code is a SubJobCard Number (e.g. 26-27-3781-A or 26-27-3781-1)
+      const sub = await db.subJobCard.findFirst({
+        where: { OR: [{ id }, { subJobCardNo: id }] },
+        include: {
+          jobCard: {
+            include: {
+              customerPO: { include: { customer: true } },
+              product: true,
+              processFlowMaster: {
+                include: {
+                  steps: { include: { stage: true }, orderBy: { stepOrder: 'asc' } },
+                },
+              },
+              subJobCards: {
+                include: {
+                  currentStage: true,
+                  movements: { include: { stage: true }, orderBy: { createdAt: 'asc' } },
+                },
+                orderBy: { subJobCardNo: 'asc' },
+              },
+            },
+          },
+        },
+      }).catch(() => null);
+
+      if (sub && sub.jobCard) {
+        jobCard = sub.jobCard;
+      }
+    }
+
+    if (!jobCard) {
       throw new NotFoundException(`Job Card with ID "${id}" not found`);
     }
 
