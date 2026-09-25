@@ -16,6 +16,7 @@ import {
   Sparkles,
   Search,
   Lock,
+  ArrowLeft,
   ArrowRight,
   Maximize2
 } from 'lucide-react';
@@ -41,7 +42,6 @@ export function parseScannedJobCode(rawText: string): string {
   const rfeMatch = clean.match(/^RFE-(?:JC|SJC)-([A-Za-z0-9\-_]+)/i);
   if (rfeMatch && rfeMatch[1]) {
     const rawCode = rfeMatch[1].trim();
-    // Check if there's a trailing timestamp suffix like -8921 on RFE-JC-26-27-3781-8921
     const strippedSuffix = rawCode.match(/^(\d{2}-\d{2}-\d+(?:-[A-Za-z0-9]+)?)-\d{4}$/);
     if (strippedSuffix && strippedSuffix[1]) {
       return strippedSuffix[1];
@@ -97,6 +97,82 @@ export function playScanSuccessBeep() {
   }
 }
 
+// High performance image decoder (native BarcodeDetector + Canvas multi-pass fallback)
+async function decodeImageFile(file: File): Promise<string> {
+  // 1. Try Native Browser BarcodeDetector (Chrome Android / Safari iOS 17+)
+  if (typeof window !== 'undefined' && 'BarcodeDetector' in window) {
+    try {
+      const detector = new (window as any).BarcodeDetector({
+        formats: ['qr_code', 'code_128', 'code_39', 'ean_13', 'upc_a', 'itf']
+      });
+      const bitmap = await createImageBitmap(file);
+      const barcodes = await detector.detect(bitmap);
+      if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
+        return barcodes[0].rawValue;
+      }
+    } catch (e) {
+      console.warn('Native BarcodeDetector pass skipped', e);
+    }
+  }
+
+  // 2. Fallback: Optimize image to 1000px on Canvas then pass to html5-qrcode
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const img = new Image();
+      img.onload = async () => {
+        try {
+          const maxDim = 1000;
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Canvas context error'));
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(async (blob) => {
+            if (!blob) {
+              reject(new Error('Blob conversion failed'));
+              return;
+            }
+            try {
+              const { Html5Qrcode } = await import('html5-qrcode');
+              const tempReader = new Html5Qrcode('rf-qr-reader-viewport', { verbose: false });
+              const optimizedFile = new File([blob], 'scan_optimized.jpg', { type: 'image/jpeg' });
+              const result = await tempReader.scanFile(optimizedFile, true);
+              resolve(result);
+            } catch (err) {
+              reject(err);
+            }
+          }, 'image/jpeg', 0.90);
+
+        } catch (canvasErr) {
+          reject(canvasErr);
+        }
+      };
+      img.onerror = reject;
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 interface LiveCameraScannerModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -105,16 +181,18 @@ interface LiveCameraScannerModalProps {
   subtitle?: string;
 }
 
-type ScanMode = 'ALL' | 'QR' | 'BARCODE';
+type ScanMode = 'QR' | 'BARCODE';
 
 export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
   isOpen,
   onClose,
   onScanSuccess,
-  title = 'Stage & Job Card Scanner',
-  subtitle = 'Scan Physical Traveler Tag QR Code or 1D Barcode'
+  title = 'Scan Job Card',
+  subtitle = 'Choose scanning mode to open camera'
 }) => {
-  const [scanMode, setScanMode] = useState<ScanMode>('ALL');
+  // Step 1: Mode Selection (QR vs Barcode) | Step 2: Live Scanner Active
+  const [selectedMode, setSelectedMode] = useState<ScanMode | null>(null);
+  
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
@@ -140,7 +218,7 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
 
     setScannedResult(cleanCode);
 
-    // Provide visual feedback then call parent callback and close
+    // Provide visual confirmation then call parent callback and close
     setTimeout(() => {
       onScanSuccess(cleanCode, decodedText);
       onClose();
@@ -161,8 +239,8 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
     }
   }, []);
 
-  // Start scanner with specific camera / mode
-  const startScanner = useCallback(async (modeToUse = scanMode, cameraIdToUse = selectedCameraId) => {
+  // Start scanner with specific format
+  const startScanner = useCallback(async (modeToUse: ScanMode, cameraIdToUse?: string) => {
     if (typeof window === 'undefined') return;
     setIsInitializing(true);
     setErrorMessage(null);
@@ -172,20 +250,10 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
 
       const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
 
-      let formatsToSupport: any[] = [
-        Html5QrcodeSupportedFormats.QR_CODE,
-        Html5QrcodeSupportedFormats.CODE_128,
-        Html5QrcodeSupportedFormats.CODE_39,
-        Html5QrcodeSupportedFormats.EAN_13,
-        Html5QrcodeSupportedFormats.EAN_8,
-        Html5QrcodeSupportedFormats.UPC_A,
-        Html5QrcodeSupportedFormats.UPC_E,
-        Html5QrcodeSupportedFormats.ITF,
-      ];
-
+      let formatsToSupport: any[] = [];
       if (modeToUse === 'QR') {
         formatsToSupport = [Html5QrcodeSupportedFormats.QR_CODE];
-      } else if (modeToUse === 'BARCODE') {
+      } else {
         formatsToSupport = [
           Html5QrcodeSupportedFormats.CODE_128,
           Html5QrcodeSupportedFormats.CODE_39,
@@ -212,7 +280,7 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
             const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
             return {
               width: Math.floor(minEdge * 0.85),
-              height: modeToUse === 'BARCODE' ? Math.floor(minEdge * 0.45) : Math.floor(minEdge * 0.75),
+              height: modeToUse === 'BARCODE' ? Math.floor(minEdge * 0.45) : Math.floor(minEdge * 0.80),
             };
           },
           aspectRatio: 1.0,
@@ -242,18 +310,28 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
       setErrorMessage(err?.message || 'Camera permission was not granted by your browser.');
       setIsInitializing(false);
     }
-  }, [scanMode, selectedCameraId, handleSuccess, stopScanner]);
+  }, [handleSuccess, stopScanner]);
 
-  // Mode change handler (switch between Auto, QR, Barcode)
-  const handleModeChange = (newMode: ScanMode) => {
-    setScanMode(newMode);
-    if (isRunningRef.current) {
-      startScanner(newMode, selectedCameraId);
-    }
+  // Handle user picking an option
+  const handleSelectOption = (mode: ScanMode) => {
+    setSelectedMode(mode);
+    setScannedResult(null);
+    setTimeout(() => {
+      startScanner(mode);
+    }, 100);
+  };
+
+  // Back button to return to 2-option selector
+  const handleBackToOptions = async () => {
+    await stopScanner();
+    setSelectedMode(null);
+    setHasCameraPermission(null);
+    setErrorMessage(null);
   };
 
   // Explicit permission request triggered by user button tap
   const handleRequestPermission = async () => {
+    if (!selectedMode) return;
     setIsInitializing(true);
     setErrorMessage(null);
     try {
@@ -263,7 +341,7 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
         });
         stream.getTracks().forEach((t) => t.stop());
       }
-      await startScanner(scanMode, selectedCameraId);
+      await startScanner(selectedMode, selectedCameraId || undefined);
     } catch (err: any) {
       setHasCameraPermission(false);
       setErrorMessage(err?.message || 'Camera access was denied in browser settings.');
@@ -278,41 +356,26 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
 
     setIsScanningFile(true);
     try {
-      const { Html5Qrcode } = await import('html5-qrcode');
-      let localQr = scannerRef.current;
-      if (!localQr) {
-        localQr = new Html5Qrcode(readerElementId, { verbose: false });
-        scannerRef.current = localQr;
-      }
-
-      const decodedText = await localQr.scanFile(file, true);
+      const decodedText = await decodeImageFile(file);
       if (decodedText) {
         handleSuccess(decodedText);
       }
     } catch (err: any) {
-      console.warn('File decode error', err);
-      alert('No QR Code or Barcode detected in this photo. Please ensure the code is well-lit and in clear focus.');
+      console.warn('Image decode error', err);
+      alert('Could not detect a clear code in this photo. Please ensure the QR code or Barcode is well-lit and in focus, or scan live using the camera.');
     } finally {
       setIsScanningFile(false);
     }
   };
 
-  // Modal open/close lifecycle (Runs only when isOpen changes to prevent flickering)
+  // Modal open/close lifecycle
   useEffect(() => {
-    let timer: any = null;
-    if (isOpen) {
+    if (!isOpen) {
+      stopScanner();
+      setSelectedMode(null);
       setScannedResult(null);
-      timer = setTimeout(() => {
-        startScanner(scanMode);
-      }, 120);
-    } else {
-      stopScanner();
     }
-    return () => {
-      if (timer) clearTimeout(timer);
-      stopScanner();
-    };
-  }, [isOpen]); // Only depend on isOpen to avoid constant flicker
+  }, [isOpen, stopScanner]);
 
   // Manual search submit
   const handleManualSubmit = (e: React.FormEvent) => {
@@ -326,28 +389,44 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
 
   return (
     <Portal>
-      <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-150">
+      <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-150 font-sans text-slate-900">
         
-        {/* Main Clean Modal Container */}
-        <div className="relative w-full max-w-lg bg-white border border-slate-200/90 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[94vh] font-sans text-slate-900">
+        {/* Main Modal Box */}
+        <div className="relative w-full max-w-lg bg-white border border-slate-200/90 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[94vh]">
           
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-3.5 bg-slate-50/90 border-b border-slate-200/80 shrink-0">
+          <div className="flex items-center justify-between px-5 py-4 bg-slate-50/90 border-b border-slate-200/80 shrink-0">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shadow-xs shrink-0">
-                <Scan className="w-5 h-5 stroke-[2.5]" />
-              </div>
+              {selectedMode ? (
+                <button
+                  type="button"
+                  onClick={handleBackToOptions}
+                  className="w-9 h-9 rounded-xl bg-white hover:bg-slate-200 text-slate-700 border border-slate-200 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95 shrink-0"
+                  title="Back to options"
+                >
+                  <ArrowLeft className="w-4 h-4 stroke-[2.5]" />
+                </button>
+              ) : (
+                <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shadow-xs shrink-0">
+                  <Scan className="w-5 h-5 stroke-[2.5]" />
+                </div>
+              )}
+
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-extrabold text-slate-900 text-sm tracking-tight truncate">
-                    {title}
+                  <h3 className="font-black text-slate-900 text-sm sm:text-base tracking-tight truncate">
+                    {selectedMode === 'QR' ? '📱 QR Code Scanner' : selectedMode === 'BARCODE' ? '🏷️ Barcode Scanner' : 'Select Scan Option'}
                   </h3>
                   <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live DB
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-500 font-medium truncate">
-                  {subtitle}
+                  {selectedMode === 'QR' 
+                    ? 'Point camera at Traveler Tag QR code' 
+                    : selectedMode === 'BARCODE' 
+                    ? 'Point camera at printed 1D Barcode' 
+                    : 'Choose your scan method below'}
                 </p>
               </div>
             </div>
@@ -361,243 +440,285 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
             </button>
           </div>
 
-          {/* Mode Selector Tabs (Theme Clean) */}
-          <div className="px-5 pt-3 pb-2 bg-white border-b border-slate-100 shrink-0">
-            <div className="grid grid-cols-3 gap-1.5 bg-slate-100/80 p-1 rounded-2xl border border-slate-200/80">
+          {/* SCREEN 1: 2-OPTION SELECTION SCREEN (Simple & Clean) */}
+          {!selectedMode ? (
+            <div className="p-5 sm:p-6 space-y-4 overflow-y-auto">
               
-              <button
-                type="button"
-                onClick={() => handleModeChange('ALL')}
-                className={`py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  scanMode === 'ALL'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-                }`}
-              >
-                <Zap className="w-3.5 h-3.5 fill-current text-amber-300" />
-                <span className="truncate">Auto (Both)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleModeChange('QR')}
-                className={`py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  scanMode === 'QR'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-                }`}
-              >
-                <QrCode className="w-3.5 h-3.5" />
-                <span className="truncate">QR Code</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleModeChange('BARCODE')}
-                className={`py-1.5 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                  scanMode === 'BARCODE'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
-                }`}
-              >
-                <Barcode className="w-3.5 h-3.5" />
-                <span className="truncate">Barcode 1D</span>
-              </button>
-
-            </div>
-          </div>
-
-          {/* Camera Viewfinder Box */}
-          <div className="p-4 bg-slate-50/50 flex-1 flex flex-col items-center justify-center min-h-[290px]">
-            
-            <div className="relative w-full rounded-2xl overflow-hidden bg-slate-950 aspect-video sm:aspect-square flex items-center justify-center shadow-inner border border-slate-800">
-              
-              {/* Video Element */}
-              <div 
-                id={readerElementId} 
-                className="w-full h-full flex items-center justify-center overflow-hidden [&_video]:w-full [&_video]:h-full [&_video]:object-cover"
-              />
-
-              {/* Viewfinder Target Guidelines */}
-              {!scannedResult && hasCameraPermission === true && (
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                  <div className={`relative border-2 border-dashed ${
-                    scanMode === 'BARCODE' 
-                      ? 'w-72 sm:w-80 h-28 border-amber-400' 
-                      : 'w-56 sm:w-64 h-56 sm:h-64 border-blue-400'
-                  } rounded-2xl transition-all duration-200 shadow-[0_0_0_9999px_rgba(15,23,42,0.55)]`}>
-                    
-                    {/* Corner Guides */}
-                    <div className="absolute -top-1 -left-1 w-5 h-5 border-t-4 border-l-4 border-blue-400 rounded-tl-lg" />
-                    <div className="absolute -top-1 -right-1 w-5 h-5 border-t-4 border-r-4 border-blue-400 rounded-tr-lg" />
-                    <div className="absolute -bottom-1 -left-1 w-5 h-5 border-b-4 border-l-4 border-blue-400 rounded-bl-lg" />
-                    <div className="absolute -bottom-1 -right-1 w-5 h-5 border-b-4 border-r-4 border-blue-400 rounded-br-lg" />
-
-                    {/* Scanning Beam */}
-                    <div className="absolute inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent shadow-[0_0_12px_#38bdf8] animate-pulse top-1/2 -translate-y-1/2" />
-                    
-                    <div className="absolute -bottom-6 inset-x-0 text-center">
-                      <span className="text-[10px] font-bold text-white bg-slate-900/90 px-2.5 py-0.5 rounded-md border border-slate-700 shadow-sm whitespace-nowrap">
-                        Align {scanMode === 'BARCODE' ? 'Barcode' : scanMode === 'QR' ? 'QR Code' : 'QR / Barcode'} inside box
-                      </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                
+                {/* Option 1: QR Code Scanner */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectOption('QR')}
+                  className="group relative p-5 bg-gradient-to-br from-blue-50/70 via-white to-blue-50/30 hover:to-blue-100/50 border-2 border-blue-200/90 hover:border-blue-500 rounded-2xl text-left transition-all duration-200 shadow-xs hover:shadow-md cursor-pointer flex flex-col justify-between space-y-4 active:scale-[0.98]"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/30 group-hover:scale-105 transition-transform">
+                      <QrCode className="w-6 h-6 stroke-[2.2]" />
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Scan Success Animation */}
-              {scannedResult && (
-                <div className="absolute inset-0 bg-emerald-950/95 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center animate-in zoom-in-95 duration-150 z-20">
-                  <div className="w-14 h-14 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 mb-2.5 animate-bounce">
-                    <CheckCircle2 className="w-9 h-9 stroke-[2.5]" />
-                  </div>
-                  <h4 className="text-xl font-black text-white font-mono tracking-tight">
-                    {scannedResult}
-                  </h4>
-                  <p className="text-xs font-bold text-emerald-300 mt-1">
-                    Job Card Detected! Fetching Live Database Details...
-                  </p>
-                </div>
-              )}
-
-              {/* Camera Permission Required View */}
-              {hasCameraPermission === false && (
-                <div className="absolute inset-0 bg-slate-900/95 p-5 flex flex-col items-center justify-center text-center space-y-3 z-10">
-                  
-                  <div className="w-11 h-11 rounded-2xl bg-blue-500/20 border border-blue-500/30 text-blue-400 flex items-center justify-center shrink-0">
-                    <Camera className="w-6 h-6 animate-pulse" />
+                    <span className="px-2.5 py-1 rounded-lg bg-blue-100 text-blue-800 text-[10px] font-black uppercase tracking-wider">
+                      2D QR
+                    </span>
                   </div>
 
-                  <div className="max-w-xs space-y-1">
-                    <h4 className="font-extrabold text-white text-sm">Camera Permission Needed</h4>
-                    <p className="text-[11px] text-slate-300 leading-relaxed">
-                      Tap below to take a photo directly or allow live video in your browser.
+                  <div>
+                    <h4 className="font-black text-slate-900 text-base tracking-tight group-hover:text-blue-600 transition-colors">
+                      QR Code Scan
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-1 font-medium leading-relaxed">
+                      Scan printed Traveler Tag QR code to fetch live specs & stage.
                     </p>
                   </div>
 
-                  {/* Direct Native Photo Snapshot Button */}
-                  <div className="w-full max-w-xs space-y-2 pt-1">
-                    <label className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-95 transition-all">
-                      <Camera className="w-4 h-4 text-white" />
-                      <span>📸 Snap Photo with Mobile Camera</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        onChange={handleFileUpload}
-                        className="hidden"
-                      />
-                    </label>
+                  <div className="pt-1 flex items-center gap-1.5 text-xs font-bold text-blue-600 group-hover:translate-x-1 transition-transform">
+                    <span>Open Camera</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </div>
+                </button>
 
-                    <button
-                      type="button"
-                      onClick={handleRequestPermission}
-                      className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Enable Live Camera Stream</span>
-                    </button>
+                {/* Option 2: Barcode Scanner */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectOption('BARCODE')}
+                  className="group relative p-5 bg-gradient-to-br from-indigo-50/70 via-white to-amber-50/30 hover:to-indigo-100/50 border-2 border-indigo-200/90 hover:border-indigo-500 rounded-2xl text-left transition-all duration-200 shadow-xs hover:shadow-md cursor-pointer flex flex-col justify-between space-y-4 active:scale-[0.98]"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/30 group-hover:scale-105 transition-transform">
+                      <Barcode className="w-6 h-6 stroke-[2.2]" />
+                    </div>
+                    <span className="px-2.5 py-1 rounded-lg bg-indigo-100 text-indigo-800 text-[10px] font-black uppercase tracking-wider">
+                      1D Code-128
+                    </span>
                   </div>
 
-                  <div className="text-[10px] text-slate-400 bg-slate-950/90 p-2 rounded-xl border border-slate-800 text-left max-w-xs">
-                    <p className="text-slate-300 font-bold mb-0.5">💡 To allow in Chrome / Safari:</p>
-                    <p>Tap <strong>🔒 Lock / Settings icon</strong> in URL bar ➔ <strong>Camera ➔ Allow</strong>.</p>
+                  <div>
+                    <h4 className="font-black text-slate-900 text-base tracking-tight group-hover:text-indigo-600 transition-colors">
+                      Barcode Scan
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-1 font-medium leading-relaxed">
+                      Scan 1D barcode strip on Job Card (e.g. *26-27-3781*).
+                    </p>
                   </div>
 
-                </div>
-              )}
+                  <div className="pt-1 flex items-center gap-1.5 text-xs font-bold text-indigo-600 group-hover:translate-x-1 transition-transform">
+                    <span>Open Camera</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </div>
+                </button>
 
-              {/* Initializing Spinner */}
-              {isInitializing && (
-                <div className="absolute top-3 right-3 z-10 bg-slate-900/90 text-white px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1.5 shadow-md">
-                  <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />
-                  <span>Starting...</span>
-                </div>
-              )}
+              </div>
 
-              {/* Scanning Image File Indicator */}
-              {isScanningFile && (
-                <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-xs z-30 flex flex-col items-center justify-center text-center p-4">
-                  <RefreshCw className="w-7 h-7 animate-spin text-emerald-400 mb-2" />
-                  <p className="text-xs font-bold text-white">Scanning photo for Job Card Code...</p>
+              {/* Direct Photo Capture & Manual Search Box */}
+              <div className="pt-2 border-t border-slate-100 space-y-3">
+                
+                <div className="flex items-center gap-2">
+                  <label className="flex-1 py-2.5 px-3.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs">
+                    <Camera className="w-4 h-4 text-emerald-600" />
+                    <span>📸 Snap Photo with Mobile Camera</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+
+                  <label className="py-2.5 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs">
+                    <Upload className="w-4 h-4 text-slate-600" />
+                    <span>Gallery</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                  </label>
                 </div>
-              )}
+
+                {/* Manual Job No Search */}
+                <form onSubmit={handleManualSubmit} className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      value={manualInput}
+                      onChange={(e) => setManualInput(e.target.value)}
+                      placeholder="Or enter Job Card No. (e.g. 26-27-3781)..."
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-mono font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white shadow-2xs"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={!manualInput.trim()}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-black text-xs rounded-xl transition-all cursor-pointer shadow-xs inline-flex items-center gap-1.5 shrink-0"
+                  >
+                    <Zap className="w-3.5 h-3.5 fill-current text-amber-300" />
+                    <span>Find</span>
+                  </button>
+                </form>
+
+              </div>
 
             </div>
-
-          </div>
-
-          {/* Quick Actions Strip (Native Camera Snapshot & Gallery Upload) */}
-          <div className="px-5 py-2.5 bg-slate-50 border-t border-slate-200/80 flex items-center justify-between gap-2 shrink-0">
-            
-            {/* Quick Camera Snapshot Button */}
-            <label className="py-1.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs">
-              <Camera className="w-3.5 h-3.5 text-emerald-600" />
-              <span>📸 Quick Snap</span>
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-            </label>
-
-            {/* Switch Camera if multiple cameras available */}
-            {cameras.length > 1 && (
-              <button
-                type="button"
-                onClick={() => {
-                  const currentIndex = cameras.findIndex((c) => c.id === selectedCameraId);
-                  const nextIndex = (currentIndex + 1) % cameras.length;
-                  const nextCamera = cameras[nextIndex];
-                  setSelectedCameraId(nextCamera.id);
-                  startScanner(scanMode, nextCamera.id);
-                }}
-                className="py-1.5 px-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
-              >
-                <RefreshCw className="w-3 h-3 text-blue-600" />
-                <span>Switch ({cameras.length})</span>
-              </button>
-            )}
-
-            {/* Choose from Gallery */}
-            <label className="py-1.5 px-3 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs ml-auto">
-              <Upload className="w-3.5 h-3.5 text-slate-500" />
-              <span>Gallery</span>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-            </label>
-
-          </div>
-
-          {/* Bottom Manual Search Form */}
-          <div className="p-3.5 bg-white border-t border-slate-200 shrink-0">
-            <form onSubmit={handleManualSubmit} className="flex gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  value={manualInput}
-                  onChange={(e) => setManualInput(e.target.value)}
-                  placeholder="Or enter Job Card No. (e.g. 26-27-3781)..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs font-mono font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white shadow-2xs"
+          ) : (
+            /* SCREEN 2: ACTIVE CAMERA SCANNER (Clean & Direct) */
+            <div className="flex-1 flex flex-col p-4 bg-slate-50/50 space-y-3">
+              
+              <div className="relative w-full rounded-2xl overflow-hidden bg-slate-950 aspect-video sm:aspect-square flex items-center justify-center shadow-inner border border-slate-800">
+                
+                {/* Video Viewport Container */}
+                <div 
+                  id={readerElementId} 
+                  className="w-full h-full flex items-center justify-center overflow-hidden [&_video]:w-full [&_video]:h-full [&_video]:object-cover"
                 />
+
+                {/* Target Guidelines Overlay */}
+                {!scannedResult && hasCameraPermission === true && (
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <div className={`relative border-2 border-dashed ${
+                      selectedMode === 'BARCODE' 
+                        ? 'w-72 sm:w-80 h-28 border-amber-400' 
+                        : 'w-56 sm:w-64 h-56 sm:h-64 border-blue-400'
+                    } rounded-2xl transition-all duration-200 shadow-[0_0_0_9999px_rgba(15,23,42,0.55)]`}>
+                      
+                      {/* Corner Guides */}
+                      <div className="absolute -top-1 -left-1 w-5 h-5 border-t-4 border-l-4 border-blue-400 rounded-tl-lg" />
+                      <div className="absolute -top-1 -right-1 w-5 h-5 border-t-4 border-r-4 border-blue-400 rounded-tr-lg" />
+                      <div className="absolute -bottom-1 -left-1 w-5 h-5 border-b-4 border-l-4 border-blue-400 rounded-bl-lg" />
+                      <div className="absolute -bottom-1 -right-1 w-5 h-5 border-b-4 border-r-4 border-blue-400 rounded-br-lg" />
+
+                      {/* Laser Beam */}
+                      <div className="absolute inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent shadow-[0_0_12px_#38bdf8] animate-pulse top-1/2 -translate-y-1/2" />
+                      
+                      <div className="absolute -bottom-6 inset-x-0 text-center">
+                        <span className="text-[10px] font-bold text-white bg-slate-900/90 px-2.5 py-0.5 rounded-md border border-slate-700 shadow-sm whitespace-nowrap">
+                          Align {selectedMode === 'BARCODE' ? 'Barcode' : 'QR Code'} inside box
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Scan Success Animation */}
+                {scannedResult && (
+                  <div className="absolute inset-0 bg-emerald-950/95 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center animate-in zoom-in-95 duration-150 z-20">
+                    <div className="w-14 h-14 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 mb-2.5 animate-bounce">
+                      <CheckCircle2 className="w-9 h-9 stroke-[2.5]" />
+                    </div>
+                    <h4 className="text-xl font-black text-white font-mono tracking-tight">
+                      {scannedResult}
+                    </h4>
+                    <p className="text-xs font-bold text-emerald-300 mt-1">
+                      Job Card Detected! Fetching Live Database Details...
+                    </p>
+                  </div>
+                )}
+
+                {/* Camera Permission Screen */}
+                {hasCameraPermission === false && (
+                  <div className="absolute inset-0 bg-slate-900/95 p-5 flex flex-col items-center justify-center text-center space-y-3 z-10">
+                    
+                    <div className="w-11 h-11 rounded-2xl bg-blue-500/20 border border-blue-500/30 text-blue-400 flex items-center justify-center shrink-0">
+                      <Camera className="w-6 h-6 animate-pulse" />
+                    </div>
+
+                    <div className="max-w-xs space-y-1">
+                      <h4 className="font-extrabold text-white text-sm">Camera Permission Needed</h4>
+                      <p className="text-[11px] text-slate-300 leading-relaxed">
+                        Tap below to snap a photo directly or allow live video stream.
+                      </p>
+                    </div>
+
+                    <div className="w-full max-w-xs space-y-2 pt-1">
+                      <label className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-95 transition-all">
+                        <Camera className="w-4 h-4 text-white" />
+                        <span>📸 Snap Photo with Mobile Camera</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                        />
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={handleRequestPermission}
+                        className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Enable Live Camera Stream</span>
+                      </button>
+                    </div>
+
+                  </div>
+                )}
+
+                {/* Initializing Spinner */}
+                {isInitializing && (
+                  <div className="absolute top-3 right-3 z-10 bg-slate-900/90 text-white px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1.5 shadow-md">
+                    <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />
+                    <span>Starting camera...</span>
+                  </div>
+                )}
+
+                {/* Decoding File Indicator */}
+                {isScanningFile && (
+                  <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-xs z-30 flex flex-col items-center justify-center text-center p-4">
+                    <RefreshCw className="w-7 h-7 animate-spin text-emerald-400 mb-2" />
+                    <p className="text-xs font-bold text-white">Analyzing photo for Job Card...</p>
+                  </div>
+                )}
+
               </div>
-              <button
-                type="submit"
-                disabled={!manualInput.trim()}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-black text-xs rounded-xl transition-all cursor-pointer shadow-xs inline-flex items-center gap-1.5 shrink-0 active:scale-95"
-              >
-                <Zap className="w-3.5 h-3.5 fill-current text-amber-300" />
-                <span>Find & Move</span>
-              </button>
-            </form>
-          </div>
+
+              {/* Bottom Action Strip */}
+              <div className="flex items-center justify-between gap-2 pt-1">
+                
+                <button
+                  type="button"
+                  onClick={handleBackToOptions}
+                  className="py-2 px-3 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Switch Mode</span>
+                </button>
+
+                <label className="py-2 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs">
+                  <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>📸 Snap Photo</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                </label>
+
+                {cameras.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const currentIndex = cameras.findIndex((c) => c.id === selectedCameraId);
+                      const nextIndex = (currentIndex + 1) % cameras.length;
+                      const nextCamera = cameras[nextIndex];
+                      setSelectedCameraId(nextCamera.id);
+                      if (selectedMode) startScanner(selectedMode, nextCamera.id);
+                    }}
+                    className="py-2 px-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                  >
+                    <RefreshCw className="w-3 h-3 text-blue-600" />
+                    <span>Flip</span>
+                  </button>
+                )}
+
+              </div>
+
+            </div>
+          )}
 
         </div>
 
