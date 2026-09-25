@@ -202,9 +202,10 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
   const [isScanningFile, setIsScanningFile] = useState(false);
 
-  const scannerRef = useRef<any>(null);
-  const isRunningRef = useRef(false);
-  const readerElementId = 'rf-qr-reader-viewport';
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const isScanningActiveRef = useRef(false);
 
   // Handler for successful scan
   const handleSuccess = useCallback((decodedText: string) => {
@@ -218,6 +219,12 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
 
     setScannedResult(cleanCode);
 
+    // Stop scanning loop
+    isScanningActiveRef.current = false;
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+
     // Provide visual confirmation then call parent callback and close
     setTimeout(() => {
       onScanSuccess(cleanCode, decodedText);
@@ -225,128 +232,169 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
     }, 450);
   }, [onScanSuccess, onClose]);
 
-  // Cleanly stop scanner instance
-  const stopScanner = useCallback(async () => {
-    if (scannerRef.current && isRunningRef.current) {
-      try {
-        await scannerRef.current.stop();
-        scannerRef.current.clear();
-      } catch (e) {
-        console.warn('Error stopping scanner', e);
-      } finally {
-        isRunningRef.current = false;
-      }
+  // Cleanly stop video tracks
+  const stopLiveCameraStream = useCallback(() => {
+    isScanningActiveRef.current = false;
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch {}
+      });
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
   }, []);
 
-  // Start scanner with specific format
-  const startScanner = useCallback(async (modeToUse: ScanMode, cameraIdToUse?: string) => {
-    if (typeof window === 'undefined') return;
-    setIsInitializing(true);
-    setErrorMessage(null);
+  // Continuous frame analysis engine using Native BarcodeDetector or Canvas Decoder
+  const startFrameAnalysis = useCallback((mode: ScanMode) => {
+    if (!videoRef.current) return;
+    isScanningActiveRef.current = true;
 
-    try {
-      await stopScanner();
+    // Check Native BarcodeDetector
+    const hasBarcodeDetector = typeof window !== 'undefined' && 'BarcodeDetector' in window;
+    let nativeDetector: any = null;
 
-      const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
+    if (hasBarcodeDetector) {
+      try {
+        const formats = mode === 'QR' 
+          ? ['qr_code'] 
+          : ['code_128', 'code_39', 'ean_13', 'upc_a', 'itf'];
+        nativeDetector = new (window as any).BarcodeDetector({ formats });
+      } catch (e) {
+        console.warn('Native BarcodeDetector init failed', e);
+      }
+    }
 
-      let formatsToSupport: any[] = [];
-      if (modeToUse === 'QR') {
-        formatsToSupport = [Html5QrcodeSupportedFormats.QR_CODE];
-      } else {
-        formatsToSupport = [
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.CODE_39,
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.UPC_A,
-        ];
+    // Hidden canvas for fallback frame capture
+    const hiddenCanvas = document.createElement('canvas');
+    const hiddenCtx = hiddenCanvas.getContext('2d', { willReadFrequently: true });
+
+    let lastScanTime = 0;
+
+    const analyzeFrame = async (timestamp: number) => {
+      if (!isScanningActiveRef.current || !videoRef.current) return;
+
+      // Throttle scanning to every 120ms (approx 8-10fps) for battery efficiency
+      if (timestamp - lastScanTime > 120 && videoRef.current.readyState >= 2) {
+        lastScanTime = timestamp;
+        const video = videoRef.current;
+
+        try {
+          // 1. Try Native BarcodeDetector
+          if (nativeDetector) {
+            const detected = await nativeDetector.detect(video);
+            if (detected && detected.length > 0 && detected[0].rawValue) {
+              handleSuccess(detected[0].rawValue);
+              return;
+            }
+          } else {
+            // 2. HTML5 Qrcode fallback via canvas
+            if (video.videoWidth > 0 && video.videoHeight > 0 && hiddenCtx) {
+              hiddenCanvas.width = video.videoWidth;
+              hiddenCanvas.height = video.videoHeight;
+              hiddenCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+              
+              hiddenCanvas.toBlob(async (blob) => {
+                if (blob && isScanningActiveRef.current) {
+                  try {
+                    const { Html5Qrcode } = await import('html5-qrcode');
+                    const tempReader = new Html5Qrcode('rf-qr-reader-viewport', { verbose: false });
+                    const file = new File([blob], 'frame.jpg', { type: 'image/jpeg' });
+                    const res = await tempReader.scanFile(file, false);
+                    if (res && isScanningActiveRef.current) {
+                      handleSuccess(res);
+                    }
+                  } catch {}
+                }
+              }, 'image/jpeg', 0.85);
+            }
+          }
+        } catch (scanErr) {
+          // Frame tick error ignored
+        }
       }
 
-      const html5QrCode = new Html5Qrcode(readerElementId, {
-        formatsToSupport,
-        verbose: false,
-      });
-      scannerRef.current = html5QrCode;
+      if (isScanningActiveRef.current) {
+        animationFrameRef.current = requestAnimationFrame(analyzeFrame);
+      }
+    };
 
-      const cameraConfig = cameraIdToUse 
-        ? { deviceId: { exact: cameraIdToUse } } 
-        : { facingMode: 'environment' };
+    animationFrameRef.current = requestAnimationFrame(analyzeFrame);
+  }, [handleSuccess]);
 
-      await html5QrCode.start(
-        cameraConfig,
-        {
-          fps: 15,
-          qrbox: (viewfinderWidth, viewfinderHeight) => {
-            const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-            return {
-              width: Math.floor(minEdge * 0.85),
-              height: modeToUse === 'BARCODE' ? Math.floor(minEdge * 0.45) : Math.floor(minEdge * 0.80),
-            };
-          },
-          aspectRatio: 1.0,
-        },
-        (decodedText) => {
-          handleSuccess(decodedText);
-        },
-        () => {}
-      );
+  // Start direct camera stream from user click (prompts browser permission immediately)
+  const startLiveCamera = useCallback(async (mode: ScanMode, deviceId?: string) => {
+    setIsInitializing(true);
+    setErrorMessage(null);
+    stopLiveCameraStream();
 
-      isRunningRef.current = true;
+    try {
+      const constraints: MediaStreamConstraints = {
+        audio: false,
+        video: deviceId 
+          ? { deviceId: { exact: deviceId } }
+          : { 
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            }
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+
       setHasCameraPermission(true);
       setIsInitializing(false);
 
-      // Enumerate available cameras once stream is live
+      // Start frame scanning loop
+      startFrameAnalysis(mode);
+
+      // Query cameras for switcher
       try {
-        const devices = await Html5Qrcode.getCameras();
-        if (devices && devices.length > 0) {
-          setCameras(devices);
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter((d) => d.kind === 'videoinput');
+        if (videoDevices.length > 0) {
+          setCameras(videoDevices);
         }
       } catch {}
 
     } catch (err: any) {
-      console.warn('Live scanner initialization error:', err);
-      isRunningRef.current = false;
+      console.warn('getUserMedia error:', err);
       setHasCameraPermission(false);
-      setErrorMessage(err?.message || 'Camera permission was not granted by your browser.');
+      setErrorMessage(err?.message || 'Camera permission was denied. Please allow camera access in your browser.');
       setIsInitializing(false);
     }
-  }, [handleSuccess, stopScanner]);
+  }, [stopLiveCameraStream, startFrameAnalysis]);
 
-  // Handle user picking an option
+  // Direct user click on QR or Barcode option
   const handleSelectOption = (mode: ScanMode) => {
     setSelectedMode(mode);
     setScannedResult(null);
-    setTimeout(() => {
-      startScanner(mode);
-    }, 100);
+    setHasCameraPermission(null);
+    
+    // Directly request camera stream in this user-click event turn!
+    startLiveCamera(mode);
   };
 
   // Back button to return to 2-option selector
-  const handleBackToOptions = async () => {
-    await stopScanner();
+  const handleBackToOptions = () => {
+    stopLiveCameraStream();
     setSelectedMode(null);
     setHasCameraPermission(null);
     setErrorMessage(null);
-  };
-
-  // Explicit permission request triggered by user button tap
-  const handleRequestPermission = async () => {
-    if (!selectedMode) return;
-    setIsInitializing(true);
-    setErrorMessage(null);
-    try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { facingMode: { ideal: 'environment' } } 
-        });
-        stream.getTracks().forEach((t) => t.stop());
-      }
-      await startScanner(selectedMode, selectedCameraId || undefined);
-    } catch (err: any) {
-      setHasCameraPermission(false);
-      setErrorMessage(err?.message || 'Camera access was denied in browser settings.');
-      setIsInitializing(false);
-    }
+    setScannedResult(null);
   };
 
   // File Upload / Instant Camera Snapshot Handler
@@ -362,7 +410,7 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
       }
     } catch (err: any) {
       console.warn('Image decode error', err);
-      alert('Could not detect a clear code in this photo. Please ensure the QR code or Barcode is well-lit and in focus, or scan live using the camera.');
+      alert('Could not detect a clear code in this photo. Please make sure the code is well-lit and in focus.');
     } finally {
       setIsScanningFile(false);
     }
@@ -371,11 +419,18 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
   // Modal open/close lifecycle
   useEffect(() => {
     if (!isOpen) {
-      stopScanner();
+      stopLiveCameraStream();
       setSelectedMode(null);
       setScannedResult(null);
     }
-  }, [isOpen, stopScanner]);
+  }, [isOpen, stopLiveCameraStream]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopLiveCameraStream();
+    };
+  }, [stopLiveCameraStream]);
 
   // Manual search submit
   const handleManualSubmit = (e: React.FormEvent) => {
@@ -391,6 +446,9 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
     <Portal>
       <div className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm animate-in fade-in duration-150 font-sans text-slate-900">
         
+        {/* Hidden Container for fallback html5-qrcode file decoding */}
+        <div id="rf-qr-reader-viewport" className="hidden" />
+
         {/* Main Modal Box */}
         <div className="relative w-full max-w-lg bg-white border border-slate-200/90 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[94vh]">
           
@@ -440,7 +498,7 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
             </button>
           </div>
 
-          {/* SCREEN 1: 2-OPTION SELECTION SCREEN (Simple & Clean) */}
+          {/* SCREEN 1: 2-OPTION SELECTION SCREEN (Clean & Simple) */}
           {!selectedMode ? (
             <div className="p-5 sm:p-6 space-y-4 overflow-y-auto">
               
@@ -562,15 +620,18 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
 
             </div>
           ) : (
-            /* SCREEN 2: ACTIVE CAMERA SCANNER (Clean & Direct) */
+            /* SCREEN 2: ACTIVE LIVE WEBRTC CAMERA SCANNER */
             <div className="flex-1 flex flex-col p-4 bg-slate-50/50 space-y-3">
               
               <div className="relative w-full rounded-2xl overflow-hidden bg-slate-950 aspect-video sm:aspect-square flex items-center justify-center shadow-inner border border-slate-800">
                 
-                {/* Video Viewport Container */}
-                <div 
-                  id={readerElementId} 
-                  className="w-full h-full flex items-center justify-center overflow-hidden [&_video]:w-full [&_video]:h-full [&_video]:object-cover"
+                {/* Native HTML5 Video Stream */}
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
                 />
 
                 {/* Target Guidelines Overlay */}
@@ -615,7 +676,7 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
                   </div>
                 )}
 
-                {/* Camera Permission Screen */}
+                {/* Camera Permission Screen Fallback */}
                 {hasCameraPermission === false && (
                   <div className="absolute inset-0 bg-slate-900/95 p-5 flex flex-col items-center justify-center text-center space-y-3 z-10">
                     
@@ -626,7 +687,7 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
                     <div className="max-w-xs space-y-1">
                       <h4 className="font-extrabold text-white text-sm">Camera Permission Needed</h4>
                       <p className="text-[11px] text-slate-300 leading-relaxed">
-                        Tap below to snap a photo directly or allow live video stream.
+                        Tap below to take a photo directly or allow live video stream.
                       </p>
                     </div>
 
@@ -645,7 +706,7 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
 
                       <button
                         type="button"
-                        onClick={handleRequestPermission}
+                        onClick={() => selectedMode && startLiveCamera(selectedMode)}
                         className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
@@ -702,11 +763,11 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      const currentIndex = cameras.findIndex((c) => c.id === selectedCameraId);
+                      const currentIndex = cameras.findIndex((c) => c.deviceId === selectedCameraId);
                       const nextIndex = (currentIndex + 1) % cameras.length;
                       const nextCamera = cameras[nextIndex];
-                      setSelectedCameraId(nextCamera.id);
-                      if (selectedMode) startScanner(selectedMode, nextCamera.id);
+                      setSelectedCameraId(nextCamera.deviceId);
+                      if (selectedMode) startLiveCamera(selectedMode, nextCamera.deviceId);
                     }}
                     className="py-2 px-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
                   >
