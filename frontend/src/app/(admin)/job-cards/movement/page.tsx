@@ -457,16 +457,20 @@ export default function JobMovementUpdatePage() {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const targetEndpoint = encodeURIComponent(jobId && !jobId.startsWith('jc-part-') ? jobId : jobCardNo);
 
-        let res = await fetch(`${getApiBaseUrl()}/job-cards/${jobId}/move-stage`, {
+        let res = await fetch(`${getApiBaseUrl()}/job-cards/${targetEndpoint}/move-stage`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({
+            cardId: jobId && !jobId.startsWith('jc-part-') ? jobId : undefined,
             jobCardNo: jobCardNo,
+            subJobCardNo: (selectedJob as any).subJobCardNo || jobCardNo,
+            currentStageName: selectedJob.currentStageName,
             rejectPcbQty: actualRejected,
             remark: actualRejected > 0
               ? `Rejection: ${actualRejected} PCBs rejected. Reason: ${effectiveReason}`
@@ -477,11 +481,19 @@ export default function JobMovementUpdatePage() {
         });
         clearTimeout(timeoutId);
 
-        if (!res.ok) {
+        if (res.ok) {
+          inFlightMovements.current.delete(jobId);
+          inFlightMovements.current.delete(jobCardNo);
+          await fetchMovementJobs();
+        } else {
+          inFlightMovements.current.delete(jobId);
+          inFlightMovements.current.delete(jobCardNo);
           const errText = await res.text().catch(() => '');
           console.warn(`Backend Stage Move Alert (${res.status}): ${errText.slice(0, 80) || res.statusText}`);
         }
       } catch (e: any) {
+        inFlightMovements.current.delete(jobId);
+        inFlightMovements.current.delete(jobCardNo);
         console.warn(`Backend API unavailable: ${e?.message || 'Network error'}`);
       }
     })();

@@ -1923,10 +1923,15 @@ export class JobCardsService {
   }
 
   async moveFull(id: string, body: { id?: string; cardId?: string; jobId?: string; jobCardNo?: string; subJobCardNo?: string; rejectPcbQty?: number; rejectQty?: number; remark?: string; remarkType?: string; status?: string } | any, user: any) {
-    const cardId = (body?.cardId || body?.id || id || '').trim();
-    const subJobCardNo = (body?.subJobCardNo || id || '').trim();
-    const rawTarget = (id || body?.cardId || body?.id || body?.jobId || body?.subJobCardNo || body?.jobCardNo || '').trim();
-    const searchNo = (body?.jobCardNo || rawTarget || '').trim();
+    const cleanStr = (val?: string) => {
+      const s = (val || '').trim();
+      return s.startsWith('jc-part-') || s.startsWith('init-') ? '' : s;
+    };
+    const cardId = cleanStr(body?.cardId || body?.id || id);
+    const subJobCardNo = cleanStr(body?.subJobCardNo || id);
+    const jobCardNo = cleanStr(body?.jobCardNo);
+    const rawTarget = cleanStr(id) || cardId || subJobCardNo || jobCardNo || (body?.jobCardNo || '').trim();
+    const searchNo = jobCardNo || rawTarget;
 
     const isUuidTarget = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cardId) ||
                          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawTarget);
@@ -1939,7 +1944,7 @@ export class JobCardsService {
     if (subJobCardNo) subCardOr.push({ subJobCardNo: subJobCardNo });
     if (rawTarget && rawTarget !== subJobCardNo && rawTarget !== searchNo) subCardOr.push({ subJobCardNo: rawTarget });
     if (searchNo && searchNo !== rawTarget) subCardOr.push({ subJobCardNo: searchNo });
-    subCardOr.push({ qrCodeValue: rawTarget });
+    if (rawTarget) subCardOr.push({ qrCodeValue: rawTarget });
 
     // 1. Try finding target SubJobCard directly by ID, subJobCardNo, or QR code
     let subCard: any = subCardOr.length > 0 ? await this.prisma.subJobCard.findFirst({
@@ -2120,6 +2125,23 @@ export class JobCardsService {
           await tx.subJobCard.delete({
             where: { id: subCard.id },
           });
+
+          // Zero-regression rule: Single-lot WIP No must remain identical to jobCardNo
+          const remainingSubs = await tx.subJobCard.findMany({
+            where: { jobCardId: subCard.jobCardId },
+          });
+          if (remainingSubs.length === 1) {
+            const parentJc = await tx.jobCard.findUnique({
+              where: { id: subCard.jobCardId },
+              select: { jobCardNo: true },
+            });
+            if (parentJc) {
+              await tx.subJobCard.update({
+                where: { id: existingSubAtNextStage.id },
+                data: { subJobCardNo: parentJc.jobCardNo },
+              });
+            }
+          }
         } else {
           await tx.subJobCard.update({
             where: { id: subCard.id },
@@ -2179,6 +2201,22 @@ export class JobCardsService {
           await tx.subJobCard.delete({
             where: { id: subCard.id },
           });
+
+          const remainingSubs = await tx.subJobCard.findMany({
+            where: { jobCardId: subCard.jobCardId },
+          });
+          if (remainingSubs.length === 1) {
+            const parentJc = await tx.jobCard.findUnique({
+              where: { id: subCard.jobCardId },
+              select: { jobCardNo: true },
+            });
+            if (parentJc) {
+              await tx.subJobCard.update({
+                where: { id: existingCompletedSub.id },
+                data: { subJobCardNo: parentJc.jobCardNo },
+              });
+            }
+          }
         } else {
           // Find the PACKING stage to keep it set (so UI shows '20. PACKING')
           const packingStage = await tx.processStage.findFirst({
@@ -2219,6 +2257,7 @@ export class JobCardsService {
   async movePartial(
     id: string,
     body: {
+      id?: string;
       cardId?: string;
       jobCardNo?: string;
       subJobCardNo?: string;
@@ -2229,23 +2268,28 @@ export class JobCardsService {
       remark?: string;
       pendingWorkReason?: string;
       remarkType?: string;
-    },
+    } | any,
     user: any,
   ) {
-    const cardId = (body?.cardId || '').trim();
-    const subJobCardNo = (body?.subJobCardNo || '').trim();
-    const jobCardNo = (body?.jobCardNo || '').trim();
-    const rawTarget = (id || cardId || subJobCardNo || jobCardNo || '').trim();
-    const searchNo = (jobCardNo || rawTarget || '').trim();
+    const cleanStr = (val?: string) => {
+      const s = (val || '').trim();
+      return s.startsWith('jc-part-') || s.startsWith('init-') ? '' : s;
+    };
+    const cardId = cleanStr(body?.cardId || body?.id || id);
+    const subJobCardNo = cleanStr(body?.subJobCardNo || id);
+    const jobCardNo = cleanStr(body?.jobCardNo);
+    const rawTarget = cleanStr(id) || cardId || subJobCardNo || jobCardNo || (body?.jobCardNo || '').trim();
+    const searchNo = jobCardNo || rawTarget;
 
     const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
 
     const subCardOr: any[] = [];
-    if (isUuid(id)) subCardOr.push({ id });
-    if (cardId && isUuid(cardId) && cardId !== id) subCardOr.push({ id: cardId });
+    if (isUuid(cardId)) subCardOr.push({ id: cardId });
+    if (rawTarget && isUuid(rawTarget) && rawTarget !== cardId) subCardOr.push({ id: rawTarget });
     if (subJobCardNo) subCardOr.push({ subJobCardNo });
-    if (rawTarget && rawTarget !== id && rawTarget !== subJobCardNo) subCardOr.push({ subJobCardNo: rawTarget });
-    subCardOr.push({ qrCodeValue: rawTarget });
+    if (rawTarget && rawTarget !== subJobCardNo && rawTarget !== searchNo) subCardOr.push({ subJobCardNo: rawTarget });
+    if (searchNo && searchNo !== rawTarget) subCardOr.push({ subJobCardNo: searchNo });
+    if (rawTarget) subCardOr.push({ qrCodeValue: rawTarget });
 
     let subCard: any = subCardOr.length > 0 ? await this.prisma.subJobCard.findFirst({
       where: {
