@@ -673,7 +673,8 @@ export class JobCardsService {
         superAdminRole = await this.prisma.role.create({
           data: { name: RoleCode.SUPER_ADMIN, description: 'Super Administrator' },
         });
-      } catch (e) {
+      } catch (e: any) {
+        console.error('Failed to create superAdminRole:', e?.message || e);
         superAdminRole = await this.prisma.role.findFirst().catch(() => null);
       }
     }
@@ -689,8 +690,34 @@ export class JobCardsService {
             roleId: superAdminRole.id,
           },
         });
-      } catch (e) {
+      } catch (e: any) {
+        console.error('Failed to create default user:', e?.message || e);
         defaultUser = await this.prisma.user.findFirst().catch(() => null);
+      }
+    }
+
+    if (!defaultUser) {
+      // Direct attempt without superAdminRole check to get exact error
+      try {
+        let role = superAdminRole;
+        if (!role) {
+          role = await this.prisma.role.upsert({
+            where: { name: RoleCode.SUPER_ADMIN },
+            update: {},
+            create: { name: RoleCode.SUPER_ADMIN, description: 'Super Administrator' },
+          });
+        }
+        defaultUser = await this.prisma.user.create({
+          data: {
+            name: 'System Admin',
+            email: `admin_${Date.now()}@rfelectro.com`,
+            passwordHash: 'dummy_hash',
+            roleId: role.id,
+          },
+        });
+      } catch (finalErr: any) {
+        console.error('Direct user creation failed:', finalErr?.message || finalErr);
+        throw new BadRequestException(`Database initialization error: ${finalErr?.message || 'Database tables might not be synced yet.'}`);
       }
     }
 
