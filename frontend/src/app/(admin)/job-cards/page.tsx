@@ -3326,22 +3326,22 @@ export default function JobCardsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-stretch">
         
         {/* Card 1: Barcode & Mobile Camera Scanner / Fast Stage Movement */}
-        <div className="bg-gradient-to-br from-white via-white to-blue-50/50 border border-blue-200/90 rounded-2xl p-3.5 shadow-xs flex flex-col justify-between space-y-2 min-h-[96px] hover:border-blue-300 transition-colors">
+        <div className="bg-white border border-blue-100 rounded-2xl p-3.5 shadow-xs flex flex-col justify-between space-y-2 min-h-[96px] hover:border-blue-200 transition-colors">
           <div className="flex items-center justify-between gap-1">
-            <div className="flex items-center gap-1.5 text-[11px] font-black text-blue-950 uppercase tracking-wider shrink-0">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider shrink-0">
               <Scan className="w-4 h-4 text-blue-600 shrink-0" />
-              <span className="whitespace-nowrap">⚡ STAGE SCANNER</span>
+              <span>STAGE SCANNER</span>
             </div>
             
             {/* Live Camera Scanner Button */}
             <button
               type="button"
               onClick={() => setIsCameraScannerOpen(true)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white font-black text-[11px] rounded-xl shadow-sm shadow-blue-500/20 active:scale-95 transition-all cursor-pointer border border-blue-400/30"
-              title="Open Mobile Camera Scanner (QR Code & 1D Barcode)"
+              className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[11px] rounded-xl border border-blue-200 active:scale-95 transition-all cursor-pointer shadow-2xs"
+              title="Open Camera Scanner"
             >
-              <Camera className="w-3.5 h-3.5 text-amber-300" />
-              <span>Camera Scan</span>
+              <Camera className="w-3.5 h-3.5 text-blue-600" />
+              <span>Camera</span>
             </button>
           </div>
 
@@ -3351,23 +3351,15 @@ export default function JobCardsPage() {
                 type="text"
                 value={barcodeInput}
                 onChange={(e) => setBarcodeInput(e.target.value)}
-                placeholder="Scan QR / Barcode..."
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-2.5 pr-7 py-1.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white placeholder-slate-400 shadow-2xs"
+                placeholder="Scan / Enter Job No..."
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-blue-500 focus:bg-white placeholder-slate-400 shadow-2xs"
               />
-              <button
-                type="button"
-                onClick={() => setIsCameraScannerOpen(true)}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
-                title="Open Camera Scanner"
-              >
-                <Camera className="w-3.5 h-3.5" />
-              </button>
             </div>
             <button
               type="submit"
               className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl transition-all cursor-pointer shadow-xs inline-flex items-center gap-1 shrink-0 active:scale-95"
             >
-              <Zap className="w-3.5 h-3.5 fill-current text-amber-400" />
+              <Zap className="w-3.5 h-3.5 fill-current text-amber-300" />
               <span>Move</span>
             </button>
           </form>
