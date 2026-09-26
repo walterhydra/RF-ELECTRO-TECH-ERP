@@ -28,6 +28,7 @@ export const Sidebar: React.FC = () => {
   const [showRestrictedModal, setShowRestrictedModal] = React.useState(false);
 
   const [isMobileOpen, setIsMobileOpen] = React.useState(false);
+  const [isMobileScreen, setIsMobileScreen] = React.useState(false);
 
   const [assignedStage, setAssignedStage] = React.useState<string | null>(null);
 
@@ -39,9 +40,18 @@ export const Sidebar: React.FC = () => {
     if (email) setUserEmail(email);
     if (stage) setAssignedStage(stage);
 
+    const handleResize = () => {
+      setIsMobileScreen(window.innerWidth < 768);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+
     const handleToggle = () => setIsMobileOpen(prev => !prev);
     window.addEventListener('toggle-mobile-sidebar', handleToggle);
-    return () => window.removeEventListener('toggle-mobile-sidebar', handleToggle);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('toggle-mobile-sidebar', handleToggle);
+    };
   }, []);
 
   // Close mobile sidebar on route change
@@ -75,6 +85,10 @@ export const Sidebar: React.FC = () => {
     return item.roles.includes(userRole);
   });
 
+  const displayedNavItems = isMobileScreen 
+    ? navItems.filter(item => item.href === '/job-cards')
+    : navItems;
+
   const initials = userRole.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 
   return (
@@ -101,7 +115,7 @@ export const Sidebar: React.FC = () => {
         </div>
 
         <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
+          {displayedNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname?.startsWith(item.href);
             

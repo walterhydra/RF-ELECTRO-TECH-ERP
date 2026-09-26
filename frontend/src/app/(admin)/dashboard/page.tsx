@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { TraceLineTracker } from '@/components/ui/TraceLineTracker';
 import { getApiBaseUrl } from '@/lib/utils';
 import { 
@@ -92,6 +93,7 @@ const mockJobs = [
 ];
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [customer, setCustomer] = useState('');
   const [productClass, setProductClass] = useState('');
   const [stage, setStage] = useState('');
@@ -107,11 +109,15 @@ export default function DashboardPage() {
   const isOperator = userRole.toLowerCase().includes('operator') || Boolean(assignedStage) || userRole === 'NORMAL' || userRole === 'PROCESS_OPERATOR';
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      router.replace('/job-cards');
+      return;
+    }
     const role = localStorage.getItem('userRole');
     const stageVal = localStorage.getItem('assignedStage');
     if (role) setUserRole(role);
     if (stageVal) setAssignedStage(stageVal);
-  }, []);
+  }, [router]);
 
   const fetchLiveDashboard = async () => {
     setIsLoading(true);

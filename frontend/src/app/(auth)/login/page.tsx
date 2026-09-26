@@ -107,7 +107,12 @@ export default function LoginPage() {
         if (data.user?.assignedStage?.id) {
           localStorage.setItem('assignedStageId', data.user.assignedStage.id);
         }
-        router.push('/dashboard');
+        const isMobileScreen = typeof window !== 'undefined' && window.innerWidth < 768;
+        if (isMobileScreen) {
+          router.push('/job-cards');
+        } else {
+          router.push('/dashboard');
+        }
         return;
       }
     } catch (err) {
@@ -123,7 +128,12 @@ export default function LoginPage() {
     } else {
       localStorage.removeItem('assignedStage');
     }
-    router.push('/dashboard');
+    const isMobileScreen = typeof window !== 'undefined' && window.innerWidth < 768;
+    if (isMobileScreen) {
+      router.push('/job-cards');
+    } else {
+      router.push('/dashboard');
+    }
   };
 
   const filteredStages = STAGE_OPERATOR_CREDENTIALS.filter((s) =>

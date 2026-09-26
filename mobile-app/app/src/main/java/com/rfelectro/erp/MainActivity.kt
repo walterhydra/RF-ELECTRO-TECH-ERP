@@ -267,6 +267,12 @@ class MainActivity : AppCompatActivity() {
                                     display: none !important; 
                                 }
 
+                                /* Mobile View: Exclusively display Job Cards & Split section in navigation */
+                                aside nav a:not([href*="job-cards"]),
+                                [class*="w-64"] nav a:not([href*="job-cards"]) {
+                                    display: none !important;
+                                }
+
                                 /* Ensure top header remains a clean single row */
                                 header {
                                     height: 60px !important;
@@ -387,6 +393,12 @@ class MainActivity : AppCompatActivity() {
                         }
                     } else if (existingBtn) {
                         existingBtn.remove();
+                    }
+
+                    // 7. Auto-navigate to /job-cards if user is on dashboard in mobile view
+                    var isAuth = localStorage.getItem('isAuthenticated') === 'true' || Boolean(localStorage.getItem('token'));
+                    if (isAuth && (window.location.pathname === '/dashboard' || window.location.pathname === '/' || window.location.pathname === '')) {
+                        window.location.replace('/job-cards');
                     }
                 }
 
