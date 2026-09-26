@@ -74,16 +74,8 @@ class MainActivity : AppCompatActivity() {
         btnRetry = findViewById(R.id.btnRetry)
 
         swipeRefreshLayout.setColorSchemeResources(R.color.accent, R.color.primary)
-        swipeRefreshLayout.setOnRefreshListener {
-            if (isNetworkAvailable()) {
-                showErrorLayout(false)
-                webView.clearCache(true)
-                webView.reload()
-            } else {
-                swipeRefreshLayout.isRefreshing = false
-                showErrorLayout(true)
-            }
-        }
+        // Disable SwipeRefreshLayout gesture interception so WebView handles bidirectional scrolling (up/down) seamlessly
+        swipeRefreshLayout.isEnabled = false
 
         btnRetry.setOnClickListener {
             if (isNetworkAvailable()) {
@@ -323,11 +315,14 @@ class MainActivity : AppCompatActivity() {
                                     display: block !important;
                                 }
 
-                                /* Main Content Area adjustments */
+                                /* Main Content Area adjustments & Smooth Bidirectional Touch Scrolling */
                                 main, .flex-1, div.flex-1 {
                                     width: 100% !important;
                                     max-width: 100vw !important;
                                     margin-left: 0 !important;
+                                    -webkit-overflow-scrolling: touch !important;
+                                    overscroll-behavior-y: contain !important;
+                                    touch-action: pan-y !important;
                                 }
                             }
                         `;
