@@ -2066,8 +2066,21 @@ export default function JobCardsPage() {
       });
 
       if (!createRes.ok) {
-        const errorMsg = await createRes.text().catch(() => '');
-        showToast(`Backend Create Error (${createRes.status}): ${errorMsg.slice(0, 80) || 'Server rejected creation'}`, 'error');
+        let errorMsg = 'Server rejected creation';
+        try {
+          const errData = await createRes.json();
+          if (errData?.error?.message) {
+            errorMsg = typeof errData.error.message === 'string' ? errData.error.message : JSON.stringify(errData.error.message);
+          } else if (errData?.message) {
+            errorMsg = typeof errData.message === 'string' ? errData.message : JSON.stringify(errData.message);
+          } else if (errData?.error) {
+            errorMsg = typeof errData.error === 'string' ? errData.error : JSON.stringify(errData.error);
+          }
+        } catch {
+          const raw = await createRes.text().catch(() => '');
+          if (raw) errorMsg = raw.slice(0, 100);
+        }
+        showToast(`Backend Create Error (${createRes.status}): ${errorMsg}`, 'error');
         return; // DO NOT add to local state if backend creation fails
       }
 

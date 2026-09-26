@@ -98,8 +98,21 @@ export default function JobCardLaunchPage() {
       });
 
       if (!res.ok) {
-        const errText = await res.text().catch(() => '');
-        showToastMsg(`Failed to create Job Card on server (${res.status}): ${errText.slice(0, 80) || res.statusText}`, 'error');
+        let errorMsg = 'Server rejected creation';
+        try {
+          const errData = await res.json();
+          if (errData?.error?.message) {
+            errorMsg = typeof errData.error.message === 'string' ? errData.error.message : JSON.stringify(errData.error.message);
+          } else if (errData?.message) {
+            errorMsg = typeof errData.message === 'string' ? errData.message : JSON.stringify(errData.message);
+          } else if (errData?.error) {
+            errorMsg = typeof errData.error === 'string' ? errData.error : JSON.stringify(errData.error);
+          }
+        } catch {
+          const raw = await res.text().catch(() => '');
+          if (raw) errorMsg = raw.slice(0, 100);
+        }
+        showToastMsg(`Failed to create Job Card on server (${res.status}): ${errorMsg}`, 'error');
         setIsLoading(false);
         return;
       }
