@@ -140,7 +140,50 @@ export class JobCardsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    // Auto-correct sub-job card PCB quantities & calculate rejection logs
+    // Batch fetch all sub-job card rejection logs & last movements in 2 single queries instead of N+1 sequential loop queries
+    const allSubCards = jobCards.flatMap((jc) => jc.subJobCards || []);
+    const allSubCardIds = allSubCards.map((s) => s.id);
+
+    const [allRejectionLogs, allLastMovements] = await Promise.all([
+      allSubCardIds.length > 0
+        ? this.prisma.stageMovementLog.findMany({
+            where: {
+              subJobCardId: { in: allSubCardIds },
+              qtyRejected: { gt: 0 },
+            },
+            include: { stage: true },
+            orderBy: { createdAt: 'asc' },
+          }).catch(() => [])
+        : [],
+      allSubCardIds.length > 0
+        ? this.prisma.stageMovementLog.findMany({
+            where: { subJobCardId: { in: allSubCardIds } },
+            include: {
+              createdBy: { select: { id: true, name: true, email: true, role: true } },
+              stage: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          }).catch(() => [])
+        : [],
+    ]);
+
+    // Group rejection logs by subJobCardId in memory O(1)
+    const rejectionLogsBySubId = new Map<string, any[]>();
+    for (const log of allRejectionLogs) {
+      const logs = rejectionLogsBySubId.get(log.subJobCardId) || [];
+      logs.push(log);
+      rejectionLogsBySubId.set(log.subJobCardId, logs);
+    }
+
+    // Group last movement by subJobCardId in memory O(1)
+    const lastMovementBySubId = new Map<string, any>();
+    for (const log of allLastMovements) {
+      if (!lastMovementBySubId.has(log.subJobCardId)) {
+        lastMovementBySubId.set(log.subJobCardId, log);
+      }
+    }
+
+    // Auto-correct sub-job card PCB quantities & calculate rejection logs in memory
     for (const jc of jobCards) {
       if (jc.subJobCards && jc.subJobCards.length > 0) {
         const masterPcbQty = jc.totalPcbQty || (jc.custPnlQty && jc.custPnlQty > 50 ? jc.custPnlQty : (jc.prodPnlQty ? jc.prodPnlQty * 4 : 160));
@@ -187,16 +230,9 @@ export class JobCardsService {
           }
         });
 
-        // Calculate live rejection statistics & logs from stageMovementLog
+        // Collect rejection logs from in-memory map in 0ms
         const subCardIds = jc.subJobCards.map((s) => s.id);
-        const rejectionLogs = await this.prisma.stageMovementLog.findMany({
-          where: {
-            subJobCardId: { in: subCardIds },
-            qtyRejected: { gt: 0 },
-          },
-          include: { stage: true },
-          orderBy: { createdAt: 'asc' },
-        }).catch(() => []);
+        const rejectionLogs = subCardIds.flatMap((subId) => rejectionLogsBySubId.get(subId) || []);
 
         let totalRejectedPcb = 0;
         let totalRejectedArea = 0;
@@ -209,7 +245,7 @@ export class JobCardsService {
             rejectedPcbQty: log.qtyRejected,
             rejectedAreaSqm: sqm,
             remark: log.remarks || 'Stage Rejection',
-            timestamp: log.createdAt.toISOString(),
+            timestamp: log.createdAt ? log.createdAt.toISOString() : new Date().toISOString(),
           };
         });
 
@@ -217,15 +253,16 @@ export class JobCardsService {
         (jc as any).rejectedAreaSqm = Number(totalRejectedArea.toFixed(2));
         (jc as any).rejectionLogs = formattedLogs;
 
-        // Fetch last movement log to know who completed / executed last action
-        const lastMovement = await this.prisma.stageMovementLog.findFirst({
-          where: { subJobCardId: { in: subCardIds } },
-          include: {
-            createdBy: { select: { id: true, name: true, email: true, role: true } },
-            stage: true,
-          },
-          orderBy: { createdAt: 'desc' },
-        }).catch(() => null);
+        // Fetch last movement log from in-memory map in 0ms
+        let lastMovement: any = null;
+        for (const subId of subCardIds) {
+          const movement = lastMovementBySubId.get(subId);
+          if (movement) {
+            if (!lastMovement || new Date(movement.createdAt) > new Date(lastMovement.createdAt)) {
+              lastMovement = movement;
+            }
+          }
+        }
 
         if (lastMovement) {
           (jc as any).lastMovementBy = lastMovement.createdBy;
