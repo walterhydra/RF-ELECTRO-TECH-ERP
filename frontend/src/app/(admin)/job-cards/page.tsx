@@ -3721,7 +3721,8 @@ export default function JobCardsPage() {
 
       {/* 4. FOURTH ROW: PRODUCTION JOBS (WIP) DATA TABLE */}
       <div className="border border-slate-300/80 rounded-2xl overflow-hidden shadow-xs bg-white">
-        <div className="w-full overflow-x-auto">
+        {/* Desktop Table View (100% Unaltered) */}
+        <div className="hidden md:block w-full overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs font-sans">
             <thead>
               {/* Row 1: Column Header Titles */}
@@ -4176,6 +4177,224 @@ export default function JobCardsPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Vertical Cards View (Optimized for Mobile Screens) */}
+        <div className="block md:hidden divide-y divide-slate-200 bg-slate-50/50">
+          {filteredCards.length === 0 ? (
+            <div className="p-8 text-center text-slate-500 text-xs font-medium">
+              No job cards found for current selection.
+            </div>
+          ) : (
+            filteredCards.map((jc, idx) => {
+              const isUnlaunched = jc.status === 'UNLAUNCHED' || jc.status === 'CREATED' || (jc.status as string) === 'PENDING_LAUNCH';
+              const isCompleted = jc.status === 'COMPLETED';
+              const stageIndex = jc.currentStageIndex !== undefined && jc.currentStageIndex >= 0 ? jc.currentStageIndex : normalizeStageIndex(jc.currentStageName);
+              const progressPct = isUnlaunched ? 0 : isCompleted ? 100 : Math.round(((stageIndex + 1) / PF01_STAGES.length) * 100);
+              const isNewTagVisible = isUnlaunched;
+              const overdue = isCardOverdue(jc);
+
+              return (
+                <div 
+                  key={`mobile-${jc.id}`}
+                  className={`p-3.5 transition-colors ${
+                    isNewTagVisible ? 'bg-emerald-50/70 border-l-4 border-l-emerald-500' : 'bg-white'
+                  }`}
+                >
+                  {/* Row 1: Header (WIP No, Print Icon, Tags, Priority) */}
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        onClick={() => setShowQrModal(jc)}
+                        title="Print QR Sticker Tag"
+                        className="text-amber-800 hover:text-amber-950 p-1 bg-amber-50 border border-amber-200 rounded-md cursor-pointer shrink-0 shadow-2xs active:scale-95"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="font-mono font-extrabold text-sm text-slate-900 tracking-tight">
+                        {jc.subJobCardNo || jc.jobCardNo}
+                      </span>
+                      {isNewTagVisible && (
+                        <span className="px-1.5 py-0.5 bg-emerald-600 text-white font-black text-[9px] rounded uppercase tracking-wider animate-pulse shadow-2xs">
+                          NEW
+                        </span>
+                      )}
+                      {jc.subJobCards && jc.subJobCards.length > 1 && (
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 bg-blue-50 text-blue-700 font-bold rounded border border-blue-200">
+                          Lot {(jc.subJobCards.findIndex((s) => s.id === jc.id) >= 0 ? jc.subJobCards.findIndex((s) => s.id === jc.id) + 1 : idx + 1)}/{jc.subJobCards.length}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span
+                        className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase border ${
+                          jc.priority === 'MOST URGENT' || jc.priority === 'HIGH'
+                            ? 'bg-rose-50 text-rose-700 border-rose-200 font-black'
+                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                        }`}
+                      >
+                        {jc.priority === 'MOST URGENT' ? 'Top Priority' : jc.priority || 'Normal'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Row 2: Product Name & Code */}
+                  <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-2.5 mb-2 space-y-1">
+                    <div className="flex items-center justify-between text-xs gap-2">
+                      <span className="font-bold text-slate-900 truncate" title={jc.customerPartNo}>
+                        {jc.customerPartNo || 'No Part Name'}
+                      </span>
+                      <span className="font-mono font-extrabold text-[11px] text-blue-700 px-1.5 py-0.5 bg-blue-50 border border-blue-200 rounded shrink-0">
+                        {jc.rfePartCode}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-slate-500">
+                      <span>Customer: <strong className="text-slate-800">{jc.customerCode || '—'}</strong></span>
+                      <span>Area: <strong className="text-emerald-700 font-mono font-bold">{jc.custPnlAreaSqm ? jc.custPnlAreaSqm.toFixed(2) : (jc.prodPnlAreaSqm ? jc.prodPnlAreaSqm.toFixed(2) : '45.00')} m²</strong></span>
+                    </div>
+                  </div>
+
+                  {/* Row 3: Key Stats Grid (Pending, Rejections, Launch, Target) */}
+                  <div className="grid grid-cols-2 gap-2 mb-2 text-xs">
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 flex items-center justify-between">
+                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Pending Qty</div>
+                      <div className="font-mono font-black text-slate-900 text-xs">
+                        {jc.totalPcbQty || (jc.custPnlQty && jc.custPnlQty > 50 ? jc.custPnlQty : (jc.prodPnlQty ? Math.round(jc.prodPnlQty * 4) : 160))} <span className="text-[9px] font-normal text-slate-500">PCBs</span>
+                      </div>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 flex items-center justify-between">
+                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Rejections</div>
+                      <div className={`font-mono font-black text-xs ${jc.rejectedPcbQty && jc.rejectedPcbQty > 0 ? 'text-rose-600' : 'text-slate-900'}`}>
+                        {jc.rejectedPcbQty || 0}
+                      </div>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 flex items-center justify-between">
+                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Launch</div>
+                      <div className="font-mono text-[10px] font-medium text-slate-700">
+                        {formatDateDisplay(jc.launchedAt || jc.createdAt)}
+                      </div>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 flex items-center justify-between">
+                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Target</div>
+                      <div className="flex items-center gap-1">
+                        <span className={`font-mono text-[10px] ${overdue ? 'text-rose-700 font-extrabold' : 'font-medium text-slate-700'}`}>
+                          {formatDateDisplay(jc.targetDate)}
+                        </span>
+                        {overdue && (
+                          <span className="px-1 py-0.2 bg-rose-100 text-rose-900 text-[8px] font-black rounded border border-rose-300 inline-flex items-center shadow-2xs">
+                            OVERDUE
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Row 4: Current Stage & Progress Bar */}
+                  <div className="space-y-1.5 mb-2.5 bg-white border border-slate-200/90 rounded-xl p-2.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[11px] font-bold text-slate-600">Current Stage:</span>
+                      {isUnlaunched ? (
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-100 text-slate-600 border border-slate-200 font-mono inline-flex items-center gap-1 shadow-2xs">
+                          <Clock className="w-3 h-3 text-slate-400 shrink-0" /> UNLAUNCHED
+                        </span>
+                      ) : isCompleted ? (
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300 font-mono inline-flex items-center gap-1 shadow-2xs">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" /> 20. PACKING (DONE)
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-blue-100 text-blue-900 border border-blue-300 font-mono inline-flex items-center gap-1 shadow-2xs">
+                          <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse shrink-0" />
+                          {jc.currentStageName || PF01_STAGES[0]}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="w-full bg-slate-200 rounded-full h-3 relative overflow-hidden border border-slate-300/80">
+                      <div
+                        className={`h-full text-[8px] font-extrabold text-white flex items-center justify-center transition-all px-1 whitespace-nowrap ${
+                          progressPct >= 100
+                            ? 'bg-emerald-600'
+                            : progressPct >= 50
+                            ? 'bg-amber-500'
+                            : 'bg-rose-500'
+                        }`}
+                        style={{ width: `${Math.max(15, progressPct)}%` }}
+                      >
+                        {progressPct}%
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Row 5: Action Buttons */}
+                  <div className="flex items-center gap-1.5 pt-0.5">
+                    {isUnlaunched ? (
+                      <button
+                        onClick={() => handleLaunchExistingJobCard(jc.id)}
+                        className="flex-1 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-lg text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                      >
+                        <Play className="w-3 h-3 fill-current" />
+                        <span>LAUNCH</span>
+                      </button>
+                    ) : isCompleted ? (
+                      <span className="flex-1 py-1.5 px-3 bg-emerald-100 border border-emerald-300 text-emerald-900 font-extrabold rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-2xs font-mono">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>DONE</span>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setSelectedMovementJob(jc);
+                          setHasRejectionInMovement(false);
+                          setFullMoveRejectQty(0);
+                          setFullMoveRemarks('');
+                          setFullMoveRemarkType('Clear Movement');
+                          setPartialMoveQty(Math.max(1, Math.floor((jc.totalPcbQty || 160) / 2)));
+                          setMovementTab('FULL');
+                        }}
+                        className="flex-1 py-1.5 px-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black rounded-lg border border-amber-600/90 text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                      >
+                        <RefreshCw className="w-3 h-3 stroke-[3]" />
+                        <span>Move Stage ➔</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => fetchJobCardHistory(jc)}
+                      title="View Full Stage Movement & Traceability History"
+                      className="py-1.5 px-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1 cursor-pointer shadow-xs active:scale-95"
+                    >
+                      <History className="w-3.5 h-3.5 text-white" />
+                      <span>History</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleOpenEditModal(jc)}
+                      title="Edit Job Card Parameters"
+                      className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg inline-flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+
+                    {isSuperAdmin && (
+                      <button
+                        onClick={() => setDeleteConfirmCard(jc)}
+                        disabled={Boolean(deletingCardId && (deletingCardId === jc.id || deletingCardId === jc.jobCardNo))}
+                        title="Delete Job Card (Super Admin Only)"
+                        className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg inline-flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs disabled:opacity-50"
+                      >
+                        {deletingCardId && (deletingCardId === jc.id || deletingCardId === jc.jobCardNo) ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
 
         {/* Footer Bar: Export to Excel & Pagination Controls */}
