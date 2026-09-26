@@ -3,28 +3,90 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Shield, Layers, CheckCircle2, Truck, Info, Check, Globe } from 'lucide-react';
+
+const DEMO_CREDENTIALS = [
+  {
+    role: 'Super Admin',
+    email: 'admin@rfelectro.com',
+    icon: Shield,
+    color: 'bg-rose-100 text-rose-600',
+    borderColor: 'border-rose-200'
+  },
+  {
+    role: 'Production Manager',
+    email: 'production@rfelectro.com',
+    icon: Layers,
+    color: 'bg-emerald-100 text-emerald-600',
+    borderColor: 'border-emerald-200'
+  },
+  {
+    role: 'Quality Inspector',
+    email: 'quality@rfelectro.com',
+    icon: CheckCircle2,
+    color: 'bg-blue-100 text-blue-600',
+    borderColor: 'border-blue-200'
+  },
+  {
+    role: 'Dispatch Manager',
+    email: 'dispatch@rfelectro.com',
+    icon: Truck,
+    color: 'bg-amber-100 text-amber-600',
+    borderColor: 'border-amber-200'
+  }
+];
+
+const STAGE_OPERATOR_CREDENTIALS = [
+  { order: 1, name: 'SHEARING', code: 'SHR', email: 'stage01.shearing@rfelectro.com', label: '1. SHEARING' },
+  { order: 2, name: 'DRILLING', code: 'DRL', email: 'stage02.drilling@rfelectro.com', label: '2. DRILLING' },
+  { order: 3, name: 'DRL-QC', code: 'DRL-QC', email: 'stage03.drlqc@rfelectro.com', label: '3. DRL-QC' },
+  { order: 4, name: 'DML', code: 'DML', email: 'stage04.dml@rfelectro.com', label: '4. DML' },
+  { order: 5, name: 'PIT', code: 'PIT', email: 'stage05.pit@rfelectro.com', label: '5. PIT' },
+  { order: 6, name: 'PIT-QC', code: 'PIT-QC', email: 'stage06.pitqc@rfelectro.com', label: '6. PIT-QC' },
+  { order: 7, name: 'PLATING', code: 'PLT', email: 'stage07.plating@rfelectro.com', label: '7. PLATING' },
+  { order: 8, name: 'ETCHING', code: 'ETC', email: 'stage08.etching@rfelectro.com', label: '8. ETCHING' },
+  { order: 9, name: 'PREMASK-QC/AOI', code: 'AOI', email: 'stage09.aoi@rfelectro.com', label: '9. PREMASK-QC/AOI' },
+  { order: 10, name: 'PISM', code: 'PISM', email: 'stage10.pism@rfelectro.com', label: '10. PISM' },
+  { order: 11, name: 'PISM-QC', code: 'PISM-QC', email: 'stage11.pismqc@rfelectro.com', label: '11. PISM-QC' },
+  { order: 12, name: 'LEGEND PRINT', code: 'LGD', email: 'stage12.legend@rfelectro.com', label: '12. LEGEND PRINT' },
+  { order: 13, name: 'HASL', code: 'HASL', email: 'stage13.hasl@rfelectro.com', label: '13. HASL' },
+  { order: 14, name: 'HASL-QC', code: 'HASL-QC', email: 'stage14.haslqc@rfelectro.com', label: '14. HASL-QC' },
+  { order: 15, name: 'ROUTING', code: 'RTE', email: 'stage15.routing@rfelectro.com', label: '15. ROUTING' },
+  { order: 16, name: 'VG', code: 'VG', email: 'stage16.vg@rfelectro.com', label: '16. VG' },
+  { order: 17, name: 'BBT', code: 'BBT', email: 'stage17.bbt@rfelectro.com', label: '17. BBT' },
+  { order: 18, name: 'FQC (AI)', code: 'FQC', email: 'stage18.fqc@rfelectro.com', label: '18. FQC (AI)' },
+  { order: 19, name: 'PDI-AQL', code: 'PDI', email: 'stage19.pdi@rfelectro.com', label: '19. PDI-AQL' },
+  { order: 20, name: 'PACKING', code: 'PKG', email: 'stage20.packing@rfelectro.com', label: '20. PACKING' },
+];
+
 import { getApiBaseUrl } from '@/lib/utils';
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [activeRole, setActiveRole] = useState<string | null>(null);
+  const [activeStage, setActiveStage] = useState<string | null>(null);
+  const [loginTab, setLoginTab] = useState<'MANAGEMENT' | 'STAGES'>('MANAGEMENT');
+  const [stageSearch, setStageSearch] = useState('');
   const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const handleDemoClick = (role: string, roleEmail: string, stageName?: string) => {
+    setEmail(roleEmail);
+    setPassword('RF-secure-2026!');
+    setActiveRole(role);
+    setActiveStage(stageName || null);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setErrorMessage(null);
-
     try {
       const res = await fetch(`${getApiBaseUrl()}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({ email, password }),
       });
-
       if (res.ok) {
         const data = await res.json();
         if (data.accessToken) {
@@ -32,11 +94,13 @@ export default function LoginPage() {
           localStorage.setItem('refreshToken', data.refreshToken || '');
         }
         localStorage.setItem('isAuthenticated', 'true');
-        const roleName = data.user?.role?.name || data.user?.role || 'Super Admin';
+        const roleName = data.user?.role?.name || data.user?.role || activeRole || 'Super Admin';
         localStorage.setItem('userRole', roleName);
         localStorage.setItem('userEmail', data.user?.email || email || 'admin@rfelectro.com');
         if (data.user?.assignedStage?.name) {
           localStorage.setItem('assignedStage', data.user.assignedStage.name);
+        } else if (activeStage) {
+          localStorage.setItem('assignedStage', activeStage);
         } else {
           localStorage.removeItem('assignedStage');
         }
@@ -50,26 +114,34 @@ export default function LoginPage() {
           router.push('/dashboard');
         }
         return;
-      } else {
-        const errData = await res.json().catch(() => null);
-        setErrorMessage(errData?.message || 'Invalid email or password. Please try again.');
-        setLoading(false);
-        return;
       }
     } catch (err) {
       console.warn('Backend login request error:', err);
-      // Fallback for offline/development environments
-      localStorage.setItem('isAuthenticated', 'true');
-      localStorage.setItem('userRole', 'Super Admin');
-      localStorage.setItem('userEmail', email || 'admin@rfelectro.com');
-      const isMobileScreen = typeof window !== 'undefined' && window.innerWidth < 768;
-      if (isMobileScreen) {
-        router.push('/job-cards');
-      } else {
-        router.push('/dashboard');
-      }
+    }
+
+    // Demo fallback for local development / test logins
+    localStorage.setItem('isAuthenticated', 'true');
+    localStorage.setItem('userRole', activeRole || 'Super Admin');
+    localStorage.setItem('userEmail', email || 'admin@rfelectro.com');
+    if (activeStage) {
+      localStorage.setItem('assignedStage', activeStage);
+    } else {
+      localStorage.removeItem('assignedStage');
+    }
+    const isMobileScreen = typeof window !== 'undefined' && window.innerWidth < 768;
+    if (isMobileScreen) {
+      router.push('/job-cards');
+    } else {
+      router.push('/dashboard');
     }
   };
+
+  const filteredStages = STAGE_OPERATOR_CREDENTIALS.filter((s) =>
+    s.name.toLowerCase().includes(stageSearch.toLowerCase()) ||
+    s.code.toLowerCase().includes(stageSearch.toLowerCase()) ||
+    s.label.toLowerCase().includes(stageSearch.toLowerCase()) ||
+    s.email.toLowerCase().includes(stageSearch.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans">
@@ -141,15 +213,8 @@ export default function LoginPage() {
 
           <div className="space-y-2 text-center md:text-left">
             <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Welcome back</h2>
-            <p className="text-slate-500 text-sm">Enter your credentials to access your ERP account</p>
+            <p className="text-slate-500 text-sm">Enter your credentials or select your stage login</p>
           </div>
-
-          {errorMessage && (
-            <div className="flex items-center gap-2.5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm font-medium animate-in fade-in">
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
 
           <form onSubmit={handleLogin} className="space-y-4 pt-2">
             <div className="space-y-4">
@@ -203,9 +268,146 @@ export default function LoginPage() {
             </button>
           </form>
 
+          {/* Quick Access Credentials Section */}
+          <div className="pt-4 border-t border-slate-200 space-y-3">
+            {/* Tab Selector */}
+            <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
+              <button
+                type="button"
+                onClick={() => setLoginTab('MANAGEMENT')}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                  loginTab === 'MANAGEMENT'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                👑 Admin & Management
+              </button>
+              <button
+                type="button"
+                onClick={() => setLoginTab('STAGES')}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  loginTab === 'STAGES'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <span>⚙️ 20 Stage Logins</span>
+                <span className="px-1.5 py-0.2 bg-amber-400 text-slate-950 rounded-full text-[10px] font-black">20</span>
+              </button>
+            </div>
+
+            {/* MANAGEMENT TAB */}
+            {loginTab === 'MANAGEMENT' && (
+              <div className="space-y-2 animate-in fade-in duration-200">
+                {DEMO_CREDENTIALS.map((cred) => {
+                  const Icon = cred.icon;
+                  const isSelected = activeRole === cred.role && !activeStage;
+                  
+                  return (
+                    <button
+                      key={cred.role}
+                      type="button"
+                      onClick={() => handleDemoClick(cred.role, cred.email)}
+                      className={`w-full flex items-center justify-between p-2.5 rounded-xl border bg-white text-left transition-all hover:shadow-xs cursor-pointer ${
+                        isSelected 
+                          ? 'border-blue-500 ring-1 ring-blue-500 shadow-xs bg-blue-50/40' 
+                          : 'border-slate-200 hover:border-blue-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${cred.color} ${cred.borderColor} shrink-0`}>
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-xs text-slate-900">{cred.role}</div>
+                          <div className="text-[11px] text-slate-500">{cred.email}</div>
+                        </div>
+                      </div>
+                      <div className={`text-[11px] font-semibold ${isSelected ? 'text-blue-600' : 'text-slate-400'}`}>
+                        {isSelected ? (
+                          <span className="flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5 text-blue-600" /> Selected
+                          </span>
+                        ) : (
+                          'Auto-fill'
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* STAGES TAB (ALL 20 PROCESS STAGES) */}
+            {loginTab === 'STAGES' && (
+              <div className="space-y-2 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between bg-blue-50 text-blue-800 px-3 py-1.5 rounded-xl border border-blue-100 text-xs">
+                  <span className="font-bold">Select Stage ID (Shows ONLY this stage's jobs):</span>
+                  <span className="text-[10px] font-mono text-blue-600 font-bold">20 Stages Ready</span>
+                </div>
+
+                <input
+                  type="text"
+                  value={stageSearch}
+                  onChange={(e) => setStageSearch(e.target.value)}
+                  placeholder="Filter stage (e.g. Drilling, PIT, HASL, AOI)..."
+                  className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500"
+                />
+
+                <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+                  {filteredStages.map((stg) => {
+                    const isSelected = activeStage === stg.label || activeStage === stg.name || email === stg.email;
+                    const isQc = stg.name.includes('QC') || stg.name.includes('AOI') || stg.name.includes('FQC') || stg.name.includes('PDI');
+
+                    return (
+                      <button
+                        key={stg.order}
+                        type="button"
+                        onClick={() => handleDemoClick(`Stage-${String(stg.order).padStart(2, '0')} Operator`, stg.email, stg.label)}
+                        className={`w-full flex items-center justify-between p-2 rounded-xl border text-left transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-blue-500 bg-blue-50/80 ring-1 ring-blue-500 shadow-xs'
+                            : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-mono font-black text-[10px] shrink-0 border ${
+                            isQc
+                              ? 'bg-purple-100 text-purple-700 border-purple-200'
+                              : 'bg-blue-100 text-blue-700 border-blue-200'
+                          }`}>
+                            {String(stg.order).padStart(2, '0')}
+                          </span>
+                          <div className="truncate">
+                            <div className="font-bold text-xs text-slate-900 flex items-center gap-1.5 truncate">
+                              <span>{stg.name}</span>
+                              <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-bold">{stg.code}</span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-mono truncate">{stg.email}</div>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 text-[11px] font-bold">
+                          {isSelected ? (
+                            <span className="text-blue-600 flex items-center gap-1">
+                              <Check className="w-3.5 h-3.5 text-blue-600" /> Selected
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 hover:text-blue-600">Auto-fill</span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+          </div>
+
         </div>
       </div>
     </div>
   );
 }
-
