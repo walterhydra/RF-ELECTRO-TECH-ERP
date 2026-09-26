@@ -19,8 +19,21 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   async onModuleInit() {
     this.logger.log('Initializing PostgreSQL connection pool via Prisma...');
-    await this.$connect();
-    this.logger.log('PostgreSQL connection established successfully.');
+    const maxRetries = 5;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await this.$connect();
+        this.logger.log('PostgreSQL connection established successfully.');
+        return;
+      } catch (err: any) {
+        this.logger.warn(`Database connection attempt ${attempt}/${maxRetries} failed: ${err?.message || err}. Retrying in 3s...`);
+        if (attempt === maxRetries) {
+          this.logger.error('Could not connect to PostgreSQL after maximum retries.', err);
+          throw err;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+    }
   }
 
   async onModuleDestroy() {
