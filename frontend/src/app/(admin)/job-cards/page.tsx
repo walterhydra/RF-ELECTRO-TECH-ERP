@@ -3860,54 +3860,84 @@ export default function JobCardsPage() {
                 <tr>
                   <td colSpan={14} className="py-12 text-center text-slate-400 text-xs font-mono">
                     <div className="flex flex-col items-center justify-center gap-3 py-4 max-w-md mx-auto">
-                      <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center font-bold">
-                        <Layers className="w-6 h-6" />
-                      </div>
-                      <p className="text-slate-700 font-sans font-bold text-sm">
-                        {jobCards.length > 0
-                          ? `Total ${jobCards.length} Job Card(s) exist in database, but hidden by current filters (Stage: ${assignedStage}, Status: ${statusRadio}).`
-                          : 'No job cards found in the system.'}
-                      </p>
-                      <div className="flex items-center gap-2 flex-wrap justify-center">
-                        {jobCards.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAssignedStage('ALL');
-                              setUserRole('MASTER');
-                              setStatusRadio('All');
-                              setGlobalSearch('');
-                              setShowColFilters(false);
-                              setColFilters({
-                                wipNo: '',
-                                product: '',
-                                productCode: '',
-                                customer: '',
-                                launch: '',
-                                target: '',
-                                priority: '',
-                                pndg: '',
-                                rejection: '',
-                                unit: '',
-                                area: '',
-                                stage: '',
-                                progress: '',
-                              });
-                            }}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
-                          >
-                            <RefreshCw className="w-3.5 h-3.5" />
-                            <span>Reset Filters (Show All {jobCards.length} Jobs)</span>
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={handleOpenCreateModal}
-                          className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
-                        >
-                          ➕ Create New Job Card
-                        </button>
-                      </div>
+                      {jobCards.length > 0 && scopedCards.length === 0 && totalCompletedCount > 0 ? (
+                        <>
+                          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 flex items-center justify-center font-bold">
+                            <Truck className="w-6 h-6" />
+                          </div>
+                          <p className="text-slate-800 font-sans font-bold text-sm text-center">
+                            All {jobCards.length} Job Card(s) have finished production and are in the <span className="text-emerald-700 font-extrabold">Completed & Dispatch Hub</span>.
+                          </p>
+                          <div className="flex items-center gap-2 flex-wrap justify-center">
+                            <button
+                              type="button"
+                              onClick={() => setActiveSectionTab('COMPLETED_DISPATCH')}
+                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                            >
+                              <Truck className="w-3.5 h-3.5" />
+                              <span>View in Completed & Dispatch Hub ({totalCompletedCount})</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleOpenCreateModal}
+                              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                            >
+                              ➕ Create New Job Card
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center font-bold">
+                            <Layers className="w-6 h-6" />
+                          </div>
+                          <p className="text-slate-700 font-sans font-bold text-sm">
+                            {jobCards.length > 0
+                              ? `Total ${jobCards.length} Job Card(s) exist in database, but hidden by current filters (Stage: ${assignedStage}, Status: ${statusRadio}).`
+                              : 'No job cards found in the system.'}
+                          </p>
+                          <div className="flex items-center gap-2 flex-wrap justify-center">
+                            {jobCards.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAssignedStage('ALL');
+                                  setUserRole('MASTER');
+                                  setStatusRadio('All');
+                                  setGlobalSearch('');
+                                  setShowColFilters(false);
+                                  setColFilters({
+                                    wipNo: '',
+                                    product: '',
+                                    productCode: '',
+                                    customer: '',
+                                    launch: '',
+                                    target: '',
+                                    priority: '',
+                                    pndg: '',
+                                    rejection: '',
+                                    unit: '',
+                                    area: '',
+                                    stage: '',
+                                    progress: '',
+                                  });
+                                }}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                              >
+                                <RefreshCw className="w-3.5 h-3.5" />
+                                <span>Reset Filters (Show All {jobCards.length} Jobs)</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={handleOpenCreateModal}
+                              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                            >
+                              ➕ Create New Job Card
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
