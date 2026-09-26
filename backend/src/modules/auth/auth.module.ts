@@ -15,7 +15,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('jwt.secret') || 'rfelectro_production_jwt_secret_key_2026_super_secure',
+        secret: config.get<string>('jwt.accessSecret') || config.get<string>('jwt.secret') || process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || 'rfelectro_production_jwt_secret_key_2026_super_secure',
         signOptions: { expiresIn: config.get<string>('jwt.expiresIn') || '24h' },
       }),
     }),
