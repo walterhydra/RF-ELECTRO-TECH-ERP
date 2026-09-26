@@ -3332,17 +3332,6 @@ export default function JobCardsPage() {
               <Scan className="w-4 h-4 text-blue-600 shrink-0" />
               <span>STAGE SCANNER</span>
             </div>
-            
-            {/* Live Camera Scanner Button */}
-            <button
-              type="button"
-              onClick={() => setIsCameraScannerOpen(true)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[11px] rounded-xl border border-blue-200 active:scale-95 transition-all cursor-pointer shadow-2xs"
-              title="Open Camera Scanner"
-            >
-              <Camera className="w-3.5 h-3.5 text-blue-600" />
-              <span>Camera</span>
-            </button>
           </div>
 
           <form onSubmit={handleBarcodeSubmit} className="flex items-center gap-1.5">
@@ -3356,11 +3345,13 @@ export default function JobCardsPage() {
               />
             </div>
             <button
-              type="submit"
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl transition-all cursor-pointer shadow-xs inline-flex items-center gap-1 shrink-0 active:scale-95"
+              type="button"
+              onClick={() => setIsCameraScannerOpen(true)}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-xs inline-flex items-center gap-1.5 shrink-0 active:scale-95"
+              title="Open Camera Scanner"
             >
-              <Zap className="w-3.5 h-3.5 fill-current text-amber-300" />
-              <span>Move</span>
+              <Camera className="w-3.5 h-3.5 text-white" />
+              <span>Scan</span>
             </button>
           </form>
         </div>
