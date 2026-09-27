@@ -75,14 +75,16 @@ export const Sidebar: React.FC = () => {
     { label: 'User & Stage Linkage', href: '/users', icon: Users, roles: ['Super Admin'] },
   ];
 
+  const isSuperAdmin = userRole === 'Super Admin' || userRole === 'SUPER_ADMIN';
   const isOperator = userRole.toLowerCase().includes('operator') || Boolean(assignedStage) || userRole === 'NORMAL' || userRole === 'PROCESS_OPERATOR';
 
   const navItems = allNavItems.filter(item => {
-    if (!item.roles) return true;
+    if (!item.roles || isSuperAdmin) return true;
     if (isOperator && (item.roles.includes('Stage Operator') || item.roles.includes('PROCESS_OPERATOR') || item.roles.includes('NORMAL'))) {
       return true;
     }
-    return item.roles.includes(userRole);
+    const normalizedRole = userRole.toUpperCase().replace(/\s+/g, '_');
+    return item.roles.some(r => r === userRole || r.toUpperCase().replace(/\s+/g, '_') === normalizedRole);
   });
 
   const displayedNavItems = isMobileScreen 

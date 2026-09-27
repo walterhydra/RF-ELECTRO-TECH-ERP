@@ -29,7 +29,15 @@ export default function LoginPage() {
           localStorage.setItem('refreshToken', data.refreshToken || '');
         }
         localStorage.setItem('isAuthenticated', 'true');
-        const roleName = data.user?.role?.name || data.user?.role || 'Super Admin';
+        const rawRole = data.user?.role?.name || data.user?.role || 'Super Admin';
+        const roleMap: Record<string, string> = {
+          SUPER_ADMIN: 'Super Admin',
+          PRODUCTION_PLANNER: 'Production Manager',
+          QC_OFFICER: 'Quality Inspector',
+          STORE_DISPATCH: 'Dispatch Manager',
+          PROCESS_OPERATOR: 'Stage Operator',
+        };
+        const roleName = roleMap[rawRole] || rawRole;
         localStorage.setItem('userRole', roleName);
         localStorage.setItem('userEmail', data.user?.email || email || 'admin@rfelectro.com');
         if (data.user?.assignedStage?.name) {
