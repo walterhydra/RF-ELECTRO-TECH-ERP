@@ -101,12 +101,12 @@ async function main() {
   // 4. Default Users
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@rfelectro.com' },
-    update: {},
+    update: { passwordHash: hashPassword('1001') },
     create: {
       name: 'Super Admin',
       email: 'admin@rfelectro.com',
       phone: '+919876543210',
-      passwordHash: hashPassword('Admin@123456'),
+      passwordHash: hashPassword('1001'),
       roleId: roleMap[RoleCode.SUPER_ADMIN],
       departmentId: deptMap['Admin & IT'],
       isActive: true,
@@ -115,12 +115,12 @@ async function main() {
 
   const plannerUser = await prisma.user.upsert({
     where: { email: 'planner@rfelectro.com' },
-    update: {},
+    update: { passwordHash: hashPassword('1005') },
     create: {
       name: 'Production Planner',
       email: 'planner@rfelectro.com',
       phone: '+919876543211',
-      passwordHash: hashPassword('Planner@123'),
+      passwordHash: hashPassword('1005'),
       roleId: roleMap[RoleCode.PRODUCTION_PLANNER],
       departmentId: deptMap['Sales & Planning'],
       isActive: true,
@@ -129,12 +129,12 @@ async function main() {
 
   const operatorUser = await prisma.user.upsert({
     where: { email: 'drilling@rfelectro.com' },
-    update: {},
+    update: { passwordHash: hashPassword('2002') },
     create: {
       name: 'Drilling Operator',
       email: 'drilling@rfelectro.com',
       phone: '+919876543212',
-      passwordHash: hashPassword('Floor@123'),
+      passwordHash: hashPassword('2002'),
       roleId: roleMap[RoleCode.PROCESS_OPERATOR],
       departmentId: deptMap['Production & Engineering'],
       assignedStageId: stageMap['DRILLING'],
@@ -144,12 +144,12 @@ async function main() {
 
   const qcUser = await prisma.user.upsert({
     where: { email: 'qc@rfelectro.com' },
-    update: {},
+    update: { passwordHash: hashPassword('1007') },
     create: {
       name: 'Quality Assurance Officer',
       email: 'qc@rfelectro.com',
       phone: '+919876543213',
-      passwordHash: hashPassword('Quality@123'),
+      passwordHash: hashPassword('1007'),
       roleId: roleMap[RoleCode.QC_OFFICER],
       departmentId: deptMap['Quality Assurance'],
       isActive: true,
@@ -158,7 +158,7 @@ async function main() {
 
   console.log('✅ Seeded 4 Core Users (Admin, Planner, Operator, QC)');
 
-  // 4b. Seed Dedicated Stage Operator Logins for ALL 20 Stages
+  // 4b. Seed Dedicated Stage Operator Logins for ALL 20 Stages (Passwords 2001 to 2020)
   const stageEmailSlugs: Record<string, string> = {
     'SHEARING': 'stage01.shearing@rfelectro.com',
     'DRILLING': 'stage02.drilling@rfelectro.com',
@@ -187,6 +187,7 @@ async function main() {
     const isQc = stg.name.includes('QC') || stg.name.includes('AOI') || stg.name.includes('FQC') || stg.name.includes('PDI');
     const roleId = isQc ? roleMap[RoleCode.QC_OFFICER] : roleMap[RoleCode.PROCESS_OPERATOR];
     const deptId = isQc ? deptMap['Quality Assurance'] : deptMap['Production & Engineering'];
+    const stagePassword = String(2000 + stg.defaultOrder); // 2001 to 2020
 
     await prisma.user.upsert({
       where: { email: stageEmail },
@@ -194,12 +195,13 @@ async function main() {
         assignedStageId: stageMap[stg.name],
         roleId,
         departmentId: deptId,
+        passwordHash: hashPassword(stagePassword),
       },
       create: {
         name: `Stage-${String(stg.defaultOrder).padStart(2, '0')} (${stg.name}) Operator`,
         email: stageEmail,
         phone: `+9198765432${String(stg.defaultOrder).padStart(2, '0')}`,
-        passwordHash: hashPassword('RF-secure-2026!'),
+        passwordHash: hashPassword(stagePassword),
         roleId,
         departmentId: deptId,
         assignedStageId: stageMap[stg.name],
@@ -207,24 +209,24 @@ async function main() {
       },
     });
   }
-  console.log('✅ Seeded 20 Dedicated Process Stage Operator Accounts');
+  console.log('✅ Seeded 20 Dedicated Process Stage Operator Accounts with 4-digit PINs (2001-2020)');
 
   // Additional Convenience Aliases for Quick Logins
   const extraAliases = [
-    { email: 'production@rfelectro.com', name: 'Production Manager', roleId: roleMap[RoleCode.PRODUCTION_PLANNER], deptId: deptMap['Production & Engineering'] },
-    { email: 'quality@rfelectro.com', name: 'Quality Inspector', roleId: roleMap[RoleCode.QC_OFFICER], deptId: deptMap['Quality Assurance'] },
-    { email: 'dispatch@rfelectro.com', name: 'Dispatch Manager', roleId: roleMap[RoleCode.STORE_DISPATCH], deptId: deptMap['Stores & Dispatch'] },
-    { email: 'pit@rfelectro.com', name: 'PIT Stage Operator', roleId: roleMap[RoleCode.PROCESS_OPERATOR], deptId: deptMap['Production & Engineering'], stageId: stageMap['PIT'] },
+    { email: 'production@rfelectro.com', name: 'Production Manager', roleId: roleMap[RoleCode.PRODUCTION_PLANNER], deptId: deptMap['Production & Engineering'], pin: '1002' },
+    { email: 'quality@rfelectro.com', name: 'Quality Inspector', roleId: roleMap[RoleCode.QC_OFFICER], deptId: deptMap['Quality Assurance'], pin: '1003' },
+    { email: 'dispatch@rfelectro.com', name: 'Dispatch Manager', roleId: roleMap[RoleCode.STORE_DISPATCH], deptId: deptMap['Stores & Dispatch'], pin: '1004' },
+    { email: 'pit@rfelectro.com', name: 'PIT Stage Operator', roleId: roleMap[RoleCode.PROCESS_OPERATOR], deptId: deptMap['Production & Engineering'], stageId: stageMap['PIT'], pin: '2005' },
   ];
 
   for (const alias of extraAliases) {
     await prisma.user.upsert({
       where: { email: alias.email },
-      update: { roleId: alias.roleId, departmentId: alias.deptId, assignedStageId: alias.stageId || null },
+      update: { roleId: alias.roleId, departmentId: alias.deptId, assignedStageId: alias.stageId || null, passwordHash: hashPassword(alias.pin) },
       create: {
         name: alias.name,
         email: alias.email,
-        passwordHash: hashPassword('RF-secure-2026!'),
+        passwordHash: hashPassword(alias.pin),
         roleId: alias.roleId,
         departmentId: alias.deptId,
         assignedStageId: alias.stageId || null,
@@ -249,11 +251,11 @@ async function main() {
 
   await prisma.customerPortalAccess.upsert({
     where: { email: 'buyer@acme-electronics.com' },
-    update: {},
+    update: { passwordHash: hashPassword('9001') },
     create: {
       customerId: customer.id,
       email: 'buyer@acme-electronics.com',
-      passwordHash: hashPassword('Portal@123'),
+      passwordHash: hashPassword('9001'),
       isActive: true,
     },
   });
