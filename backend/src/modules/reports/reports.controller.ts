@@ -12,6 +12,11 @@ export class ReportsController {
     return this.reportsService.getDashboardSummary();
   }
 
+  @Get('live-production-dashboard')
+  getLiveProductionDashboard(@Query('shift') shift?: string) {
+    return this.reportsService.getLiveProductionDashboard(shift);
+  }
+
   @Get('rejection-summary')
   getRejectionSummary() {
     return this.reportsService.getRejectionSummary();
