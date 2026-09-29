@@ -3,12 +3,9 @@
 import React from 'react';
 import { 
   ArrowRight, 
-  Activity, 
-  Truck, 
-  PlayCircle, 
-  Hourglass, 
-  PauseCircle, 
-  CheckCircle2 
+  Layers, 
+  Truck,
+  PackageCheck
 } from 'lucide-react';
 import { PipelineStageItem } from '@/services/dashboardService';
 
@@ -17,125 +14,105 @@ interface JobMovementPipelineProps {
   todayDispatchedSqm: number;
 }
 
+// Fixed standard stage color map matching user's design
+const stageColorPalette: Record<string, string> = {
+  'SHEARING': '#2563EB', // Blue
+  'DRILLING': '#16A34A', // Forest Green
+  'DML': '#EA580C',      // Orange
+  'PIT': '#6366F1',      // Indigo/Purple
+  'EPL': '#E11D48',      // Rose/Red
+  'SES': '#0D9488',      // Teal/Cyan
+  'PISM': '#D97706',     // Amber/Gold
+  'LP': '#0284C7',       // Sky Blue
+  'HASL': '#7C3AED',     // Violet
+  'RT': '#475569',       // Slate Gray
+  'BBT': '#78350F',      // Rust Brown
+  'DISPATCH': '#15803D', // Dark Green
+};
+
 export const JobMovementPipeline: React.FC<JobMovementPipelineProps> = ({
   stages,
   todayDispatchedSqm,
 }) => {
+  // Filter out the dispatch node from stages array if backend included it
+  const processStages = stages.filter(s => !s.isDispatch);
+
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4 lg:p-5 shadow-sm">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-3 border-b border-slate-100 mb-3.5">
-        <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-lg bg-blue-50 text-blue-600 border border-blue-200">
-            <Activity className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-sm lg:text-base font-bold text-slate-900 flex items-center gap-2">
-              Job Movement — Live Status Pipeline
-            </h2>
-            <p className="text-xs text-slate-500">
-              Real-time work-in-progress throughput across all 12 manufacturing stages
-            </p>
-          </div>
+      <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100 mb-4">
+        <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200">
+          <Layers className="w-4 h-4" />
         </div>
-
-        {/* Legend */}
-        <div className="flex items-center gap-3 text-xs font-semibold text-slate-600 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 self-start sm:self-auto">
-          <span className="flex items-center gap-1 text-emerald-700">
-            <PlayCircle className="w-3.5 h-3.5 text-emerald-600" /> Running
-          </span>
-          <span className="text-slate-300">•</span>
-          <span className="flex items-center gap-1 text-amber-700">
-            <Hourglass className="w-3.5 h-3.5 text-amber-600" /> Waiting
-          </span>
-          <span className="text-slate-300">•</span>
-          <span className="flex items-center gap-1 text-rose-700">
-            <PauseCircle className="w-3.5 h-3.5 text-rose-600" /> Hold
-          </span>
-        </div>
+        <h2 className="text-sm lg:text-base font-bold text-slate-900">
+          Job Movement – Live Status
+        </h2>
       </div>
 
-      {/* Horizontal Flow */}
-      <div className="overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-slate-300">
+      {/* Horizontal Flow Container */}
+      <div className="overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-300">
         <div className="flex items-center gap-2 min-w-max">
-          {stages.map((stage, index) => {
-            const isLast = index === stages.length - 1;
-            const hasHold = stage.hold > 0;
+          {processStages.map((stage, index) => {
+            const shortCode = (stage.shortCode || stage.name || '').toUpperCase().replace(/^\d+\.\s*/, '');
+            const bannerColor = stageColorPalette[shortCode] || stage.color || '#3B82F6';
 
             return (
-              <React.Fragment key={stage.name}>
-                {/* Stage Box */}
-                <div
-                  className={`w-32 rounded-lg border p-2.5 flex flex-col justify-between transition-all ${
-                    stage.isDispatch
-                      ? 'bg-emerald-50/50 border-emerald-300'
-                      : hasHold
-                      ? 'bg-rose-50/40 border-rose-300'
-                      : 'bg-slate-50/80 border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  {/* Top Bar: Dept Name & Color */}
-                  <div className="flex items-center justify-between gap-1 pb-1 border-b border-slate-200/80">
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className="w-2 h-2 rounded-full shrink-0"
-                        style={{ backgroundColor: stage.color }}
-                      />
-                      <span className="text-[11px] font-bold text-slate-900 tracking-wider truncate">
-                        {stage.name}
-                      </span>
-                    </div>
-                    {stage.isDispatch && (
-                      <Truck className="w-3 h-3 text-emerald-600 shrink-0" />
-                    )}
+              <React.Fragment key={stage.name || index}>
+                {/* Stage Card */}
+                <div className="w-28 lg:w-32 rounded-xl overflow-hidden shadow-xs border border-slate-200/90 bg-white flex flex-col shrink-0">
+                  {/* Top Colored Header Banner */}
+                  <div
+                    className="py-1.5 px-2 text-center text-white text-xs font-black tracking-wider uppercase truncate"
+                    style={{ backgroundColor: bannerColor }}
+                  >
+                    {shortCode}
                   </div>
 
-                  {/* Metric: Today's Sqm */}
-                  <div className="my-1.5">
-                    <div className="text-lg font-bold text-slate-900 font-mono">
-                      {stage.todaySqm}{' '}
-                      <span className="text-[10px] font-normal text-slate-500">m²</span>
+                  {/* Card Body */}
+                  <div className="p-2.5 flex flex-col items-center justify-center text-center">
+                    {/* Sqm Output */}
+                    <div className="text-sm lg:text-base font-extrabold text-slate-900 font-mono">
+                      {stage.todaySqm || 0} <span className="text-[11px] font-bold text-slate-600">Sqm</span>
                     </div>
-                    <div className="text-[10px] text-slate-500">
-                      {stage.isDispatch ? "Today's Ship" : "Output"}
+
+                    {/* Stats */}
+                    <div className="mt-1.5 space-y-0.5 text-[11px] font-medium text-slate-600">
+                      <div>Running: <span className="font-semibold text-slate-800">{stage.running || 0}</span></div>
+                      <div>Waiting: <span className="font-semibold text-slate-800">{stage.waiting || 0}</span></div>
+                      <div className={stage.hold > 0 ? 'text-rose-600 font-bold' : 'text-slate-500'}>
+                        Hold: <span>{stage.hold || 0}</span>
+                      </div>
                     </div>
                   </div>
-
-                  {/* Bottom Breakdown (Running, Waiting, Hold) */}
-                  {stage.isDispatch ? (
-                    <div className="pt-1 border-t border-emerald-200 text-[10px] font-bold text-emerald-700 flex items-center justify-between">
-                      <span>Ready</span>
-                      <CheckCircle2 className="w-3 h-3" />
-                    </div>
-                  ) : (
-                    <div className="pt-1 border-t border-slate-200/80 flex items-center justify-between text-[10px] font-mono">
-                      <span className="text-emerald-700 font-bold" title="Running Jobs">
-                        R:{stage.running}
-                      </span>
-                      <span className="text-amber-700 font-medium" title="Waiting Jobs">
-                        W:{stage.waiting}
-                      </span>
-                      <span
-                        className={`font-bold ${
-                          hasHold ? 'text-rose-700 font-black' : 'text-slate-400'
-                        }`}
-                        title="Held Jobs"
-                      >
-                        H:{stage.hold}
-                      </span>
-                    </div>
-                  )}
                 </div>
 
-                {/* Connector */}
-                {!isLast && (
-                  <div className="text-slate-400 shrink-0">
-                    <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
-                  </div>
-                )}
+                {/* Arrow Connector */}
+                <div className="text-slate-600 px-0.5 shrink-0">
+                  <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                </div>
               </React.Fragment>
             );
           })}
+
+          {/* Final Node: DISPATCH */}
+          <div className="w-28 lg:w-32 rounded-xl overflow-hidden shadow-xs border border-green-300 bg-white flex flex-col shrink-0">
+            {/* Dispatch Header Banner */}
+            <div className="py-1.5 px-2 text-center text-white text-xs font-black tracking-wider uppercase flex items-center justify-center gap-1.5 bg-green-700">
+              <PackageCheck className="w-3.5 h-3.5" />
+              <span>DISPATCH</span>
+            </div>
+
+            {/* Dispatch Card Body */}
+            <div className="p-2.5 flex flex-col items-center justify-center text-center">
+              <Truck className="w-5 h-5 text-green-600 my-0.5" />
+              <div className="text-[10px] font-semibold text-slate-500">
+                Dispatched Today
+              </div>
+              <div className="text-sm lg:text-base font-black text-slate-900 font-mono mt-0.5">
+                {todayDispatchedSqm || 0} <span className="text-[11px] font-bold text-slate-600">Sqm</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

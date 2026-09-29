@@ -80,6 +80,7 @@ export interface ManagementAlertItem {
 
 export interface PipelineStageItem {
   name: string;
+  shortCode?: string;
   color: string;
   todaySqm: number;
   running: number;

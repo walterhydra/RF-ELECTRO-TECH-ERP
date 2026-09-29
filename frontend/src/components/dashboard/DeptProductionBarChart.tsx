@@ -73,17 +73,21 @@ export const DeptProductionBarChart: React.FC<DeptProductionBarChartProps> = ({ 
       </div>
 
       {/* Bar Chart */}
-      <div className="w-full h-52 lg:h-56">
+      <div className="w-full h-64 lg:h-72">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={sortedData} margin={{ top: 10, right: 10, left: -20, bottom: 15 }}>
+          <BarChart data={sortedData} margin={{ top: 12, right: 10, left: -15, bottom: 45 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
             <XAxis 
-              dataKey="name" 
+              dataKey="fullName" 
               stroke="#64748b" 
               fontSize={11} 
               fontWeight={600}
               tickLine={false}
-              dy={6}
+              interval={0}
+              angle={-38}
+              textAnchor="end"
+              height={60}
+              dy={4}
             />
             <YAxis 
               stroke="#64748b" 
