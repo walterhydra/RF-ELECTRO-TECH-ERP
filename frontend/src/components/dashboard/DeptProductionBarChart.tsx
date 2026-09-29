@@ -11,7 +11,7 @@ import {
   ResponsiveContainer, 
   Cell 
 } from 'recharts';
-import { BarChart3, ArrowDownWideNarrow, Sparkles } from 'lucide-react';
+import { BarChart3, ArrowDownWideNarrow } from 'lucide-react';
 import { DeptBarChartItem } from '@/services/dashboardService';
 
 interface DeptProductionBarChartProps {
@@ -19,7 +19,6 @@ interface DeptProductionBarChartProps {
 }
 
 export const DeptProductionBarChart: React.FC<DeptProductionBarChartProps> = ({ data }) => {
-  // Sort from highest to lowest
   const sortedData = [...data].sort((a, b) => b.sqm - a.sqm);
 
   const CustomTooltip = ({ active, payload }: any) => {
@@ -27,22 +26,22 @@ export const DeptProductionBarChart: React.FC<DeptProductionBarChartProps> = ({ 
       const item = payload[0].payload as DeptBarChartItem;
       const percent = Math.round((item.sqm / item.target) * 100);
       return (
-        <div className="bg-slate-900/95 border border-slate-700 p-3 rounded-xl shadow-2xl backdrop-blur-md">
-          <div className="flex items-center gap-2 font-bold text-white text-sm">
-            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+        <div className="bg-white border border-slate-200 p-2.5 rounded-lg shadow-xl text-slate-800">
+          <div className="flex items-center gap-2 font-bold text-slate-900 text-xs">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
             {item.fullName}
           </div>
-          <div className="mt-2 space-y-1 text-xs">
-            <div className="text-slate-300 flex justify-between gap-4">
+          <div className="mt-1.5 space-y-1 text-xs">
+            <div className="text-slate-600 flex justify-between gap-3">
               <span>Today's Output:</span>
-              <span className="font-bold text-white">{item.sqm} Sqm</span>
+              <span className="font-bold text-slate-900">{item.sqm} Sqm</span>
             </div>
-            <div className="text-slate-400 flex justify-between gap-4">
-              <span>Dept Target:</span>
-              <span className="font-bold text-slate-200">{item.target} Sqm</span>
+            <div className="text-slate-500 flex justify-between gap-3">
+              <span>Target:</span>
+              <span className="font-medium text-slate-700">{item.target} Sqm</span>
             </div>
-            <div className="pt-1 border-t border-slate-800 flex justify-between gap-4 font-bold text-emerald-400">
-              <span>Achievement:</span>
+            <div className="pt-1 border-t border-slate-100 flex justify-between gap-3 font-bold text-emerald-600">
+              <span>Achieved:</span>
               <span>{percent}%</span>
             </div>
           </div>
@@ -53,50 +52,47 @@ export const DeptProductionBarChart: React.FC<DeptProductionBarChartProps> = ({ 
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-hidden flex flex-col justify-between">
-      {/* Background glow */}
-      <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none -mr-16 -mt-16" />
-
+    <div className="bg-white border border-slate-200 rounded-xl p-4 lg:p-5 shadow-sm flex flex-col justify-between h-full">
       {/* Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+      <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
         <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30">
+          <div className="p-2 rounded-lg bg-blue-50 text-blue-600 border border-blue-200">
             <BarChart3 className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
+            <h2 className="text-sm lg:text-base font-bold text-slate-900 flex items-center gap-2">
               Dept-wise Production Output
             </h2>
-            <p className="text-xs text-slate-400">Live floor sqm output by manufacturing stage</p>
+            <p className="text-xs text-slate-500">Live floor sqm output by manufacturing stage</p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700">
-          <ArrowDownWideNarrow className="w-3.5 h-3.5 text-blue-400" />
-          <span>Sorted High ➔ Low</span>
+        <div className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+          <ArrowDownWideNarrow className="w-3.5 h-3.5 text-blue-600" />
+          <span>High ➔ Low</span>
         </div>
       </div>
 
-      {/* Recharts Bar Chart */}
-      <div className="w-full h-56 lg:h-64">
+      {/* Bar Chart */}
+      <div className="w-full h-52 lg:h-56">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={sortedData} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} opacity={0.5} />
+          <BarChart data={sortedData} margin={{ top: 10, right: 10, left: -20, bottom: 15 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
             <XAxis 
               dataKey="name" 
-              stroke="#94A3B8" 
+              stroke="#64748b" 
               fontSize={11} 
               fontWeight={600}
               tickLine={false}
-              dy={8}
+              dy={6}
             />
             <YAxis 
-              stroke="#94A3B8" 
+              stroke="#64748b" 
               fontSize={11} 
               tickLine={false}
               unit="m²"
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: '#334155', opacity: 0.2 }} />
-            <Bar dataKey="sqm" radius={[6, 6, 0, 0]}>
+            <Tooltip content={<CustomTooltip />} />
+            <Bar dataKey="sqm" radius={[4, 4, 0, 0]}>
               {sortedData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.color} />
               ))}

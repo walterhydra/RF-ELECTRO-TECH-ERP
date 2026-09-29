@@ -34,7 +34,6 @@ import {
   fallbackDashboardData, 
   LiveDashboardData 
 } from '@/services/dashboardService';
-import { Loader2 } from 'lucide-react';
 
 export default function LiveProductionDashboardPage() {
   const router = useRouter();
@@ -96,7 +95,7 @@ export default function LiveProductionDashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 lg:p-6 space-y-5 max-w-[1720px] mx-auto">
+    <div className="p-4 lg:p-6 space-y-4 max-w-[1720px] mx-auto">
       {/* 1. TOP HEADER */}
       <DashboardHeader
         shift={selectedShift}
@@ -116,20 +115,20 @@ export default function LiveProductionDashboardPage() {
       />
 
       {/* 3. SECTION C: PRODUCTION GAUGE & LIVE DEPT BAR CHART */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Left: Today's Production vs Target Card (5 Columns on Large Screens) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Left: Today's Production vs Target Card */}
         <div className="lg:col-span-5">
           <ProductionTargetCard data={data.productionGauge} />
         </div>
 
-        {/* Right: Department-wise Production Bar Chart (7 Columns on Large Screens) */}
+        {/* Right: Department-wise Production Bar Chart */}
         <div className="lg:col-span-7">
           <DeptProductionBarChart data={data.deptProductionBarChart} />
         </div>
       </div>
 
       {/* 4. SECTION D: 3-COLUMN MIDDLE GRID (Tables & Alerts) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
         {/* Left: Department-wise Live Production Table (5 Columns) */}
         <div className="lg:col-span-5">
           <DeptProductionTable data={data.deptProductionTable} />
