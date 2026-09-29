@@ -784,18 +784,15 @@ export class ReportsService {
       monthRejectedQty += rejected;
     });
 
-    // Plant-wide daily production = physical volume launched and processed through shop floor today
+    // Plant-wide daily production = physical volume of all JobCards created / launched today in PostgreSQL DB
     const todayLaunchedCards = allJobCards.filter((jc: any) => new Date(jc.createdAt) >= startOfToday);
     const todayLaunchedSqm = todayLaunchedCards.reduce((acc, jc) => acc + getJobCardAreaSqm(jc), 0);
-    
-    // Total plant daily production (capped realistically to shop floor capacity ~135-155 sqm)
-    const rawTodayProduction = todayLaunchedSqm > 0 ? todayLaunchedSqm : (stageWipMap[firstStageId]?.todaySqm || 138.4);
-    const totalTodayProductionSqm = Number((rawTodayProduction > 0 ? (rawTodayProduction % 180 + 110) : 138.4).toFixed(1));
+    const totalTodayProductionSqm = Number(todayLaunchedSqm.toFixed(1));
 
-    // Month production (scale realistically to ~3,200 - 3,800 sqm toward 4,000 sqm target)
+    // Plant-wide monthly production = physical volume of all JobCards created / launched this month in PostgreSQL DB
     const monthLaunchedCards = allJobCards.filter((jc: any) => new Date(jc.createdAt) >= startOfMonth);
     const monthLaunchedSqm = monthLaunchedCards.reduce((acc, jc) => acc + getJobCardAreaSqm(jc), 0);
-    const totalMonthProductionSqm = Number((monthLaunchedSqm > 0 ? (monthLaunchedSqm * 2.5 + 1200) : 3450).toFixed(1));
+    const totalMonthProductionSqm = Number(monthLaunchedSqm.toFixed(1));
 
     // 7. Calculate Dispatches
     let monthDispatchedSqmCalc = 0;
@@ -853,8 +850,8 @@ export class ReportsService {
       const stageStats = stageWipMap[stage.id] || stageWipMap[stage.name] || stageWipMap[stage.code] || { running: 0, waiting: 0, hold: 0, todaySqm: 0 };
       
       const targetSqm = defaultStageTemplates[idx % defaultStageTemplates.length]?.target || 25;
-      const todaySqm = Number(stageStats.todaySqm.toFixed(1)) || (idx === 0 ? Math.min(targetSqm, totalTodayProductionSqm) : 0);
-      const achievementPercent = targetSqm > 0 ? Math.min(150, Math.round((todaySqm / targetSqm) * 100)) : 0;
+      const todaySqm = Number((stageStats.todaySqm > 0 ? stageStats.todaySqm : (idx === 0 ? totalTodayProductionSqm : 0)).toFixed(1));
+      const achievementPercent = targetSqm > 0 ? Math.round((todaySqm / targetSqm) * 100) : 0;
 
       return {
         rank: idx + 1,
@@ -878,7 +875,7 @@ export class ReportsService {
     const pipelineStages = activeStageList.map((stage: any, idx: number) => {
       const cleanName = formatStageDisplayName(stage.name);
       const stageStats = stageWipMap[stage.id] || stageWipMap[stage.name] || stageWipMap[stage.code] || { running: 0, waiting: 0, hold: 0, todaySqm: 0 };
-      const todaySqm = Number(stageStats.todaySqm.toFixed(1)) || (idx === 0 ? Math.min(25, totalTodayProductionSqm) : 0);
+      const todaySqm = Number((stageStats.todaySqm > 0 ? stageStats.todaySqm : (idx === 0 ? totalTodayProductionSqm : 0)).toFixed(1));
 
       return {
         name: cleanName,
