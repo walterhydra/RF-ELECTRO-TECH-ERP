@@ -542,7 +542,7 @@ export class ReportsService {
 
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-    // Determine current shift based on current hour if not provided
+    // Current shift calculation (Shift A: 06-14, Shift B: 14-22, Shift C: 22-06)
     const currentHour = today.getHours();
     let detectedShift = 'A Shift';
     if (currentHour >= 6 && currentHour < 14) {
@@ -554,12 +554,14 @@ export class ReportsService {
     }
     const activeShift = shiftOverride || detectedShift;
 
-    // Fetch all process stages
+    // 1. Fetch Process Stages from DB
     const stages = await this.prisma.processStage.findMany({
+      where: { isActive: true },
+      include: { department: true },
       orderBy: { defaultOrder: 'asc' },
     });
 
-    // 1. Month-to-date movements & rejections
+    // 2. Real Month Movements & Rejections
     const monthMovements = await this.prisma.stageMovementLog.findMany({
       where: { createdAt: { gte: startOfMonth } },
       include: {
@@ -568,12 +570,10 @@ export class ReportsService {
           include: {
             jobCard: {
               select: {
-                jobCardNo: true,
                 prodPnlAreaSqm: true,
                 custPnlAreaSqm: true,
                 totalQty: true,
                 prodPnlQty: true,
-                customerPO: { include: { customer: true } }
               }
             }
           }
@@ -583,16 +583,25 @@ export class ReportsService {
 
     let monthProcessedQty = 0;
     let monthRejectedQty = 0;
+    let monthProductionSqmCalculated = 0;
+
     monthMovements.forEach(m => {
-      monthProcessedQty += m.qtyProcessed || 0;
-      monthRejectedQty += m.qtyRejected || 0;
+      const processed = m.qtyProcessed || 0;
+      const rejected = m.qtyRejected || 0;
+      monthProcessedQty += processed;
+      monthRejectedQty += rejected;
+
+      const jc = m.subJobCard?.jobCard;
+      const totalPcb = jc?.totalQty || 100;
+      const areaPerPiece = (jc?.prodPnlAreaSqm || jc?.custPnlAreaSqm || 1.2) / (totalPcb || 1);
+      monthProductionSqmCalculated += processed * areaPerPiece;
     });
 
-    const monthRejectionRate = monthProcessedQty > 0 
-      ? Number(((monthRejectedQty / monthProcessedQty) * 100).toFixed(2))
-      : 0.52;
+    const monthRejectionRate = (monthProcessedQty + monthRejectedQty) > 0 
+      ? Number(((monthRejectedQty / (monthProcessedQty + monthRejectedQty)) * 100).toFixed(2))
+      : 0.0;
 
-    // 2. Today's Movements
+    // 3. Real Today Movements
     const todayMovements = await this.prisma.stageMovementLog.findMany({
       where: { createdAt: { gte: startOfToday, lte: endOfToday } },
       include: {
@@ -601,11 +610,10 @@ export class ReportsService {
           include: {
             jobCard: {
               select: {
-                jobCardNo: true,
                 prodPnlAreaSqm: true,
                 custPnlAreaSqm: true,
                 totalQty: true,
-                customerPO: { include: { customer: true } }
+                prodPnlQty: true,
               }
             }
           }
@@ -613,7 +621,23 @@ export class ReportsService {
       }
     });
 
-    // 3. Dispatches for this month & today
+    let todayProductionSqm = 0;
+    const stageTodaySqmMap: Record<string, number> = {};
+
+    todayMovements.forEach(m => {
+      const processed = m.qtyProcessed || 0;
+      const jc = m.subJobCard?.jobCard;
+      const totalPcb = jc?.totalQty || 100;
+      const areaPerPiece = (jc?.prodPnlAreaSqm || jc?.custPnlAreaSqm || 1.2) / (totalPcb || 1);
+      const sqm = processed * areaPerPiece;
+      todayProductionSqm += sqm;
+
+      if (m.stageId) {
+        stageTodaySqmMap[m.stageId] = (stageTodaySqmMap[m.stageId] || 0) + sqm;
+      }
+    });
+
+    // 4. Real Dispatches (Month & Today)
     const monthDispatches = await this.prisma.dispatch.findMany({
       where: { createdAt: { gte: startOfMonth } },
       include: {
@@ -630,15 +654,17 @@ export class ReportsService {
 
     const monthDispatchedSqm = monthDispatches.reduce((acc, d) => {
       const cardSqm = d.jobCard?.prodPnlAreaSqm || d.jobCard?.custPnlAreaSqm || 1.2;
-      return acc + (d.dispatchedQty * (cardSqm / (d.jobCard?.totalQty || 100)));
+      const totalQty = d.jobCard?.totalQty || 100;
+      return acc + (d.dispatchedQty * (cardSqm / totalQty));
     }, 0);
 
     const todayDispatchedSqm = todayDispatches.reduce((acc, d) => {
       const cardSqm = d.jobCard?.prodPnlAreaSqm || d.jobCard?.custPnlAreaSqm || 1.2;
-      return acc + (d.dispatchedQty * (cardSqm / (d.jobCard?.totalQty || 100)));
+      const totalQty = d.jobCard?.totalQty || 100;
+      return acc + (d.dispatchedQty * (cardSqm / totalQty));
     }, 0);
 
-    // 4. Active Sub Job Cards & WIP
+    // 5. Real Active WIP SubJobCards
     const activeSubCards = await this.prisma.subJobCard.findMany({
       where: { status: { in: ['IN_STAGE', 'PENDING_LAUNCH', 'ON_HOLD'] } },
       include: {
@@ -648,6 +674,11 @@ export class ReportsService {
             product: true,
             customerPO: { include: { customer: true } }
           }
+        },
+        movements: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+          include: { createdBy: true }
         }
       }
     });
@@ -656,159 +687,147 @@ export class ReportsService {
       return acc + (c.prodPnlAreaSqm || c.custPnlAreaSqm || ((c.qty || 10) * 0.45));
     }, 0);
 
-    const heldCards = activeSubCards.filter(c => c.status === 'ON_HOLD');
+    // 6. Real Held Jobs
+    const realHeldSubCards = activeSubCards.filter(
+      c => c.status === 'ON_HOLD' || (c.qtyHold && c.qtyHold > 0) || c.jobCard?.status === 'ON_HOLD'
+    );
 
-    // 11 Core Standard Departments in PCB Manufacturing
-    const defaultDepts = [
-      { name: 'Shearing & Cutting', short: 'SHEARING', color: '#3B82F6', target: 35, baseSqm: 32 },
-      { name: 'CNC Drilling', short: 'DRILLING', color: '#10B981', target: 30, baseSqm: 28 },
-      { name: 'DML (Dry Film)', short: 'DML', color: '#6366F1', target: 25, baseSqm: 24 },
-      { name: 'PTH / PIT (Plating)', short: 'PIT', color: '#F59E0B', target: 25, baseSqm: 22 },
-      { name: 'EPL (Pattern Plating)', short: 'EPL', color: '#EC4899', target: 20, baseSqm: 18 },
-      { name: 'SES (Etching & Strip)', short: 'SES', color: '#8B5CF6', target: 20, baseSqm: 17 },
-      { name: 'PISM (Solder Mask)', short: 'PISM', color: '#14B8A6', target: 22, baseSqm: 19 },
-      { name: 'LP / Legend Print', short: 'LP', color: '#F97316', target: 18, baseSqm: 16 },
-      { name: 'HASL / Surface Finish', short: 'HASL', color: '#06B6D4', target: 18, baseSqm: 15 },
-      { name: 'Routing & Profile (RT)', short: 'RT', color: '#84CC16', target: 15, baseSqm: 12 },
-      { name: 'BBT & Testing', short: 'BBT', color: '#E11D48', target: 12, baseSqm: 6 },
-    ];
-
-    // Calculate actual Sqm output per department from movement logs or realistic distribution
-    const todayMovementsSqm = todayMovements.reduce((acc, m) => {
-      const cardSqm = m.subJobCard?.jobCard?.prodPnlAreaSqm || m.subJobCard?.jobCard?.custPnlAreaSqm || 1.5;
-      return acc + (m.qtyProcessed * (cardSqm / (m.subJobCard?.jobCard?.totalQty || 50)));
-    }, 0);
-
-    const actualTodayProductionSqm = Math.max(138, Math.round(todayMovementsSqm > 0 ? todayMovementsSqm : 138));
-    const monthProductionSqm = Math.max(1561, Math.round(monthProcessedQty > 0 ? (monthProcessedQty * 0.35) : 1561));
-    const finalMonthDispatchedSqm = Math.max(1420, Math.round(monthDispatchedSqm > 0 ? monthDispatchedSqm : 1420));
-    const finalTodayDispatchedSqm = Math.max(121, Math.round(todayDispatchedSqm > 0 ? todayDispatchedSqm : 121));
-
-    // Department Performance Breakdown
-    const deptProductionTable = defaultDepts.map((d, index) => {
-      // Find matching stage movements
-      const matchedStage = stages.find(s => s.name.toUpperCase().includes(d.short) || s.code?.toUpperCase() === d.short);
-      const stageLots = activeSubCards.filter(c => matchedStage ? c.currentStageId === matchedStage.id : false);
-      
-      const runningJobs = stageLots.filter(l => l.status === 'IN_STAGE').length || (index === 0 ? 4 : index === 1 ? 3 : 2);
-      const waitingJobs = stageLots.filter(l => l.status === 'PENDING_LAUNCH').length || (index === 0 ? 2 : index === 2 ? 3 : 1);
-      const holdJobs = stageLots.filter(l => l.status === 'ON_HOLD').length || (index === 1 ? 2 : index === 3 ? 1 : 0);
-
-      const todaySqm = d.baseSqm;
-      const targetSqm = d.target;
-      const achievementPercent = Math.min(120, Math.round((todaySqm / targetSqm) * 100));
+    const jobHoldDetails = realHeldSubCards.map(c => {
+      const latestMovement = c.movements?.[0];
+      const holdSinceDate = latestMovement?.createdAt || c.updatedAt || c.createdAt;
+      const formattedSince = new Date(holdSinceDate).toLocaleDateString('en-US', {
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
 
       return {
-        rank: index + 1,
-        department: d.name,
-        shortCode: d.short,
-        color: d.color,
-        todayProductionSqm: todaySqm,
+        jobCardNo: c.jobCard?.jobCardNo || c.subJobCardNo,
+        customer: c.jobCard?.customerPO?.customer?.companyName || c.jobCard?.customerCode || 'Direct Customer',
+        job: c.jobCard?.product?.name || c.jobCard?.customerPartNo || 'Custom PCB',
+        qtyPnl: c.prodPnlQty || c.qtyHold || c.qty || 1,
+        department: c.currentStage?.name?.replace(/^\d+\.\s*/, '') || 'Processing',
+        holdReason: latestMovement?.remarks || latestMovement?.rejectionReason || 'Under Quality Review / Customer Hold',
+        since: formattedSince,
+        responsible: latestMovement?.createdBy?.name || 'Quality Lead',
+        priority: (c.jobCard?.priority || 'NORMAL').toUpperCase() as 'CRITICAL' | 'HIGH' | 'NORMAL',
+      };
+    });
+
+    // 7. Real Department Table & Output
+    const deptColors = ['#3B82F6', '#10B981', '#6366F1', '#F59E0B', '#EC4899', '#8B5CF6', '#14B8A6', '#F97316', '#06B6D4', '#84CC16', '#E11D48'];
+
+    const deptProductionTable = stages.map((stage, idx) => {
+      const cleanName = stage.name.replace(/^\d+\.\s*/, '');
+      const stageLots = activeSubCards.filter(c => c.currentStageId === stage.id);
+      
+      const runningJobs = stageLots.filter(l => l.status === 'IN_STAGE').length;
+      const waitingJobs = stageLots.filter(l => l.status === 'PENDING_LAUNCH').length;
+      const holdJobs = stageLots.filter(l => l.status === 'ON_HOLD' || (l.qtyHold && l.qtyHold > 0)).length;
+
+      const stageSqm = Number((stageTodaySqmMap[stage.id] || 0).toFixed(1));
+      const targetSqm = 25; // Standard plant target per stage
+      const achievementPercent = targetSqm > 0 ? Math.min(150, Math.round((stageSqm / targetSqm) * 100)) : 0;
+
+      return {
+        rank: idx + 1,
+        department: cleanName,
+        shortCode: stage.code || cleanName.substring(0, 8).toUpperCase(),
+        color: deptColors[idx % deptColors.length],
+        todayProductionSqm: stageSqm,
         targetSqm: targetSqm,
         achievementPercent: achievementPercent,
         runningJobs,
         waitingJobs,
         holdJobs,
       };
-    }).sort((a, b) => b.todayProductionSqm - a.todayProductionSqm);
+    }).sort((a, b) => b.todayProductionSqm - a.todayProductionSqm || b.runningJobs - a.runningJobs);
 
-    // Machine Breakdowns
-    const machineBreakdowns = [
-      {
-        id: 'M-DRL-02',
-        machine: 'CNC Drilling M/C #02 (Posalux 4-Spindle)',
-        department: 'CNC Drilling',
-        breakdownSince: '08:30 AM (Today)',
-        duration: '2h 18m',
-        estimatedRunningTime: '11:45 AM',
-        status: 'BREAKDOWN',
-        severity: 'CRITICAL',
-      },
-      {
-        id: 'M-SM-01',
-        machine: 'Solder Mask Semi-Auto Coater #01',
-        department: 'PISM (Solder Mask)',
-        breakdownSince: '09:15 AM (Today)',
-        duration: '1h 33m',
-        estimatedRunningTime: '12:30 PM',
-        status: 'BREAKDOWN',
-        severity: 'HIGH',
-      },
-    ];
+    // Update ranks after sort
+    deptProductionTable.forEach((d, i) => {
+      d.rank = i + 1;
+    });
 
-    // Job Hold Details
-    const jobHoldDetails = [
-      {
-        jobCardNo: '26-27-1636',
-        customer: 'Schneider Electric',
-        job: 'PWR-CTRL-REV4',
-        qtyPnl: 45,
-        department: 'CNC Drilling',
-        holdReason: 'Hole Size Dia Deviation (> 0.05mm)',
-        since: 'Yesterday 04:30 PM',
-        responsible: 'QC / Tooling Lead',
-        priority: 'HIGH',
-      },
-      {
-        jobCardNo: '26-27-1420',
-        customer: 'L&T Technology',
-        job: 'INV-GATE-V2',
-        qtyPnl: 80,
-        department: 'PISM (Solder Mask)',
-        holdReason: 'Customer Ink Color Approval Pending',
-        since: 'Today 09:00 AM',
-        responsible: 'Sales Executive',
-        priority: 'NORMAL',
-      },
-      {
-        jobCardNo: '26-27-1588',
-        customer: 'Havells India',
-        job: 'LED-DRV-120W',
-        qtyPnl: 120,
-        department: 'HASL',
-        holdReason: 'Tin Thickness Low on SMT Pads',
-        since: 'Today 09:40 AM',
-        responsible: 'Process Chemist',
-        priority: 'HIGH',
-      },
-      {
-        jobCardNo: '26-27-1702',
-        customer: 'Secure Meters',
-        job: 'MTR-MB-4L',
-        qtyPnl: 30,
-        department: 'DML (Dry Film)',
-        holdReason: 'Base Copper Scratches on Raw Panel',
-        since: 'Today 10:10 AM',
-        responsible: 'Store / Quality',
-        priority: 'CRITICAL',
-      },
-    ];
+    // 8. Bottom 12-Stage Visual Pipeline
+    const pipelineStages = stages.map((stage, idx) => {
+      const cleanName = stage.name.replace(/^\d+\.\s*/, '');
+      const stageLots = activeSubCards.filter(c => c.currentStageId === stage.id);
+      const running = stageLots.filter(l => l.status === 'IN_STAGE').length;
+      const waiting = stageLots.filter(l => l.status === 'PENDING_LAUNCH').length;
+      const hold = stageLots.filter(l => l.status === 'ON_HOLD' || (l.qtyHold && l.qtyHold > 0)).length;
+      const stageSqm = Number((stageTodaySqmMap[stage.id] || 0).toFixed(1));
 
-    // 12-Stage Visual Movement Pipeline
-    const pipelineStages = [
-      { name: 'SHEARING', color: '#3B82F6', todaySqm: 32, running: 4, waiting: 2, hold: 0 },
-      { name: 'DRILLING', color: '#10B981', todaySqm: 28, running: 3, waiting: 1, hold: 1 },
-      { name: 'DML', color: '#6366F1', todaySqm: 24, running: 2, waiting: 3, hold: 1 },
-      { name: 'PIT', color: '#F59E0B', todaySqm: 22, running: 2, waiting: 1, hold: 0 },
-      { name: 'EPL', color: '#EC4899', todaySqm: 18, running: 2, waiting: 2, hold: 0 },
-      { name: 'SES', color: '#8B5CF6', todaySqm: 17, running: 1, waiting: 1, hold: 0 },
-      { name: 'PISM', color: '#14B8A6', todaySqm: 19, running: 3, waiting: 2, hold: 1 },
-      { name: 'LP', color: '#F97316', todaySqm: 16, running: 2, waiting: 1, hold: 0 },
-      { name: 'HASL', color: '#06B6D4', todaySqm: 15, running: 2, waiting: 1, hold: 1 },
-      { name: 'RT', color: '#84CC16', todaySqm: 12, running: 1, waiting: 2, hold: 0 },
-      { name: 'BBT', color: '#E11D48', todaySqm: 6, running: 1, waiting: 1, hold: 0 },
-      { name: 'DISPATCH', color: '#059669', todaySqm: finalTodayDispatchedSqm, running: 0, waiting: 0, hold: 0, isDispatch: true },
-    ];
+      return {
+        name: stage.code || cleanName.substring(0, 8).toUpperCase(),
+        color: deptColors[idx % deptColors.length],
+        todaySqm: stageSqm,
+        running,
+        waiting,
+        hold,
+        isDispatch: false,
+      };
+    });
 
-    // Management Alerts
+    // Append Final Dispatch Pipeline Card
+    pipelineStages.push({
+      name: 'DISPATCH',
+      color: '#059669',
+      todaySqm: Number(todayDispatchedSqm.toFixed(1)),
+      running: 0,
+      waiting: 0,
+      hold: 0,
+      isDispatch: true,
+    });
+
+    // 9. Real Machine Breakdowns (Filter movements with remarkType = BREAKDOWN or active issues)
+    const breakdownMovements = await this.prisma.stageMovementLog.findMany({
+      where: {
+        createdAt: { gte: startOfToday },
+        OR: [
+          { remarkType: 'MACHINE_BREAKDOWN' },
+          { remarks: { contains: 'breakdown', mode: 'insensitive' } },
+          { remarks: { contains: 'machine', mode: 'insensitive' } },
+        ]
+      },
+      include: { stage: true }
+    });
+
+    const machineBreakdowns = breakdownMovements.map((bm, i) => {
+      const durationHours = Math.max(1, Math.floor((new Date().getTime() - new Date(bm.createdAt).getTime()) / (1000 * 60 * 60)));
+      return {
+        id: `MB-${i + 1}`,
+        machine: bm.remarks || `Stage Equipment (${bm.stage?.name || 'Floor'})`,
+        department: bm.stage?.name?.replace(/^\d+\.\s*/, '') || 'Production Floor',
+        breakdownSince: new Date(bm.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        duration: `${durationHours}h`,
+        estimatedRunningTime: 'Under Service',
+        status: 'BREAKDOWN' as const,
+        severity: 'CRITICAL' as const,
+      };
+    });
+
+    // 10. Real Management Alerts
+    const belowTargetDepts = deptProductionTable.filter(d => d.todayProductionSqm < d.targetSqm && d.targetSqm > 0).length;
+    const pendingQcReviews = await this.prisma.stageMovementLog.count({
+      where: {
+        qcReviewStatus: 'PENDING_REVIEW'
+      }
+    });
+
     const managementAlerts = [
-      { type: 'BREAKDOWN', count: 2, label: 'Machine Breakdown', severity: 'red', icon: 'AlertTriangle' },
-      { type: 'JOB_HOLD', count: 4, label: 'Job Hold', severity: 'red', icon: 'PauseCircle' },
-      { type: 'BELOW_TARGET', count: 3, label: 'Production Below Target (3 Depts)', severity: 'yellow', icon: 'TrendingDown' },
-      { type: 'QA_HOLD', count: 2, label: 'Quality Hold', severity: 'blue', icon: 'ShieldAlert' },
-      { type: 'MAT_SHORTAGE', count: 1, label: 'Material Shortage (CEM-3 1.6mm)', severity: 'purple', icon: 'PackageX' },
-      { type: 'CUST_APPROVAL', count: 1, label: 'Customer Approval Pending', severity: 'pink', icon: 'Clock' },
+      { type: 'BREAKDOWN', count: machineBreakdowns.length, label: 'Machine Breakdowns', severity: machineBreakdowns.length > 0 ? ('red' as const) : ('blue' as const), icon: 'AlertTriangle' },
+      { type: 'JOB_HOLD', count: jobHoldDetails.length, label: 'Jobs on Hold', severity: jobHoldDetails.length > 0 ? ('red' as const) : ('blue' as const), icon: 'PauseCircle' },
+      { type: 'BELOW_TARGET', count: belowTargetDepts, label: `Stages Below Target (${belowTargetDepts})`, severity: 'yellow' as const, icon: 'TrendingDown' },
+      { type: 'QA_HOLD', count: pendingQcReviews, label: 'Quality Review Pending', severity: 'blue' as const, icon: 'ShieldAlert' },
     ];
+
+    const finalTodaySqm = Number(todayProductionSqm.toFixed(1));
+    const finalMonthSqm = Number(monthProductionSqmCalculated.toFixed(1));
+    const finalMonthDispatch = Number(monthDispatchedSqm.toFixed(1));
+    const finalTodayDispatch = Number(todayDispatchedSqm.toFixed(1));
+    const todayTargetMin = 150;
+    const todayTargetMax = 170;
 
     return {
       shift: activeShift,
@@ -816,26 +835,26 @@ export class ReportsService {
       kpis: {
         monthRejectionPercent: monthRejectionRate,
         monthRejectionTarget: 2.0,
-        monthProductionSqm: monthProductionSqm,
+        monthProductionSqm: finalMonthSqm,
         monthProductionTarget: 4000,
-        monthDispatchedSqm: finalMonthDispatchedSqm,
-        monthPendingDispatchSqm: Math.max(141, monthProductionSqm - finalMonthDispatchedSqm),
-        todayProductionSqm: actualTodayProductionSqm,
-        todayTargetMin: 150,
-        todayTargetMax: 170,
-        totalPendingWipSqm: Math.max(312, Math.round(totalPendingWipSqm)),
-        totalPendingWipJobs: Math.max(18, activeSubCards.length),
-        jobsOnHoldCount: 4,
-        machinesBreakdownCount: 2,
+        monthDispatchedSqm: finalMonthDispatch,
+        monthPendingDispatchSqm: Math.max(0, Number((finalMonthSqm - finalMonthDispatch).toFixed(1))),
+        todayProductionSqm: finalTodaySqm,
+        todayTargetMin: todayTargetMin,
+        todayTargetMax: todayTargetMax,
+        totalPendingWipSqm: Number(totalPendingWipSqm.toFixed(1)),
+        totalPendingWipJobs: activeSubCards.length,
+        jobsOnHoldCount: jobHoldDetails.length,
+        machinesBreakdownCount: machineBreakdowns.length,
       },
       productionGauge: {
-        currentSqm: actualTodayProductionSqm,
-        targetSqm: 150,
-        progressPercent: Math.round((actualTodayProductionSqm / 150) * 100),
-        minTarget: 150,
-        maxTarget: 170,
-        requiredToAchieve: Math.max(0, 150 - actualTodayProductionSqm),
-        estimatedEodProduction: 162,
+        currentSqm: finalTodaySqm,
+        targetSqm: todayTargetMin,
+        progressPercent: todayTargetMin > 0 ? Math.round((finalTodaySqm / todayTargetMin) * 100) : 0,
+        minTarget: todayTargetMin,
+        maxTarget: todayTargetMax,
+        requiredToAchieve: Math.max(0, Number((todayTargetMin - finalTodaySqm).toFixed(1))),
+        estimatedEodProduction: Number((finalTodaySqm * 1.3).toFixed(1)),
       },
       deptProductionBarChart: deptProductionTable.map(d => ({
         name: d.shortCode,
@@ -849,7 +868,7 @@ export class ReportsService {
       jobHoldDetails,
       managementAlerts,
       pipelineStages,
-      todayDispatchedSqm: finalTodayDispatchedSqm,
+      todayDispatchedSqm: finalTodayDispatch,
     };
   }
 }
