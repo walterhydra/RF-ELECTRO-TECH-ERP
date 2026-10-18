@@ -64,31 +64,23 @@ export default function LoginPage() {
     setInfoMessage('');
 
     try {
-      const res = await fetch(`${getApiBaseUrl()}/auth/request-otp`, {
+      // 1. Request OTP via Next.js serverless route with Gmail SMTP integration
+      let res = await fetch('/api/auth/request-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password }),
       });
 
-      const data = await res.json();
-
-      // If backend has not yet deployed /auth/request-otp (returns 404), seamlessly fall back to /auth/login
-      if (res.status === 404) {
-        const directRes = await fetch(`${getApiBaseUrl()}/auth/login`, {
+      // Fallback to backend API if internal route fails
+      if (!res.ok && res.status === 404) {
+        res = await fetch(`${getApiBaseUrl()}/auth/request-otp`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: email.trim(), password }),
         });
-        const directData = await directRes.json();
-        if (directRes.ok && directData.accessToken) {
-          finalizeSuccessfulLogin(directData);
-          return;
-        } else {
-          setErrorMessage(directData.message || 'Invalid username or password. Please try again.');
-          setLoading(false);
-          return;
-        }
       }
+
+      const data = await res.json();
 
       if (!res.ok) {
         setErrorMessage(data.message || 'Invalid username or password. Please try again.');
@@ -101,9 +93,8 @@ export default function LoginPage() {
         setTargetEmail(data.targetEmail || 'milanpandavadra84@gmail.com');
         setStep('OTP');
         setOtpCooldown(30);
-        setInfoMessage(`Security OTP code has been sent to ${data.targetEmail || 'milanpandavadra84@gmail.com'}`);
+        setInfoMessage(`Security OTP code has been dispatched to ${data.targetEmail || 'milanpandavadra84@gmail.com'}`);
       } else if (data.accessToken) {
-        // Fallback for direct token logins
         finalizeSuccessfulLogin(data);
         return;
       }
@@ -127,11 +118,19 @@ export default function LoginPage() {
     setErrorMessage('');
 
     try {
-      const res = await fetch(`${getApiBaseUrl()}/auth/verify-otp`, {
+      let res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tempToken, otp: otp.trim() }),
       });
+
+      if (!res.ok && res.status === 404) {
+        res = await fetch(`${getApiBaseUrl()}/auth/verify-otp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tempToken, otp: otp.trim() }),
+        });
+      }
 
       const data = await res.json();
 
@@ -155,13 +154,25 @@ export default function LoginPage() {
     setResending(true);
     setErrorMessage('');
     try {
-      const res = await fetch(`${getApiBaseUrl()}/auth/resend-otp`, {
+      let res = await fetch('/api/auth/resend-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tempToken }),
       });
+
+      if (!res.ok && res.status === 404) {
+        res = await fetch(`${getApiBaseUrl()}/auth/resend-otp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tempToken }),
+        });
+      }
+
       const data = await res.json();
       if (res.ok) {
+        if (data.tempToken) {
+          setTempToken(data.tempToken);
+        }
         setOtpCooldown(30);
         setInfoMessage(`Fresh OTP code has been re-sent to ${targetEmail}`);
       } else {

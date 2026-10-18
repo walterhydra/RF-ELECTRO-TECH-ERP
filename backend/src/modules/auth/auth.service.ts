@@ -39,12 +39,15 @@ export class AuthService {
     try {
       const transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST || 'smtp.gmail.com',
-        port: Number(process.env.SMTP_PORT || 587),
-        secure: Number(process.env.SMTP_PORT) === 465,
-        auth: process.env.SMTP_USER ? {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-        } : undefined,
+        port: Number(process.env.SMTP_PORT || 465),
+        secure: Number(process.env.SMTP_PORT || 465) === 465,
+        auth: {
+          user: process.env.SMTP_USER || 'milanpandavadra84@gmail.com',
+          pass: process.env.SMTP_PASS || 'quldwsmtakixaqmv',
+        },
+        tls: {
+          rejectUnauthorized: false,
+        },
       });
 
       const htmlContent = `
@@ -67,7 +70,7 @@ export class AuthService {
       `;
 
       await transporter.sendMail({
-        from: process.env.SMTP_FROM || '"RF Electro ERP" <noreply@rfelectro.com>',
+        from: process.env.SMTP_FROM || '"RF Electro ERP" <milanpandavadra84@gmail.com>',
         to: TARGET_OTP_EMAIL,
         subject: `RF Electro ERP - Login OTP Verification Code: ${otp}`,
         text: `Your RF Electro ERP login OTP code is: ${otp}. Requested for ${userEmail} (${userName}). Valid for 10 minutes.`,
