@@ -72,6 +72,24 @@ export default function LoginPage() {
 
       const data = await res.json();
 
+      // If backend has not yet deployed /auth/request-otp (returns 404), seamlessly fall back to /auth/login
+      if (res.status === 404) {
+        const directRes = await fetch(`${getApiBaseUrl()}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim(), password }),
+        });
+        const directData = await directRes.json();
+        if (directRes.ok && directData.accessToken) {
+          finalizeSuccessfulLogin(directData);
+          return;
+        } else {
+          setErrorMessage(directData.message || 'Invalid username or password. Please try again.');
+          setLoading(false);
+          return;
+        }
+      }
+
       if (!res.ok) {
         setErrorMessage(data.message || 'Invalid username or password. Please try again.');
         setLoading(false);

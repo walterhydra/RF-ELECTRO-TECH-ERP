@@ -33,9 +33,9 @@ export function getApiBaseUrl(): string {
       return cleaned.endsWith('/api/v1') ? cleaned : `${cleaned}/api/v1`;
     }
 
-    // If on Vercel or any HTTPS cloud deployment, always use Render Cloud Backend
-    if (isVercel) {
-      return 'https://rf-electro-tech-erp.onrender.com/api/v1';
+    // If on Vercel, rfgenix.com, or any cloud deployment, point directly to the live VPS backend
+    if (isVercel || hostname.includes('rfgenix.com')) {
+      return 'https://api.rfgenix.com/api/v1';
     }
 
     // Default LAN / Localhost resolution for local dev
@@ -53,7 +53,7 @@ export function getApiBaseUrl(): string {
     return cleaned.endsWith('/api/v1') ? cleaned : (cleaned.endsWith('/') ? `${cleaned}api/v1` : `${cleaned}/api/v1`);
   }
 
-  return 'https://rf-electro-tech-erp.onrender.com/api/v1';
+  return 'https://api.rfgenix.com/api/v1';
 }
 
 export async function fetchApi(urlOrPath: string, options: RequestInit = {}): Promise<Response> {
