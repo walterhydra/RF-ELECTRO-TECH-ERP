@@ -13,17 +13,24 @@ export function getApiBaseUrl(): string {
     const hostname = window.location.hostname || 'localhost';
     const isVercel = hostname.includes('vercel.app') || isHttps;
 
-    // Purge legacy localtunnel / invalid localhost overrides if present in browser storage
+    // Purge legacy onrender / localtunnel / invalid localhost overrides if present in browser storage
     const savedApiHost = localStorage.getItem('erp_backend_api_url') || localStorage.getItem('erp_qr_server_host');
     if (
       savedApiHost &&
-      (savedApiHost.includes('loca.lt') || (isVercel && (savedApiHost.includes('localhost') || savedApiHost.startsWith('http://') || savedApiHost.includes('192.168.') || savedApiHost.includes('127.0.0.1'))))
+      (savedApiHost.includes('loca.lt') ||
+       savedApiHost.includes('onrender.com') ||
+       (isVercel && (savedApiHost.includes('localhost') || savedApiHost.startsWith('http://') || savedApiHost.includes('192.168.') || savedApiHost.includes('127.0.0.1'))))
     ) {
       localStorage.removeItem('erp_backend_api_url');
       localStorage.removeItem('erp_qr_server_host');
     }
 
-    // Check explicit localStorage override (only if valid HTTPS or matching environment)
+    // If on Vercel, rfgenix.com, or any cloud deployment, always use the live VPS backend
+    if (isVercel || hostname.includes('rfgenix.com')) {
+      return 'https://api.rfgenix.com/api/v1';
+    }
+
+    // Check explicit localStorage override for local development
     const validSavedHost = localStorage.getItem('erp_backend_api_url');
     if (validSavedHost && validSavedHost.trim() !== '') {
       let cleaned = validSavedHost.trim();
@@ -31,11 +38,6 @@ export function getApiBaseUrl(): string {
         cleaned = isHttps ? `https://${cleaned}` : `http://${cleaned}`;
       }
       return cleaned.endsWith('/api/v1') ? cleaned : `${cleaned}/api/v1`;
-    }
-
-    // If on Vercel, rfgenix.com, or any cloud deployment, point directly to the live VPS backend
-    if (isVercel || hostname.includes('rfgenix.com')) {
-      return 'https://api.rfgenix.com/api/v1';
     }
 
     // Default LAN / Localhost resolution for local dev
