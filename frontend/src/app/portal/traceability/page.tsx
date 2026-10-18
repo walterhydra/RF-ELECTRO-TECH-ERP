@@ -135,8 +135,16 @@ export default function CustomerTraceability() {
                           </div>
                           <div className="bg-slate-900 p-2 rounded">
                             <span className="text-slate-500 block">Rejected:</span>
-                            <span className={log.qtyRejected > 0 ? "text-red-400" : "text-slate-400"}>{log.qtyRejected}</span>
+                            <span className={log.qtyRejected > 0 ? "text-red-400 font-bold" : "text-slate-400"}>{log.qtyRejected || 0}</span>
                           </div>
+                          {((log.qtyHold && log.qtyHold > 0) || (log.qtyProcessed > log.qtyForwarded + (log.qtyRejected || 0))) && (
+                            <div className="bg-slate-900 p-2 rounded col-span-2 border border-amber-500/30">
+                              <span className="text-amber-400 block font-semibold">Partial / Hold at Stage:</span>
+                              <span className="text-amber-300 font-bold">
+                                {log.qtyHold || Math.max(0, log.qtyProcessed - log.qtyForwarded - (log.qtyRejected || 0))} PCBs
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

@@ -46,7 +46,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var fileChooserLauncher: ActivityResultLauncher<Intent>
 
     companion object {
-        const val ERP_TARGET_URL = "https://rf-electrotech.vercel.app/"
+        const val ERP_TARGET_URL = "https://rfgenix.com/"
         const val MOBILE_CSS_OVERRIDE_ID = "mobile-override-style"
     }
 
@@ -140,7 +140,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
-                if (url.contains("rf-electrotech.vercel.app") || url.contains("vercel.app")) {
+                if (url.contains("rfgenix.com") || url.contains("rf-electrotech.vercel.app") || url.contains("vercel.app")) {
                     return false
                 }
 

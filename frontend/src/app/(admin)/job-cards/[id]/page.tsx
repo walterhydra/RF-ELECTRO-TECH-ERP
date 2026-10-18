@@ -523,9 +523,10 @@ export default function JobCardDetailPage() {
                   <th className="py-2.5 px-3">Sub-Lot #</th>
                   <th className="py-2.5 px-3">Stage</th>
                   <th className="py-2.5 px-3">Event Status</th>
-                  <th className="py-2.5 px-3 text-right">Received</th>
-                  <th className="py-2.5 px-3 text-right">Forwarded</th>
-                  <th className="py-2.5 px-3 text-right">Rej / Hold</th>
+                  <th className="py-2.5 px-3 text-right">In (Recv)</th>
+                  <th className="py-2.5 px-3 text-right">Out (Fwd)</th>
+                  <th className="py-2.5 px-3 text-right">Partial (Hold)</th>
+                  <th className="py-2.5 px-3 text-right">Scrap (Rej)</th>
                   <th className="py-2.5 px-3">Operator & ID</th>
                   <th className="py-2.5 px-3 font-sans">Remarks / Reason</th>
                 </tr>
@@ -536,7 +537,8 @@ export default function JobCardDetailPage() {
                   const dateStr = dateObj ? dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
                   const timeStr = dateObj ? dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
                   const isRej = (log.qtyRejected || 0) > 0 || String(log.remarkType || '').toUpperCase().includes('REJECT');
-                  const isIncomplete = log.remarkType === 'INCOMPLETE_MOVEMENT' || (log.qtyForwarded < log.qtyReceived && log.qtyReceived > 0);
+                  const isIncomplete = !isRej && (log.remarkType === 'INCOMPLETE_MOVEMENT' || ((log.qtyForwarded || 0) < (log.qtyReceived || 0) && (log.qtyReceived || 0) > 0));
+                  const remainingHold = log.qtyHold !== undefined && log.qtyHold !== null ? Number(log.qtyHold) : Math.max(0, (log.qtyReceived || 0) - (log.qtyForwarded || 0) - (log.qtyRejected || 0));
                   const isInit = String(log.remarkType || '').includes('INITIAL_LAUNCH');
                   const isComp = String(log.remarkType || '').includes('JOB_COMPLETED');
                   const opName = log.createdBy?.name || 'Operator';
@@ -563,8 +565,8 @@ export default function JobCardDetailPage() {
                             Defect Logged
                           </span>
                         ) : isIncomplete ? (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                            Incomplete
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+                            Partially Moved ({remainingHold} Left)
                           </span>
                         ) : isInit ? (
                           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
@@ -575,15 +577,30 @@ export default function JobCardDetailPage() {
                             Completed
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-50 text-slate-600 border border-slate-200">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
                             Full Moved
                           </span>
                         )}
                       </td>
                       <td className="py-2.5 px-3 text-right font-medium text-slate-700">{log.qtyReceived || 0}</td>
                       <td className="py-2.5 px-3 text-right font-bold text-emerald-700">{log.qtyForwarded || 0}</td>
-                      <td className="py-2.5 px-3 text-right font-bold text-rose-700">
-                        {log.qtyRejected > 0 ? `${log.qtyRejected}` : (log.qtyHold > 0 ? `Hold: ${log.qtyHold}` : '0')}
+                      <td className="py-2.5 px-3 text-right font-bold">
+                        {isIncomplete && remainingHold > 0 ? (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-50 text-amber-800 border border-amber-200">
+                            {remainingHold}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 font-normal">—</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-bold">
+                        {log.qtyRejected > 0 ? (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-rose-50 text-rose-700 border border-rose-200 font-bold">
+                            {log.qtyRejected}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 font-normal">—</span>
+                        )}
                       </td>
                       <td className="py-2.5 px-3 whitespace-nowrap">
                         <div className="font-semibold text-slate-900 text-[11px]">{opName}</div>

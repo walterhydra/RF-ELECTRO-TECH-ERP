@@ -6694,9 +6694,19 @@ export default function JobCardsPage() {
                   const yieldPercent = totalBatchQty > 0 ? ((goodQty / totalBatchQty) * 100).toFixed(1) : '100.0';
                   const activeStage = historyModalJob.currentStageName || PF01_STAGES[historyModalJob.currentStageIndex || 0] || '1. SHEARING';
 
+                  const partialLogs = historyLogs.filter((l: any) => {
+                    const isRej = (l.qtyRejected || 0) > 0 || String(l.remarkType || '').toUpperCase().includes('REJECT');
+                    const isInc = l.remarkType === 'INCOMPLETE_MOVEMENT' || ((l.qtyForwarded || 0) < (l.qtyReceived || 0) && (l.qtyReceived || 0) > 0);
+                    return !isRej && isInc;
+                  });
+                  const totalPartialHoldQty = partialLogs.reduce((acc: number, l: any) => {
+                    const hold = l.qtyHold !== undefined && l.qtyHold !== null ? Number(l.qtyHold) : Math.max(0, (l.qtyReceived || 0) - (l.qtyForwarded || 0) - (l.qtyRejected || 0));
+                    return acc + hold;
+                  }, 0);
+
                   return (
                     <div className="space-y-2.5">
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
                         {/* Batch Volume */}
                         <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
                           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Total Volume</span>
@@ -6718,6 +6728,22 @@ export default function JobCardsPage() {
                           </div>
                           <span className="text-[11px] text-emerald-700 font-mono font-semibold block mt-0.5">
                             Yield: {yieldPercent}%
+                          </span>
+                        </div>
+
+                        {/* Partial / Hold WIP */}
+                        <div className={`bg-white rounded-xl p-3 shadow-2xs border ${totalPartialHoldQty > 0 ? 'border-amber-300 ring-1 ring-amber-100' : 'border-slate-200'}`}>
+                          <span className={`text-[10px] font-bold uppercase tracking-wider block font-mono ${totalPartialHoldQty > 0 ? 'text-amber-800' : 'text-slate-400'}`}>
+                            Partial / Hold WIP
+                          </span>
+                          <div className="flex items-baseline gap-1.5 mt-0.5">
+                            <strong className={`text-xl font-extrabold font-mono ${totalPartialHoldQty > 0 ? 'text-amber-900' : 'text-slate-700'}`}>
+                              {totalPartialHoldQty}
+                            </strong>
+                            <span className={`text-xs font-semibold ${totalPartialHoldQty > 0 ? 'text-amber-700' : 'text-slate-500'}`}>PCBs</span>
+                          </div>
+                          <span className={`text-[11px] font-mono block mt-0.5 ${totalPartialHoldQty > 0 ? 'text-amber-700 font-semibold' : 'text-slate-400'}`}>
+                            {partialLogs.length > 0 ? `${partialLogs.length} Partial Transfer(s)` : 'Zero Hold WIP'}
                           </span>
                         </div>
 
@@ -6768,9 +6794,15 @@ export default function JobCardsPage() {
                           </>
                         )}
                         {defectLogs.length > 0 && (
-                          <span className="bg-amber-100 text-amber-900 border border-amber-300 font-bold px-2 py-0.5 rounded font-mono text-[11px] flex items-center gap-1">
-                            <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
+                          <span className="bg-rose-100 text-rose-900 border border-rose-300 font-bold px-2 py-0.5 rounded font-mono text-[11px] flex items-center gap-1">
+                            <AlertTriangle className="w-3.5 h-3.5 text-rose-700" />
                             {defectLogs.length} Quality Defect Event(s)
+                          </span>
+                        )}
+                        {partialLogs.length > 0 && (
+                          <span className="bg-amber-100 text-amber-900 border border-amber-300 font-bold px-2 py-0.5 rounded font-mono text-[11px] flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-amber-700" />
+                            {partialLogs.length} Partial Transfer(s) ({totalPartialHoldQty} Left)
                           </span>
                         )}
                         {historyLastUpdated && (
@@ -6811,8 +6843,8 @@ export default function JobCardsPage() {
                   >
                     <option value="ALL">All Records</option>
                     <option value="FORWARD">Stage Forward Only</option>
+                    <option value="INCOMPLETE">Partially Moved Qty</option>
                     <option value="REJECTION">Defects / Rejections</option>
-                    <option value="INCOMPLETE">Incomplete Moves</option>
                   </select>
                 </div>
 
@@ -6852,12 +6884,13 @@ export default function JobCardsPage() {
               <div className="flex-1 overflow-y-auto bg-white">
                 {(() => {
                   const filtered = historyLogs.filter((log: any) => {
+                    const isRej = (log.qtyRejected || 0) > 0 || String(log.remarkType || '').toUpperCase().includes('REJECT');
+                    const isInc = log.remarkType === 'INCOMPLETE_MOVEMENT' || ((log.qtyForwarded || 0) < (log.qtyReceived || 0) && (log.qtyReceived || 0) > 0);
+
                     if (historyFilterType === 'REJECTION') {
-                      const isRej = (log.qtyRejected || 0) > 0 || String(log.remarkType || '').toUpperCase().includes('REJECT');
                       if (!isRej) return false;
                     } else if (historyFilterType === 'INCOMPLETE') {
-                      const isInc = log.remarkType === 'INCOMPLETE_MOVEMENT' || (log.qtyForwarded < log.qtyReceived && log.qtyReceived > 0);
-                      if (!isInc) return false;
+                      if (!isInc || isRej) return false;
                     } else if (historyFilterType === 'FORWARD') {
                       const isFwd = (log.qtyForwarded || 0) > 0;
                       if (!isFwd) return false;
@@ -6906,13 +6939,14 @@ export default function JobCardsPage() {
                       <thead className="sticky top-0 z-20 bg-slate-100 text-slate-600 border-b border-slate-200 font-mono text-[11px] uppercase tracking-wider font-bold shadow-2xs">
                         <tr>
                           <th className="py-3 px-4 w-12 text-center">#</th>
-                          <th className="py-3 px-4 w-44">Date & Time</th>
+                          <th className="py-3 px-4 w-40">Date & Time</th>
                           <th className="py-3 px-4">Process Stage</th>
-                          <th className="py-3 px-4 w-32">Stage Status</th>
+                          <th className="py-3 px-4 w-36">Stage Status</th>
                           <th className="py-3 px-4 text-right w-20">In (Recv)</th>
-                          <th className="py-3 px-4 text-right w-24">Out (Fwd)</th>
+                          <th className="py-3 px-4 text-right w-20">Out (Fwd)</th>
+                          <th className="py-3 px-4 text-right w-24">Partial / Hold</th>
                           <th className="py-3 px-4 text-right w-20">Scrap</th>
-                          <th className="py-3 px-4 w-48">Operator & Role</th>
+                          <th className="py-3 px-4 w-44">Operator & Role</th>
                           <th className="py-3 px-4">Remarks / Defect Details</th>
                         </tr>
                       </thead>
@@ -6925,6 +6959,8 @@ export default function JobCardsPage() {
                           const isCurr = String(log.remarkType || '').includes('CURRENT_STAGE');
                           const isInit = String(log.remarkType || '').includes('INITIAL_LAUNCH');
                           const isComp = String(log.remarkType || '').includes('JOB_COMPLETED');
+                          const isInc = !isRej && (log.remarkType === 'INCOMPLETE_MOVEMENT' || ((log.qtyForwarded || 0) < (log.qtyReceived || 0) && (log.qtyReceived || 0) > 0));
+                          const remainingHold = log.qtyHold !== undefined && log.qtyHold !== null ? Number(log.qtyHold) : Math.max(0, (log.qtyReceived || 0) - (log.qtyForwarded || 0) - (log.qtyRejected || 0));
                           const stageName = log.stage?.name || log.stageName || 'Stage';
                           const subNo = log.subJobCard?.subJobCardNo || historyModalJob.jobCardNo;
                           const opName = log.createdBy?.name || 'Operator';
@@ -6935,7 +6971,7 @@ export default function JobCardsPage() {
                           return (
                             <tr
                               key={log.id || idx}
-                              className={`hover:bg-slate-50/90 transition-colors ${isRej ? 'bg-rose-50/30' : isCurr ? 'bg-blue-50/20' : ''}`}
+                              className={`hover:bg-slate-50/90 transition-colors ${isRej ? 'bg-rose-50/30' : isInc ? 'bg-amber-50/30' : isCurr ? 'bg-blue-50/20' : ''}`}
                             >
                               {/* Step Number */}
                               <td className="py-3 px-4 text-center font-mono font-bold text-slate-400 text-xs">
@@ -6967,6 +7003,11 @@ export default function JobCardsPage() {
                                     <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
                                     Defect Logged
                                   </span>
+                                ) : isInc ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 font-mono">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                    Partially Moved ({remainingHold} Left)
+                                  </span>
                                 ) : isCurr ? (
                                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 font-mono">
                                     <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
@@ -6995,6 +7036,17 @@ export default function JobCardsPage() {
                               {/* Forwarded */}
                               <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700">
                                 {log.qtyForwarded || 0}
+                              </td>
+
+                              {/* Partial / Hold */}
+                              <td className="py-3 px-4 text-right font-mono font-bold">
+                                {isInc && remainingHold > 0 ? (
+                                  <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                    {remainingHold}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-300 font-normal">—</span>
+                                )}
                               </td>
 
                               {/* Scrap / Rejected */}

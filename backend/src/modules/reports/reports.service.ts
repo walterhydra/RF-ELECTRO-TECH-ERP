@@ -223,6 +223,70 @@ export class ReportsService {
     }
   }
 
+  async getAllTraceability(query?: { search?: string; type?: string; limit?: number }) {
+    const where: any = {};
+    if (query?.search && query.search.trim()) {
+      const s = query.search.trim();
+      where.OR = [
+        { subJobCard: { subJobCardNo: { contains: s, mode: 'insensitive' } } },
+        { subJobCard: { jobCard: { jobCardNo: { contains: s, mode: 'insensitive' } } } },
+        { stage: { name: { contains: s, mode: 'insensitive' } } },
+        { remarks: { contains: s, mode: 'insensitive' } },
+        { rejectionReason: { contains: s, mode: 'insensitive' } },
+      ];
+    }
+    if (query?.type === 'REJECTION') {
+      where.OR = [
+        { qtyRejected: { gt: 0 } },
+        { remarkType: { contains: 'REJECT' } },
+      ];
+    } else if (query?.type === 'PARTIAL') {
+      where.OR = [
+        { remarkType: 'INCOMPLETE_MOVEMENT' },
+        { qtyHold: { gt: 0 } },
+      ];
+    }
+
+    const logs = await this.prisma.stageMovementLog.findMany({
+      where,
+      include: {
+        stage: true,
+        createdBy: { select: { id: true, name: true, role: { select: { name: true } } } },
+        subJobCard: {
+          include: {
+            jobCard: { select: { id: true, jobCardNo: true, product: { select: { name: true, code: true } } } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: query?.limit ? Number(query.limit) : 200,
+    });
+
+    return logs.map((l) => {
+      const isRej = (l.qtyRejected || 0) > 0 || String(l.remarkType || '').includes('REJECT');
+      const isPart = l.remarkType === 'INCOMPLETE_MOVEMENT' || ((l.qtyForwarded || 0) < (l.qtyReceived || 0) && (l.qtyReceived || 0) > 0);
+      const remainingHold = Math.max(0, (l.qtyReceived || 0) - (l.qtyForwarded || 0) - (l.qtyRejected || 0));
+
+      return {
+        id: l.id,
+        jobCardNo: l.subJobCard?.jobCard?.jobCardNo || l.subJobCard?.subJobCardNo || '—',
+        subJobCardNo: l.subJobCard?.subJobCardNo || '—',
+        stageName: l.stage?.name || 'Stage',
+        operatorId: l.createdBy?.name || 'Shop Floor Operator',
+        operatorRole: l.createdBy?.role?.name || 'Operator',
+        qtyReceived: l.qtyReceived || 0,
+        qtyForwarded: l.qtyForwarded || 0,
+        qtyHold: l.qtyHold || remainingHold || 0,
+        qtyRejected: l.qtyRejected || 0,
+        rejectionReason: l.rejectionReason,
+        remarks: l.remarks,
+        remarkType: l.remarkType,
+        processedAt: l.createdAt,
+        status: isRej ? 'DEFECT' : isPart ? 'PARTIAL' : 'FORWARDED',
+      };
+    });
+  }
+
   async exportData(type: string) {
     let data: any[] = [];
     if (type === 'orders') {

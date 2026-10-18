@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Phone, Mail, MapPin, ChevronRight, CheckCircle, Star, Shield, Zap, TrendingDown, X, Facebook, Twitter, Globe, Linkedin, ArrowUp, MessageCircle } from 'lucide-react';
@@ -10,6 +10,18 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 export default function LandingPage() {
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    try {
+      const isAuth = localStorage.getItem('isAuthenticated') === 'true';
+      const token = localStorage.getItem('token');
+      const hasCookie = typeof document !== 'undefined' && document.cookie.includes('rf_session_token');
+      if (isAuth && (token || hasCookie)) {
+        setIsLoggedIn(true);
+      }
+    } catch {}
+  }, []);
 
   const products = [
     { name: 'MULTILAYER PCB', img: '/Assets/ChatGPT Image Jul 4, 2026, 04_04_14 PM (1).png', desc: 'Ideal for complex circuits. Consists of 3 or more layers of conductive material, allowing for high-density routing and superior performance in advanced electronics.' },
@@ -40,8 +52,8 @@ export default function LandingPage() {
             <Phone className="w-4 h-4" />
             +91 9205009707
           </a>
-          <Link href="/login" className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-semibold text-sm transition-all shadow-sm ml-2">
-            ERP Login
+          <Link href={isLoggedIn ? "/dashboard" : "/login"} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-semibold text-sm transition-all shadow-sm ml-2">
+            {isLoggedIn ? "ERP Dashboard" : "ERP Login"}
           </Link>
         </div>
       </nav>
@@ -59,8 +71,8 @@ export default function LandingPage() {
             Delivering high-volume circuit board production and rapid prototyping with exceptional quality and consistency.
           </p>
           <div className="pt-4 flex justify-center gap-4">
-            <Link href="/login" className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-xl font-bold transition-all shadow-lg flex items-center gap-2">
-              Access ERP Portal <ChevronRight className="w-5 h-5" />
+            <Link href={isLoggedIn ? "/dashboard" : "/login"} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-xl font-bold transition-all shadow-lg flex items-center gap-2">
+              {isLoggedIn ? "Open ERP Dashboard" : "Access ERP Portal"} <ChevronRight className="w-5 h-5" />
             </Link>
           </div>
         </div>

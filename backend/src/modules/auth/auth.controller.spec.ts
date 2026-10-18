@@ -35,7 +35,7 @@ describe('AuthController', () => {
   });
 
   it('should return token and user on login', async () => {
-    const result = await controller.login({ email: 'admin@rfelectro.com', password: 'password123' });
+    const result: any = await controller.login({ email: 'admin@rfelectro.com', password: 'password123' });
     expect(result.accessToken).toBe('test-jwt-token');
     expect(result.user.email).toBe('admin@rfelectro.com');
   });

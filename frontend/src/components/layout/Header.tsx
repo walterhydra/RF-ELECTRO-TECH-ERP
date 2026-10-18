@@ -3,6 +3,7 @@
 import React from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Bell, Wifi, Search, ChevronDown, LogOut, User, Loader2, Menu } from 'lucide-react';
+import { getApiBaseUrl } from '@/lib/utils';
 
 const MOCK_SEARCH_DB = [
   { type: 'Job Card', id: 'JC-4021', title: 'Mainboard Assembly', status: 'WIP', url: '/job-cards/4021' },
@@ -110,10 +111,34 @@ export const Header: React.FC = () => {
   // Get initials from role
   const initials = userRole.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        await fetch(`${getApiBaseUrl()}/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      }
+    } catch {
+      // Ignore if offline
+    }
+
     localStorage.removeItem('isAuthenticated');
     localStorage.removeItem('userRole');
     localStorage.removeItem('userEmail');
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('assignedStage');
+    localStorage.removeItem('assignedStageId');
+
+    // Clear cookies
+    document.cookie = 'rf_session_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0; SameSite=Lax';
+    document.cookie = 'rf_user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0; SameSite=Lax';
+
     router.push('/login');
   };
 

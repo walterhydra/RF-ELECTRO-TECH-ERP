@@ -69,13 +69,17 @@ export async function fetchApi(urlOrPath: string, options: RequestInit = {}): Pr
   headers.set('bypass-tunnel-reminder', 'true');
   headers.set('Bypass-Tunnel-Reminder', 'true');
   if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('token');
+    let token = localStorage.getItem('token');
+    if (!token && typeof document !== 'undefined') {
+      const match = document.cookie.match(/(?:^|;\s*)rf_session_token=([^;]+)/);
+      if (match) token = decodeURIComponent(match[1]);
+    }
     if (token && !headers.has('Authorization')) {
       headers.set('Authorization', `Bearer ${token}`);
     }
   }
 
-  return fetch(fullUrl, { ...options, headers });
+  return fetch(fullUrl, { credentials: 'include', ...options, headers });
 }
 
 /**

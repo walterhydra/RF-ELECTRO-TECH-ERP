@@ -52,6 +52,15 @@ export class ReportsController {
     return this.reportsService.getOrders();
   }
 
+  @Get('traceability')
+  getAllTraceability(
+    @Query('search') search?: string,
+    @Query('type') type?: string,
+    @Query('limit') limit?: number,
+  ) {
+    return this.reportsService.getAllTraceability({ search, type, limit });
+  }
+
   @Get('traceability/:jobCardNo')
   getTraceability(@Param('jobCardNo') jobCardNo: string) {
     return this.reportsService.getTraceability(jobCardNo);

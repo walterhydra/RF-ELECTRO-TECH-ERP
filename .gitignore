@@ -30,4 +30,11 @@ Thumbs.db
 *.apk
 *.aab
 
+# Archives & Database Dumps
+*.zip
+*.tar.gz
+*.sql
+*.backup
+neon_backup_*.json
+
 

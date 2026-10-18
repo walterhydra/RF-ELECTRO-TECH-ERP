@@ -1,5 +1,6 @@
-import { Controller, Post, Body, Get, UseGuards, Request, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, Get, UseGuards, Request, Res, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
@@ -10,10 +11,37 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Internal staff JWT login' })
-  @ApiResponse({ status: 200, description: 'Returns access token and user profile' })
-  async login(@Body() body: { email?: string; password?: string }) {
-    return this.authService.login(body.email || '', body.password || '');
+  @ApiOperation({ summary: 'Internal staff login / OTP verification' })
+  @ApiResponse({ status: 200, description: 'Returns OTP challenge or access token with session cookie' })
+  async login(
+    @Body() body: { email?: string; password?: string; otp?: string; tempToken?: string },
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<any> {
+    return this.authService.login(body.email || '', body.password || '', body.otp, body.tempToken, res);
+  }
+
+  @Post('request-otp')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Validate credentials and send 2FA OTP to milanpandavadra84@gmail.com' })
+  async requestOtp(@Body() body: { email?: string; password?: string }): Promise<any> {
+    return this.authService.requestOtp(body.email || '', body.password || '');
+  }
+
+  @Post('verify-otp')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify OTP code and issue JWT tokens with persistent cookie' })
+  async verifyOtp(
+    @Body() body: { tempToken?: string; otp?: string },
+    @Res({ passthrough: true }) res?: Response,
+  ): Promise<any> {
+    return this.authService.verifyOtp(body.tempToken || '', body.otp || '', res);
+  }
+
+  @Post('resend-otp')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resend fresh OTP code to milanpandavadra84@gmail.com' })
+  async resendOtp(@Body() body: { tempToken?: string }): Promise<any> {
+    return this.authService.resendOtp(body.tempToken || '');
   }
 
   @Get('me')
@@ -36,8 +64,12 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Invalidate refresh token (stateless)' })
-  async logout() {
+  @ApiOperation({ summary: 'Invalidate refresh token and clear cookies' })
+  async logout(@Res({ passthrough: true }) res?: Response) {
+    if (res && typeof res.clearCookie === 'function') {
+      res.clearCookie('rf_session_token', { path: '/' });
+      res.clearCookie('rf_user_role', { path: '/' });
+    }
     return { success: true, message: 'Logged out successfully' };
   }
 
