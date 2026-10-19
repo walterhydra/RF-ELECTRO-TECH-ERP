@@ -2,6 +2,7 @@ import React from 'react';
 import '@/styles/globals.css';
 import type { Metadata } from 'next';
 import { Quicksand, IBM_Plex_Mono } from 'next/font/google';
+import FloatingCalculator from '@/components/ui/FloatingCalculator';
 
 const quicksand = Quicksand({
   weight: ['400', '500', '600', '700'],
@@ -37,6 +38,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-slate-100 text-slate-900 font-quicksand antialiased">
         {children}
+        <FloatingCalculator />
       </body>
     </html>
   );

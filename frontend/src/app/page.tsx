@@ -312,8 +312,8 @@ export default function LandingPage() {
             Hi, how can I help?
           </a>
         </div>
-        <div className="fixed bottom-6 right-6 z-[90]">
-          <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="bg-blue-400 hover:bg-blue-500 text-white p-4 rounded-full shadow-lg transition-transform hover:scale-110 flex items-center justify-center">
+        <div className="fixed bottom-6 right-20 sm:right-22 z-[90]">
+          <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="bg-blue-400 hover:bg-blue-500 text-white p-4 rounded-full shadow-lg transition-transform hover:scale-110 flex items-center justify-center cursor-pointer">
             <ArrowUp className="w-5 h-5" />
           </button>
         </div>
