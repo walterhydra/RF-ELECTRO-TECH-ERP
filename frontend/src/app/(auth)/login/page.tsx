@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Mail, Lock, ArrowRight, Eye, EyeOff, ShieldCheck, ArrowLeft, RefreshCw, AlertCircle, KeyRound } from 'lucide-react';
+import { Mail, Lock, ArrowRight, Eye, EyeOff, ArrowLeft, RefreshCw, AlertCircle, KeyRound } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/utils';
 
 export default function LoginPage() {
@@ -263,7 +263,7 @@ export default function LoginPage() {
               Traceability & Control <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">at Every Stage.</span>
             </h2>
             <p className="text-slate-400 text-lg leading-relaxed">
-              Two-step verification with instant security code delivery to <strong>milanpandavadra84@gmail.com</strong> for high-security manufacturing audit.
+              Dedicated login access for each manufacturing stage. Real-time shop-floor tracking with isolated stage views.
             </p>
           </div>
         </div>
@@ -356,11 +356,6 @@ export default function LoginPage() {
                       </button>
                     </div>
                   </div>
-                </div>
-
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-[11px] text-slate-600 flex items-start gap-2">
-                  <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                  <span>A 6-digit OTP will be dispatched to <strong>milanpandavadra84@gmail.com</strong> upon clicking continue.</span>
                 </div>
 
                 <button
@@ -471,10 +466,6 @@ export default function LoginPage() {
                   {resending && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                   <span>{otpCooldown > 0 ? `Resend Code in ${otpCooldown}s` : 'Resend Code'}</span>
                 </button>
-              </div>
-
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-500 text-center font-mono">
-                🔒 Once verified, this device remains securely authenticated until you log out.
               </div>
             </div>
           )}
