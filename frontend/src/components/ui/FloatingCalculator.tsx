@@ -1,26 +1,16 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Calculator, X, Delete, Copy, Check, History, Trash2, ArrowLeft } from 'lucide-react';
-
-interface HistoryEntry {
-  id: string;
-  expression: string;
-  result: string;
-  time: string;
-}
+import { Calculator, X, Delete, Copy, Check } from 'lucide-react';
 
 export default function FloatingCalculator() {
   const [isOpen, setIsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'calc' | 'history'>('calc');
   const [display, setDisplay] = useState('0');
   const [prevValue, setPrevValue] = useState<number | null>(null);
   const [operation, setOperation] = useState<string | null>(null);
   const [waitingForOperand, setWaitingForOperand] = useState(false);
-  const [historyExpr, setHistoryExpr] = useState('');
+  const [history, setHistory] = useState('');
   const [copied, setCopied] = useState(false);
-  const [memory, setMemory] = useState<number | null>(null);
-  const [historyList, setHistoryList] = useState<HistoryEntry[]>([]);
   const calcRef = useRef<HTMLDivElement>(null);
 
   // Close when clicking outside
@@ -37,17 +27,6 @@ export default function FloatingCalculator() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
-
-  // Record into history
-  const recordHistory = (expr: string, res: string) => {
-    const newEntry: HistoryEntry = {
-      id: Math.random().toString(36).substring(2, 9),
-      expression: expr,
-      result: res,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-    setHistoryList((prev) => [newEntry, ...prev.slice(0, 24)]);
-  };
 
   // Digits input
   const inputDigit = (digit: string) => {
@@ -71,18 +50,13 @@ export default function FloatingCalculator() {
     }
   };
 
-  // Clear All
+  // Clear all
   const clearAll = () => {
     setDisplay('0');
     setPrevValue(null);
     setOperation(null);
     setWaitingForOperand(false);
-    setHistoryExpr('');
-  };
-
-  // Clear Entry
-  const clearEntry = () => {
-    setDisplay('0');
+    setHistory('');
   };
 
   // Backspace
@@ -100,38 +74,8 @@ export default function FloatingCalculator() {
     const current = parseFloat(display);
     if (isNaN(current)) return;
     const result = current / 100;
-    const formatted = String(Number(result.toFixed(8)));
-    setHistoryExpr(`${current}%`);
-    setDisplay(formatted);
+    setDisplay(String(Number(result.toFixed(8))));
     setWaitingForOperand(true);
-    recordHistory(`${current}%`, formatted);
-  };
-
-  // Quick 18% GST (India PCB manufacturing standard)
-  const addGst18 = () => {
-    const current = parseFloat(display);
-    if (isNaN(current)) return;
-    const withGst = Number((current * 1.18).toFixed(4));
-    const formatted = String(withGst);
-    setHistoryExpr(`${current} + 18% GST`);
-    setDisplay(formatted);
-    setWaitingForOperand(true);
-    recordHistory(`${current} + 18% GST`, formatted);
-  };
-
-  // Square Root (√)
-  const handleSqrt = () => {
-    const current = parseFloat(display);
-    if (isNaN(current) || current < 0) {
-      setDisplay('Error');
-      return;
-    }
-    const result = Number(Math.sqrt(current).toFixed(8));
-    const formatted = String(result);
-    setHistoryExpr(`√(${current})`);
-    setDisplay(formatted);
-    setWaitingForOperand(true);
-    recordHistory(`√(${current})`, formatted);
   };
 
   // Toggle plus/minus sign
@@ -165,23 +109,23 @@ export default function FloatingCalculator() {
 
     if (prevValue === null) {
       setPrevValue(inputValue);
-      setHistoryExpr(`${display} ${nextOp}`);
+      setHistory(`${display} ${nextOp}`);
     } else if (operation && !waitingForOperand) {
       const result = calculate(prevValue, inputValue, operation);
       if (isNaN(result)) {
         setDisplay('Error');
         setPrevValue(null);
         setOperation(null);
-        setHistoryExpr('');
+        setHistory('');
         setWaitingForOperand(true);
         return;
       }
       const rounded = Number(result.toFixed(8));
       setDisplay(String(rounded));
       setPrevValue(rounded);
-      setHistoryExpr(`${rounded} ${nextOp}`);
+      setHistory(`${rounded} ${nextOp}`);
     } else {
-      setHistoryExpr(`${prevValue} ${nextOp}`);
+      setHistory(`${prevValue} ${nextOp}`);
     }
 
     setWaitingForOperand(true);
@@ -197,45 +141,16 @@ export default function FloatingCalculator() {
 
     if (isNaN(result)) {
       setDisplay('Error');
-      setHistoryExpr('');
+      setHistory('');
     } else {
       const rounded = Number(result.toFixed(8));
-      const expr = `${prevValue} ${operation} ${inputValue}`;
-      setHistoryExpr(`${expr} =`);
+      setHistory(`${prevValue} ${operation} ${inputValue} =`);
       setDisplay(String(rounded));
-      recordHistory(expr, String(rounded));
     }
 
     setPrevValue(null);
     setOperation(null);
     setWaitingForOperand(true);
-  };
-
-  // Memory functions
-  const memoryClear = () => setMemory(null);
-  const memoryRecall = () => {
-    if (memory !== null) {
-      setDisplay(String(memory));
-      setWaitingForOperand(true);
-    }
-  };
-  const memoryAdd = () => {
-    const current = parseFloat(display) || 0;
-    setMemory((prev) => (prev || 0) + current);
-    setWaitingForOperand(true);
-  };
-  const memorySubtract = () => {
-    const current = parseFloat(display) || 0;
-    setMemory((prev) => (prev || 0) - current);
-    setWaitingForOperand(true);
-  };
-
-  // Number formatting with commas
-  const formatNumber = (val: string) => {
-    if (val === 'Error' || val === 'NaN' || val === 'Infinity') return val;
-    const parts = val.split('.');
-    const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    return parts[1] !== undefined ? `${intPart}.${parts[1]}` : intPart;
   };
 
   // Keyboard shortcut listeners
@@ -292,61 +207,33 @@ export default function FloatingCalculator() {
   };
 
   return (
-    <div 
-      ref={calcRef} 
-      className="fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-[9999] flex flex-col items-end select-none font-sans pointer-events-auto"
-    >
-      {/* ── CALCULATOR POPUP CARD (FLUIDLY POSITIONED ABOVE BUTTON) ── */}
+    <div ref={calcRef} className="fixed bottom-5 right-5 z-[9999] select-none font-sans">
+      {/* ── SIMPLE CLEAN CALCULATOR POPUP ── */}
       {isOpen && (
-        <div className="mb-2.5 w-[320px] sm:w-[350px] max-h-[calc(100vh-100px)] overflow-y-auto bg-white border border-slate-200/90 rounded-3xl p-4 sm:p-4.5 shadow-[0_20px_50px_rgba(0,0,0,0.18)] text-slate-900 animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute bottom-16 right-0 w-[280px] sm:w-[300px] bg-white border border-slate-200 rounded-2xl p-4 shadow-2xl text-slate-900 animate-in fade-in zoom-in-95 duration-150">
           
-          {/* Header Bar */}
-          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
-            {/* Tab switch */}
-            <div className="flex items-center bg-slate-100 p-0.5 rounded-xl text-xs font-semibold">
-              <button
-                type="button"
-                onClick={() => setActiveTab('calc')}
-                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                  activeTab === 'calc'
-                    ? 'bg-white text-blue-600 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Standard
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('history')}
-                className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
-                  activeTab === 'history'
-                    ? 'bg-white text-blue-600 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <History className="w-3.5 h-3.5" />
-                <span>History</span>
-                {historyList.length > 0 && (
-                  <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-700 text-[10px] flex items-center justify-center font-bold">
-                    {historyList.length}
-                  </span>
-                )}
-              </button>
+          {/* Header */}
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <Calculator className="w-4 h-4 text-blue-600" />
+              <span className="text-xs font-bold text-slate-700 tracking-wide">
+                Calculator
+              </span>
             </div>
             
             <div className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={handleCopy}
-                title="Copy current result"
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                title="Copy result"
+                className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
               </button>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 title="Close"
               >
                 <X className="w-4 h-4" />
@@ -354,322 +241,198 @@ export default function FloatingCalculator() {
             </div>
           </div>
 
-          {/* ── TAB 1: STANDARD CALCULATOR ── */}
-          {activeTab === 'calc' && (
-            <div className="space-y-2.5 pt-2">
-              {/* Digital Display Screen */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col justify-between min-h-[78px] text-right">
-                <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
-                  <div className="flex items-center gap-1">
-                    {memory !== null && (
-                      <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] font-bold">
-                        M = {formatNumber(String(memory))}
-                      </span>
-                    )}
-                  </div>
-                  <div className="h-4 overflow-hidden truncate">
-                    {historyExpr || '\u00A0'}
-                  </div>
-                </div>
-                
-                <div 
-                  onClick={handleCopy}
-                  title="Click to copy"
-                  className="text-2xl sm:text-3xl font-bold font-mono text-slate-900 tracking-tight overflow-x-auto whitespace-nowrap scrollbar-none cursor-pointer hover:text-blue-600 transition-colors"
-                >
-                  {formatNumber(display)}
-                </div>
-
-                {copied && (
-                  <span className="text-[10px] font-semibold text-emerald-600">
-                    Copied to clipboard!
-                  </span>
-                )}
-              </div>
-
-              {/* Memory Row + Quick 18% GST */}
-              <div className="grid grid-cols-5 gap-1 text-[11px] font-semibold">
-                <button
-                  type="button"
-                  onClick={memoryClear}
-                  disabled={memory === null}
-                  title="Memory Clear"
-                  className="py-1 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer text-center"
-                >
-                  MC
-                </button>
-                <button
-                  type="button"
-                  onClick={memoryRecall}
-                  disabled={memory === null}
-                  title="Memory Recall"
-                  className="py-1 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer text-center"
-                >
-                  MR
-                </button>
-                <button
-                  type="button"
-                  onClick={memoryAdd}
-                  title="Memory Add"
-                  className="py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer text-center"
-                >
-                  M+
-                </button>
-                <button
-                  type="button"
-                  onClick={memorySubtract}
-                  title="Memory Subtract"
-                  className="py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer text-center"
-                >
-                  M−
-                </button>
-                <button
-                  type="button"
-                  onClick={addGst18}
-                  title="Add 18% GST immediately"
-                  className="py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-bold transition-colors cursor-pointer text-center"
-                >
-                  +18%
-                </button>
-              </div>
-
-              {/* Main Keypad Grid (4 columns × 5 rows) */}
-              <div className="grid grid-cols-4 gap-1.5 text-base font-semibold">
-                {/* Row 1: Clear & Math Operations */}
-                <button
-                  type="button"
-                  onClick={clearAll}
-                  title="Clear All (AC)"
-                  className="h-10.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-bold font-mono active:scale-95 transition-all flex items-center justify-center cursor-pointer text-sm"
-                >
-                  AC
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSqrt}
-                  title="Square Root"
-                  className="h-10.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-mono active:scale-95 transition-all flex items-center justify-center cursor-pointer text-sm"
-                >
-                  √x
-                </button>
-                <button
-                  type="button"
-                  onClick={inputPercent}
-                  title="Percent"
-                  className="h-10.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-mono active:scale-95 transition-all flex items-center justify-center cursor-pointer text-sm"
-                >
-                  %
-                </button>
-                <button
-                  type="button"
-                  onClick={() => performOperation('÷')}
-                  className={`h-10.5 rounded-xl border font-bold font-mono text-lg active:scale-95 transition-all flex items-center justify-center cursor-pointer ${
-                    operation === '÷'
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-600/30'
-                      : 'bg-blue-50 hover:bg-blue-100 text-blue-600 border-blue-200'
-                  }`}
-                >
-                  ÷
-                </button>
-
-                {/* Row 2: 7, 8, 9, × */}
-                <button
-                  type="button"
-                  onClick={() => inputDigit('7')}
-                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
-                >
-                  7
-                </button>
-                <button
-                  type="button"
-                  onClick={() => inputDigit('8')}
-                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
-                >
-                  8
-                </button>
-                <button
-                  type="button"
-                  onClick={() => inputDigit('9')}
-                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
-                >
-                  9
-                </button>
-                <button
-                  type="button"
-                  onClick={() => performOperation('×')}
-                  className={`h-10.5 rounded-xl border font-bold font-mono text-lg active:scale-95 transition-all flex items-center justify-center cursor-pointer ${
-                    operation === '×'
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-600/30'
-                      : 'bg-blue-50 hover:bg-blue-100 text-blue-600 border-blue-200'
-                  }`}
-                >
-                  ×
-                </button>
-
-                {/* Row 3: 4, 5, 6, − */}
-                <button
-                  type="button"
-                  onClick={() => inputDigit('4')}
-                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
-                >
-                  4
-                </button>
-                <button
-                  type="button"
-                  onClick={() => inputDigit('5')}
-                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
-                >
-                  5
-                </button>
-                <button
-                  type="button"
-                  onClick={() => inputDigit('6')}
-                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
-                >
-                  6
-                </button>
-                <button
-                  type="button"
-                  onClick={() => performOperation('-')}
-                  className={`h-10.5 rounded-xl border font-bold font-mono text-lg active:scale-95 transition-all flex items-center justify-center cursor-pointer ${
-                    operation === '-'
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-600/30'
-                      : 'bg-blue-50 hover:bg-blue-100 text-blue-600 border-blue-200'
-                  }`}
-                >
-                  −
-                </button>
-
-                {/* Row 4: 1, 2, 3, + */}
-                <button
-                  type="button"
-                  onClick={() => inputDigit('1')}
-                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
-                >
-                  1
-                </button>
-                <button
-                  type="button"
-                  onClick={() => inputDigit('2')}
-                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
-                >
-                  2
-                </button>
-                <button
-                  type="button"
-                  onClick={() => inputDigit('3')}
-                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
-                >
-                  3
-                </button>
-                <button
-                  type="button"
-                  onClick={() => performOperation('+')}
-                  className={`h-10.5 rounded-xl border font-bold font-mono text-lg active:scale-95 transition-all flex items-center justify-center cursor-pointer ${
-                    operation === '+'
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-600/30'
-                      : 'bg-blue-50 hover:bg-blue-100 text-blue-600 border-blue-200'
-                  }`}
-                >
-                  +
-                </button>
-
-                {/* Row 5: ⌫, 0, ., = */}
-                <button
-                  type="button"
-                  onClick={backspace}
-                  title="Backspace"
-                  className="h-10.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
-                >
-                  <Delete className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => inputDigit('0')}
-                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
-                >
-                  0
-                </button>
-                <button
-                  type="button"
-                  onClick={inputDecimal}
-                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
-                >
-                  .
-                </button>
-                <button
-                  type="button"
-                  onClick={handleEquals}
-                  className="h-10.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold font-mono text-xl shadow-md shadow-blue-600/30 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
-                >
-                  =
-                </button>
-              </div>
+          {/* Simple Clean Screen */}
+          <div className="my-3 p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col justify-end text-right">
+            <div className="text-[11px] font-mono text-slate-400 tracking-wider h-4 overflow-hidden truncate">
+              {history || '\u00A0'}
             </div>
-          )}
-
-          {/* ── TAB 2: CALCULATION HISTORY TAPE ── */}
-          {activeTab === 'history' && (
-            <div className="pt-2 space-y-2.5">
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
-                <span>Recent Calculations</span>
-                {historyList.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setHistoryList([])}
-                    className="text-rose-600 hover:text-rose-800 flex items-center gap-1 transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Clear All</span>
-                  </button>
-                )}
-              </div>
-
-              {historyList.length === 0 ? (
-                <div className="py-10 text-center text-slate-400 space-y-1.5">
-                  <History className="w-7 h-7 mx-auto opacity-40" />
-                  <p className="text-xs">No previous calculations yet.</p>
-                </div>
-              ) : (
-                <div className="max-h-[260px] overflow-y-auto space-y-1.5 pr-1 divide-y divide-slate-100">
-                  {historyList.map((item) => (
-                    <div
-                      key={item.id}
-                      onClick={() => {
-                        setDisplay(item.result);
-                        setWaitingForOperand(true);
-                        setActiveTab('calc');
-                      }}
-                      title="Click to recall this result"
-                      className="pt-2 pb-1.5 px-2 hover:bg-blue-50/60 rounded-xl cursor-pointer transition-colors text-right group"
-                    >
-                      <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono">
-                        <span>{item.time}</span>
-                        <span>{item.expression} =</span>
-                      </div>
-                      <div className="text-lg font-bold font-mono text-slate-800 group-hover:text-blue-600 transition-colors">
-                        {formatNumber(item.result)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('calc')}
-                className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Back to Calculator</span>
-              </button>
+            <div 
+              onClick={handleCopy}
+              title="Click to copy"
+              className="text-2xl sm:text-3xl font-semibold font-mono text-slate-900 tracking-tight overflow-x-auto whitespace-nowrap scrollbar-none cursor-pointer hover:text-blue-600 transition-colors"
+            >
+              {display}
             </div>
-          )}
+            {copied && (
+              <span className="text-[10px] font-medium text-emerald-600 mt-0.5">
+                Copied!
+              </span>
+            )}
+          </div>
 
+          {/* Keypad Grid (4 columns) */}
+          <div className="grid grid-cols-4 gap-1.5 text-sm">
+            {/* Row 1 */}
+            <button
+              type="button"
+              onClick={clearAll}
+              className="h-10 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-bold font-mono active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+            >
+              C
+            </button>
+            <button
+              type="button"
+              onClick={backspace}
+              title="Backspace"
+              className="h-10 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+            >
+              <Delete className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={inputPercent}
+              className="h-10 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 font-medium font-mono active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+            >
+              %
+            </button>
+            <button
+              type="button"
+              onClick={() => performOperation('÷')}
+              className={`h-10 rounded-lg border font-bold font-mono text-base active:scale-95 transition-all flex items-center justify-center cursor-pointer ${
+                operation === '÷'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-blue-50 hover:bg-blue-100 text-blue-600 border-blue-200'
+              }`}
+            >
+              ÷
+            </button>
+
+            {/* Row 2 */}
+            <button
+              type="button"
+              onClick={() => inputDigit('7')}
+              className="h-10 rounded-lg bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 font-semibold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+            >
+              7
+            </button>
+            <button
+              type="button"
+              onClick={() => inputDigit('8')}
+              className="h-10 rounded-lg bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 font-semibold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+            >
+              8
+            </button>
+            <button
+              type="button"
+              onClick={() => inputDigit('9')}
+              className="h-10 rounded-lg bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 font-semibold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+            >
+              9
+            </button>
+            <button
+              type="button"
+              onClick={() => performOperation('×')}
+              className={`h-10 rounded-lg border font-bold font-mono text-base active:scale-95 transition-all flex items-center justify-center cursor-pointer ${
+                operation === '×'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-blue-50 hover:bg-blue-100 text-blue-600 border-blue-200'
+              }`}
+            >
+              ×
+            </button>
+
+            {/* Row 3 */}
+            <button
+              type="button"
+              onClick={() => inputDigit('4')}
+              className="h-10 rounded-lg bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 font-semibold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+            >
+              4
+            </button>
+            <button
+              type="button"
+              onClick={() => inputDigit('5')}
+              className="h-10 rounded-lg bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 font-semibold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+            >
+              5
+            </button>
+            <button
+              type="button"
+              onClick={() => inputDigit('6')}
+              className="h-10 rounded-lg bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 font-semibold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+            >
+              6
+            </button>
+            <button
+              type="button"
+              onClick={() => performOperation('-')}
+              className={`h-10 rounded-lg border font-bold font-mono text-base active:scale-95 transition-all flex items-center justify-center cursor-pointer ${
+                operation === '-'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-blue-50 hover:bg-blue-100 text-blue-600 border-blue-200'
+              }`}
+            >
+              −
+            </button>
+
+            {/* Row 4 */}
+            <button
+              type="button"
+              onClick={() => inputDigit('1')}
+              className="h-10 rounded-lg bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 font-semibold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+            >
+              1
+            </button>
+            <button
+              type="button"
+              onClick={() => inputDigit('2')}
+              className="h-10 rounded-lg bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 font-semibold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+            >
+              2
+            </button>
+            <button
+              type="button"
+              onClick={() => inputDigit('3')}
+              className="h-10 rounded-lg bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 font-semibold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+            >
+              3
+            </button>
+            <button
+              type="button"
+              onClick={() => performOperation('+')}
+              className={`h-10 rounded-lg border font-bold font-mono text-base active:scale-95 transition-all flex items-center justify-center cursor-pointer ${
+                operation === '+'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-blue-50 hover:bg-blue-100 text-blue-600 border-blue-200'
+              }`}
+            >
+              +
+            </button>
+
+            {/* Row 5 */}
+            <button
+              type="button"
+              onClick={toggleSign}
+              className="h-10 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-medium font-mono text-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+            >
+              ±
+            </button>
+            <button
+              type="button"
+              onClick={() => inputDigit('0')}
+              className="h-10 rounded-lg bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 font-semibold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+            >
+              0
+            </button>
+            <button
+              type="button"
+              onClick={inputDecimal}
+              className="h-10 rounded-lg bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 font-semibold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+            >
+              .
+            </button>
+            <button
+              type="button"
+              onClick={handleEquals}
+              className="h-10 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold font-mono text-lg shadow-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+            >
+              =
+            </button>
+          </div>
         </div>
       )}
 
-      {/* ── SIMPLE CLEAN CORNER BUTTON (SITS NEATLY BELOW POPUP) ── */}
+      {/* ── SIMPLE CLEAN CORNER BUTTON ── */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
@@ -677,7 +440,7 @@ export default function FloatingCalculator() {
         title={isOpen ? 'Close' : 'Calculator'}
         className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg border transition-all duration-200 cursor-pointer ${
           isOpen
-            ? 'bg-blue-600 text-white border-blue-500 shadow-blue-500/30'
+            ? 'bg-slate-800 text-white border-slate-700'
             : 'bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-600 border-slate-300 hover:border-blue-400 hover:shadow-xl hover:scale-105 active:scale-95'
         }`}
       >
