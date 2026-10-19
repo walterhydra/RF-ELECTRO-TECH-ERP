@@ -313,11 +313,14 @@ export default function LoginPage() {
               <form onSubmit={handleRequestOtp} className="space-y-4 pt-1">
                 <div className="space-y-4">
                   <div className="group">
-                    <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider group-focus-within:text-blue-600 transition-colors">Email or Stage ID</label>
+                    <label htmlFor="email" className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider group-focus-within:text-blue-600 transition-colors">Email or Stage ID</label>
                     <div className="relative">
                       <Mail className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
                       <input
+                        id="email"
+                        name="username"
                         type="text"
+                        autoComplete="username"
                         required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
@@ -329,13 +332,16 @@ export default function LoginPage() {
 
                   <div className="group">
                     <div className="flex justify-between items-center mb-1.5">
-                      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider group-focus-within:text-blue-600 transition-colors">Password</label>
+                      <label htmlFor="password" className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider group-focus-within:text-blue-600 transition-colors">Password</label>
                       <a href="#" className="text-[12px] text-blue-600 hover:text-blue-800 font-semibold transition-colors">Forgot password?</a>
                     </div>
                     <div className="relative">
                       <Lock className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
                       <input
+                        id="password"
+                        name="password"
                         type={showPassword ? 'text' : 'password'}
+                        autoComplete="current-password"
                         required
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
