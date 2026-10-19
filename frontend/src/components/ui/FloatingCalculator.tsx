@@ -38,7 +38,7 @@ export default function FloatingCalculator() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
-  // Helper to add to history tape
+  // Record into history
   const recordHistory = (expr: string, res: string) => {
     const newEntry: HistoryEntry = {
       id: Math.random().toString(36).substring(2, 9),
@@ -80,7 +80,7 @@ export default function FloatingCalculator() {
     setHistoryExpr('');
   };
 
-  // Clear Entry (current input only)
+  // Clear Entry
   const clearEntry = () => {
     setDisplay('0');
   };
@@ -107,7 +107,7 @@ export default function FloatingCalculator() {
     recordHistory(`${current}%`, formatted);
   };
 
-  // Quick GST 18% (vital for PCB manufacturing and job cards)
+  // Quick 18% GST (India PCB manufacturing standard)
   const addGst18 = () => {
     const current = parseFloat(display);
     if (isNaN(current)) return;
@@ -132,18 +132,6 @@ export default function FloatingCalculator() {
     setDisplay(formatted);
     setWaitingForOperand(true);
     recordHistory(`√(${current})`, formatted);
-  };
-
-  // Square (x²)
-  const handleSquare = () => {
-    const current = parseFloat(display);
-    if (isNaN(current)) return;
-    const result = Number((current * current).toFixed(8));
-    const formatted = String(result);
-    setHistoryExpr(`sqr(${current})`);
-    setDisplay(formatted);
-    setWaitingForOperand(true);
-    recordHistory(`sqr(${current})`, formatted);
   };
 
   // Toggle plus/minus sign
@@ -242,7 +230,7 @@ export default function FloatingCalculator() {
     setWaitingForOperand(true);
   };
 
-  // Number formatting with commas for readable large numbers
+  // Number formatting with commas
   const formatNumber = (val: string) => {
     if (val === 'Error' || val === 'NaN' || val === 'Infinity') return val;
     const parts = val.split('.');
@@ -304,19 +292,22 @@ export default function FloatingCalculator() {
   };
 
   return (
-    <div ref={calcRef} className="fixed bottom-6 right-6 z-[9999] select-none font-sans">
-      {/* ── SPACIOUS PROFESSIONAL CALCULATOR POPUP ── */}
+    <div 
+      ref={calcRef} 
+      className="fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-[9999] flex flex-col items-end select-none font-sans pointer-events-auto"
+    >
+      {/* ── CALCULATOR POPUP CARD (FLUIDLY POSITIONED ABOVE BUTTON) ── */}
       {isOpen && (
-        <div className="absolute bottom-18 right-0 w-[340px] sm:w-[370px] bg-white border border-slate-200/90 rounded-3xl p-5 shadow-[0_20px_50px_rgba(0,0,0,0.15)] text-slate-900 animate-in fade-in zoom-in-95 duration-150">
+        <div className="mb-2.5 w-[320px] sm:w-[350px] max-h-[calc(100vh-100px)] overflow-y-auto bg-white border border-slate-200/90 rounded-3xl p-4 sm:p-4.5 shadow-[0_20px_50px_rgba(0,0,0,0.18)] text-slate-900 animate-in fade-in zoom-in-95 duration-150">
           
           {/* Header Bar */}
-          <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
-            {/* Tab switch: Calc / History */}
-            <div className="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
+            {/* Tab switch */}
+            <div className="flex items-center bg-slate-100 p-0.5 rounded-xl text-xs font-semibold">
               <button
                 type="button"
                 onClick={() => setActiveTab('calc')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
                   activeTab === 'calc'
                     ? 'bg-white text-blue-600 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -327,7 +318,7 @@ export default function FloatingCalculator() {
               <button
                 type="button"
                 onClick={() => setActiveTab('history')}
-                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
                   activeTab === 'history'
                     ? 'bg-white text-blue-600 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -365,11 +356,11 @@ export default function FloatingCalculator() {
 
           {/* ── TAB 1: STANDARD CALCULATOR ── */}
           {activeTab === 'calc' && (
-            <div className="space-y-3 pt-3">
-              {/* Spacious Digital Display Screen */}
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col justify-between min-h-[95px] text-right">
-                <div className="flex items-center justify-between text-xs font-mono text-slate-400">
-                  <div className="flex items-center gap-1.5">
+            <div className="space-y-2.5 pt-2">
+              {/* Digital Display Screen */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col justify-between min-h-[78px] text-right">
+                <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+                  <div className="flex items-center gap-1">
                     {memory !== null && (
                       <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] font-bold">
                         M = {formatNumber(String(memory))}
@@ -384,7 +375,7 @@ export default function FloatingCalculator() {
                 <div 
                   onClick={handleCopy}
                   title="Click to copy"
-                  className="text-3xl sm:text-4xl font-bold font-mono text-slate-900 tracking-tight overflow-x-auto whitespace-nowrap scrollbar-none cursor-pointer hover:text-blue-600 transition-colors py-1"
+                  className="text-2xl sm:text-3xl font-bold font-mono text-slate-900 tracking-tight overflow-x-auto whitespace-nowrap scrollbar-none cursor-pointer hover:text-blue-600 transition-colors"
                 >
                   {formatNumber(display)}
                 </div>
@@ -396,14 +387,14 @@ export default function FloatingCalculator() {
                 )}
               </div>
 
-              {/* Memory Row + Quick GST */}
-              <div className="grid grid-cols-5 gap-1.5 text-xs font-semibold">
+              {/* Memory Row + Quick 18% GST */}
+              <div className="grid grid-cols-5 gap-1 text-[11px] font-semibold">
                 <button
                   type="button"
                   onClick={memoryClear}
                   disabled={memory === null}
                   title="Memory Clear"
-                  className="py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer"
+                  className="py-1 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer text-center"
                 >
                   MC
                 </button>
@@ -412,7 +403,7 @@ export default function FloatingCalculator() {
                   onClick={memoryRecall}
                   disabled={memory === null}
                   title="Memory Recall"
-                  className="py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer"
+                  className="py-1 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer text-center"
                 >
                   MR
                 </button>
@@ -420,7 +411,7 @@ export default function FloatingCalculator() {
                   type="button"
                   onClick={memoryAdd}
                   title="Memory Add"
-                  className="py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                  className="py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer text-center"
                 >
                   M+
                 </button>
@@ -428,7 +419,7 @@ export default function FloatingCalculator() {
                   type="button"
                   onClick={memorySubtract}
                   title="Memory Subtract"
-                  className="py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                  className="py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer text-center"
                 >
                   M−
                 </button>
@@ -436,78 +427,43 @@ export default function FloatingCalculator() {
                   type="button"
                   onClick={addGst18}
                   title="Add 18% GST immediately"
-                  className="py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-bold transition-colors cursor-pointer"
+                  className="py-1 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-bold transition-colors cursor-pointer text-center"
                 >
-                  +18% GST
-                </button>
-              </div>
-
-              {/* Extended Functions Row */}
-              <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-slate-700">
-                <button
-                  type="button"
-                  onClick={handleSqrt}
-                  title="Square Root"
-                  className="h-10 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 font-mono text-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer"
-                >
-                  √x
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSquare}
-                  title="Square (x²)"
-                  className="h-10 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 font-mono text-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer"
-                >
-                  x²
-                </button>
-                <button
-                  type="button"
-                  onClick={inputPercent}
-                  title="Percent"
-                  className="h-10 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 font-mono text-sm active:scale-95 transition-all flex items-center justify-center cursor-pointer"
-                >
-                  %
-                </button>
-                <button
-                  type="button"
-                  onClick={backspace}
-                  title="Backspace"
-                  className="h-10 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 active:scale-95 transition-all flex items-center justify-center text-slate-700 cursor-pointer"
-                >
-                  <Delete className="w-4 h-4" />
+                  +18%
                 </button>
               </div>
 
               {/* Main Keypad Grid (4 columns × 5 rows) */}
-              <div className="grid grid-cols-4 gap-2 text-base font-semibold">
-                {/* Row 1 */}
+              <div className="grid grid-cols-4 gap-1.5 text-base font-semibold">
+                {/* Row 1: Clear & Math Operations */}
                 <button
                   type="button"
                   onClick={clearAll}
                   title="Clear All (AC)"
-                  className="h-12 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-bold font-mono active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                  className="h-10.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-bold font-mono active:scale-95 transition-all flex items-center justify-center cursor-pointer text-sm"
                 >
                   AC
                 </button>
                 <button
                   type="button"
-                  onClick={clearEntry}
-                  title="Clear Entry (CE)"
-                  className="h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-bold font-mono active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                  onClick={handleSqrt}
+                  title="Square Root"
+                  className="h-10.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-mono active:scale-95 transition-all flex items-center justify-center cursor-pointer text-sm"
                 >
-                  CE
+                  √x
                 </button>
                 <button
                   type="button"
-                  onClick={toggleSign}
-                  className="h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-mono active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                  onClick={inputPercent}
+                  title="Percent"
+                  className="h-10.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-mono active:scale-95 transition-all flex items-center justify-center cursor-pointer text-sm"
                 >
-                  ±
+                  %
                 </button>
                 <button
                   type="button"
                   onClick={() => performOperation('÷')}
-                  className={`h-12 rounded-xl border font-bold font-mono text-xl active:scale-95 transition-all flex items-center justify-center cursor-pointer ${
+                  className={`h-10.5 rounded-xl border font-bold font-mono text-lg active:scale-95 transition-all flex items-center justify-center cursor-pointer ${
                     operation === '÷'
                       ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-600/30'
                       : 'bg-blue-50 hover:bg-blue-100 text-blue-600 border-blue-200'
@@ -516,32 +472,32 @@ export default function FloatingCalculator() {
                   ÷
                 </button>
 
-                {/* Row 2 */}
+                {/* Row 2: 7, 8, 9, × */}
                 <button
                   type="button"
                   onClick={() => inputDigit('7')}
-                  className="h-12 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-lg font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
                 >
                   7
                 </button>
                 <button
                   type="button"
                   onClick={() => inputDigit('8')}
-                  className="h-12 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-lg font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
                 >
                   8
                 </button>
                 <button
                   type="button"
                   onClick={() => inputDigit('9')}
-                  className="h-12 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-lg font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
                 >
                   9
                 </button>
                 <button
                   type="button"
                   onClick={() => performOperation('×')}
-                  className={`h-12 rounded-xl border font-bold font-mono text-xl active:scale-95 transition-all flex items-center justify-center cursor-pointer ${
+                  className={`h-10.5 rounded-xl border font-bold font-mono text-lg active:scale-95 transition-all flex items-center justify-center cursor-pointer ${
                     operation === '×'
                       ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-600/30'
                       : 'bg-blue-50 hover:bg-blue-100 text-blue-600 border-blue-200'
@@ -550,32 +506,32 @@ export default function FloatingCalculator() {
                   ×
                 </button>
 
-                {/* Row 3 */}
+                {/* Row 3: 4, 5, 6, − */}
                 <button
                   type="button"
                   onClick={() => inputDigit('4')}
-                  className="h-12 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-lg font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
                 >
                   4
                 </button>
                 <button
                   type="button"
                   onClick={() => inputDigit('5')}
-                  className="h-12 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-lg font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
                 >
                   5
                 </button>
                 <button
                   type="button"
                   onClick={() => inputDigit('6')}
-                  className="h-12 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-lg font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
                 >
                   6
                 </button>
                 <button
                   type="button"
                   onClick={() => performOperation('-')}
-                  className={`h-12 rounded-xl border font-bold font-mono text-xl active:scale-95 transition-all flex items-center justify-center cursor-pointer ${
+                  className={`h-10.5 rounded-xl border font-bold font-mono text-lg active:scale-95 transition-all flex items-center justify-center cursor-pointer ${
                     operation === '-'
                       ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-600/30'
                       : 'bg-blue-50 hover:bg-blue-100 text-blue-600 border-blue-200'
@@ -584,32 +540,32 @@ export default function FloatingCalculator() {
                   −
                 </button>
 
-                {/* Row 4 */}
+                {/* Row 4: 1, 2, 3, + */}
                 <button
                   type="button"
                   onClick={() => inputDigit('1')}
-                  className="h-12 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-lg font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
                 >
                   1
                 </button>
                 <button
                   type="button"
                   onClick={() => inputDigit('2')}
-                  className="h-12 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-lg font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
                 >
                   2
                 </button>
                 <button
                   type="button"
                   onClick={() => inputDigit('3')}
-                  className="h-12 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-lg font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
                 >
                   3
                 </button>
                 <button
                   type="button"
                   onClick={() => performOperation('+')}
-                  className={`h-12 rounded-xl border font-bold font-mono text-xl active:scale-95 transition-all flex items-center justify-center cursor-pointer ${
+                  className={`h-10.5 rounded-xl border font-bold font-mono text-lg active:scale-95 transition-all flex items-center justify-center cursor-pointer ${
                     operation === '+'
                       ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-600/30'
                       : 'bg-blue-50 hover:bg-blue-100 text-blue-600 border-blue-200'
@@ -618,25 +574,33 @@ export default function FloatingCalculator() {
                   +
                 </button>
 
-                {/* Row 5 */}
+                {/* Row 5: ⌫, 0, ., = */}
+                <button
+                  type="button"
+                  onClick={backspace}
+                  title="Backspace"
+                  className="h-10.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                >
+                  <Delete className="w-4 h-4" />
+                </button>
                 <button
                   type="button"
                   onClick={() => inputDigit('0')}
-                  className="col-span-2 h-12 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-lg font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
                 >
                   0
                 </button>
                 <button
                   type="button"
                   onClick={inputDecimal}
-                  className="h-12 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-lg font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+                  className="h-10.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-base font-bold font-mono active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
                 >
                   .
                 </button>
                 <button
                   type="button"
                   onClick={handleEquals}
-                  className="h-12 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold font-mono text-2xl shadow-md shadow-blue-600/30 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
+                  className="h-10.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold font-mono text-xl shadow-md shadow-blue-600/30 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
                 >
                   =
                 </button>
@@ -646,7 +610,7 @@ export default function FloatingCalculator() {
 
           {/* ── TAB 2: CALCULATION HISTORY TAPE ── */}
           {activeTab === 'history' && (
-            <div className="pt-3 space-y-3">
+            <div className="pt-2 space-y-2.5">
               <div className="flex items-center justify-between text-xs font-semibold text-slate-500">
                 <span>Recent Calculations</span>
                 {historyList.length > 0 && (
@@ -662,12 +626,12 @@ export default function FloatingCalculator() {
               </div>
 
               {historyList.length === 0 ? (
-                <div className="py-12 text-center text-slate-400 space-y-2">
-                  <History className="w-8 h-8 mx-auto opacity-40" />
+                <div className="py-10 text-center text-slate-400 space-y-1.5">
+                  <History className="w-7 h-7 mx-auto opacity-40" />
                   <p className="text-xs">No previous calculations yet.</p>
                 </div>
               ) : (
-                <div className="max-h-[310px] overflow-y-auto space-y-2 pr-1 divide-y divide-slate-100">
+                <div className="max-h-[260px] overflow-y-auto space-y-1.5 pr-1 divide-y divide-slate-100">
                   {historyList.map((item) => (
                     <div
                       key={item.id}
@@ -683,7 +647,7 @@ export default function FloatingCalculator() {
                         <span>{item.time}</span>
                         <span>{item.expression} =</span>
                       </div>
-                      <div className="text-xl font-bold font-mono text-slate-800 group-hover:text-blue-600 transition-colors">
+                      <div className="text-lg font-bold font-mono text-slate-800 group-hover:text-blue-600 transition-colors">
                         {formatNumber(item.result)}
                       </div>
                     </div>
@@ -694,7 +658,7 @@ export default function FloatingCalculator() {
               <button
                 type="button"
                 onClick={() => setActiveTab('calc')}
-                className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                className="w-full py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>Back to Calculator</span>
@@ -705,22 +669,22 @@ export default function FloatingCalculator() {
         </div>
       )}
 
-      {/* ── COMFORTABLE CORNER CIRCULAR BUTTON (FAB) ── */}
+      {/* ── SIMPLE CLEAN CORNER BUTTON (SITS NEATLY BELOW POPUP) ── */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         aria-label="Calculator"
         title={isOpen ? 'Close' : 'Calculator'}
-        className={`w-13 h-13 sm:w-14 sm:h-14 rounded-full flex items-center justify-center shadow-xl border transition-all duration-200 cursor-pointer ${
+        className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg border transition-all duration-200 cursor-pointer ${
           isOpen
-            ? 'bg-slate-900 text-white border-slate-800 rotate-90 scale-105'
-            : 'bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-600 border-slate-300 hover:border-blue-500 hover:shadow-2xl hover:scale-105 active:scale-95'
+            ? 'bg-blue-600 text-white border-blue-500 shadow-blue-500/30'
+            : 'bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-600 border-slate-300 hover:border-blue-400 hover:shadow-xl hover:scale-105 active:scale-95'
         }`}
       >
         {isOpen ? (
-          <X className="w-6 h-6" />
+          <X className="w-5 h-5" />
         ) : (
-          <Calculator className="w-6 h-6" />
+          <Calculator className="w-5 h-5" />
         )}
       </button>
     </div>
