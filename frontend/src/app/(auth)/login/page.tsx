@@ -282,7 +282,7 @@ export default function LoginPage() {
               </span>
               2FA Authentication Enabled • Secure ERP
             </div>
-            <h2 className="text-5xl font-extrabold leading-[1.15] tracking-tight">
+            <h2 className="text-5xl font-bold leading-[1.15] tracking-tight">
               Traceability & Control <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">at Every Stage.</span>
             </h2>
             <p className="text-slate-400 text-lg leading-relaxed">
@@ -322,7 +322,7 @@ export default function LoginPage() {
           {step === 'CREDENTIALS' && (
             <div className="space-y-6 animate-in fade-in duration-300">
               <div className="space-y-2 text-center md:text-left">
-                <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Welcome back</h2>
+                <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Welcome back</h2>
                 <p className="text-slate-500 text-sm">Enter your credentials to receive your security login code</p>
               </div>
 
@@ -425,7 +425,7 @@ export default function LoginPage() {
                 <div className="w-14 h-14 bg-blue-50 border border-blue-200 rounded-2xl mx-auto flex items-center justify-center shadow-xs">
                   <KeyRound className="w-7 h-7 text-blue-600" />
                 </div>
-                <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Two-Factor Authentication</h2>
+                <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Two-Factor Authentication</h2>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
                   Enter the 6-digit security code sent to <strong className="text-slate-800 font-mono font-bold">{targetEmail || 'ocbpl.qms@gmail.com'}</strong> for account <span className="text-slate-700 font-mono">{email}</span>.
                 </p>

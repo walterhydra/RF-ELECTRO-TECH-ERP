@@ -5,8 +5,9 @@ import { Quicksand, IBM_Plex_Mono } from 'next/font/google';
 import FloatingCalculator from '@/components/ui/FloatingCalculator';
 
 const quicksand = Quicksand({
-  weight: ['400', '500', '600', '700'],
+  weight: ['300', '400', '500', '600', '700'],
   subsets: ['latin'],
+  display: 'swap',
   variable: '--font-quicksand',
 });
 
@@ -33,10 +34,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${quicksand.variable} ${plexMono.variable}`}>
       <head>
-        <link href="https://api.fontshare.com/v2/css?f[]=satoshi@900,700,500,400&display=swap" rel="stylesheet" />
-        <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
       </head>
-      <body className="min-h-screen bg-slate-100 text-slate-900 font-quicksand antialiased">
+      <body className={`min-h-screen bg-slate-100 text-slate-900 ${quicksand.className} font-quicksand antialiased`}>
         {children}
         <FloatingCalculator />
       </body>

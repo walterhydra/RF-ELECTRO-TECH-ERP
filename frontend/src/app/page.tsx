@@ -64,7 +64,7 @@ export default function LandingPage() {
         <VideoBackground />
         
         <div className="max-w-4xl mx-auto text-center space-y-6 relative z-10">
-          <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white drop-shadow-md">
+          <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-white drop-shadow-md">
             Precision PCB Manufacturing <br className="hidden md:block" /> <span className="text-blue-400 drop-shadow-md">You Can Trust.</span>
           </h1>
           <p className="text-lg text-slate-200 font-medium max-w-2xl mx-auto drop-shadow-md">
