@@ -9,10 +9,10 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Satoshi', 'Quicksand', 'var(--font-quicksand)', 'sans-serif'],
+        sans: ['Quicksand', 'var(--font-quicksand)', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        quicksand: ['Quicksand', 'var(--font-quicksand)', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        display: ['Quicksand', 'var(--font-quicksand)', 'sans-serif'],
         satoshi: ['Satoshi', 'sans-serif'],
-        quicksand: ['Quicksand', 'Satoshi', 'var(--font-quicksand)', 'sans-serif'],
-        display: ['Satoshi', 'Quicksand', 'sans-serif'],
         mono: ['var(--font-plex-mono)', 'monospace'],
       },
       keyframes: {

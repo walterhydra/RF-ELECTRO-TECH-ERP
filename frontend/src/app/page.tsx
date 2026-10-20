@@ -33,7 +33,7 @@ export default function LandingPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-white font-sans text-slate-900">
+    <div className="min-h-screen bg-white font-quicksand text-slate-900">
       {/* Navbar */}
       <nav className="absolute top-0 left-0 w-full z-50 flex flex-col md:flex-row justify-between items-center p-6 lg:px-12 gap-4">
         <div className="flex items-center gap-3">
