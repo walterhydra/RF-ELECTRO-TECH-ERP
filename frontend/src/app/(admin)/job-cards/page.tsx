@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { 
   Layers, 
@@ -57,6 +57,7 @@ import {
 } from 'lucide-react';
 import { Portal } from '@/components/ui/Portal';
 import { getApiBaseUrl, compressImageFile } from '@/lib/utils';
+import { generateCode128Svg } from '@/lib/barcode';
 import { LiveCameraScannerModal, parseScannedJobCode } from '@/components/scanner/LiveCameraScannerModal';
 
 
@@ -233,21 +234,37 @@ interface JobCard {
 }
 
 
+// Client-Side Safe Code128 Barcode Display with Vector SVG Fallback
+const BarcodeDisplay = ({ text, barcodeImageUrl }: { text: string; barcodeImageUrl: string }) => {
+  const [hasError, setHasError] = useState(false);
+  const svgMarkup = useMemo(() => generateCode128Svg(text, 44, 2), [text]);
+
+  if (hasError || !barcodeImageUrl) {
+    return (
+      <div 
+        className="w-full flex items-center justify-center max-w-[280px] mx-auto overflow-hidden py-0.5" 
+        dangerouslySetInnerHTML={{ __html: svgMarkup }} 
+      />
+    );
+  }
+
+  return (
+    <img
+      src={barcodeImageUrl}
+      alt={`Barcode for ${text}`}
+      className="w-full h-11 object-contain mx-auto"
+      onError={() => setHasError(true)}
+    />
+  );
+};
+
 // Printable Horizontal Industrial Job Card QR Tag Component
-const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint?: () => void; onClose?: () => void }) => {
-  const [serverHost, setServerHost] = useState<string>('https://rf-electro-tech-erp.onrender.com');
+const JobCardQrTag = ({ jobCard, onPrint, onClose, onOpenPdf, onViewPhoto }: { jobCard: JobCard; onPrint?: () => void; onClose?: () => void; onOpenPdf?: () => void; onViewPhoto?: (url: string) => void }) => {
   const [liveDetails, setLiveDetails] = useState<{
     product?: any;
     customerPO?: any;
   } | null>(null);
   const [isFetchingSpecs, setIsFetchingSpecs] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('erp_qr_server_host');
-      if (saved) setServerHost(saved);
-    }
-  }, []);
 
   // Fetch 100% Live DB specs and customer PO directly from API
   useEffect(() => {
@@ -301,125 +318,126 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
     return () => { isMounted = false; };
   }, [jobCard.id, jobCard.jobCardNo, jobCard.rfePartCode, jobCard.customerPartNo]);
 
-  const [isEditingHost, setIsEditingHost] = useState(false);
+  // Dynamic live origin determination (auto-adapts to local dev, custom domain, or live production VPS)
+  const currentOrigin = typeof window !== 'undefined' && window.location.origin
+    ? window.location.origin
+    : 'https://api.rfgenix.com';
 
-  const handleSaveHost = (newHost: string) => {
-    const cleaned = newHost.trim();
-    setServerHost(cleaned);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('erp_qr_server_host', cleaned);
-      localStorage.setItem('erp_backend_api_url', cleaned);
-    }
-  };
-
-  const formattedHost = serverHost.startsWith('http://') || serverHost.startsWith('https://') 
-    ? serverHost 
-    : `http://${serverHost}`;
-
-  const pdfDocumentUrl = `${formattedHost}/job-cards-pdf/${jobCard.id || jobCard.jobCardNo}`;
+  const targetJobNo = jobCard.subJobCardNo || jobCard.jobCardNo;
+  const pdfDocumentUrl = `${currentOrigin}/job-cards-pdf/${encodeURIComponent(jobCard.id || jobCard.jobCardNo)}`;
 
   // Live merged Product & PO Data (Prioritize live DB record, fallback to attached jobCard fields, NEVER mock strings)
-  const product = liveDetails?.product || jobCard.product;
-  const customerPO = liveDetails?.customerPO || jobCard.customerPO;
+  const rawProduct = liveDetails?.product || jobCard.product;
+  const rawCustomerPO = liveDetails?.customerPO || jobCard.customerPO;
 
-  // Accurate Numeric Calculations & Clean Formatting (No float glitch like 61.87500000000001)
-  // Accurate Numeric Calculations & Clean Formatting (Prioritize customer net area, never gross trimmed area)
+  // Protect against demo product leakage (e.g. Main Motherboard V2) when job card has empty part numbers
+  const isDemoProduct = rawProduct?.name === 'Main Motherboard V2' && (!jobCard.customerPartNo || jobCard.customerPartNo !== 'PCB-MB-V2');
+  const product = isDemoProduct ? undefined : rawProduct;
+  const customerPO = (isDemoProduct && rawCustomerPO?.customer?.companyName === 'Acme Electronics Ltd' && !jobCard.customerCode) ? undefined : rawCustomerPO;
+
+  // Display fields
+  const displayRfePart = jobCard.rfePartCode || product?.specCardNo || '—';
+  const displayCustCode = jobCard.customerCode || customerPO?.customer?.code || customerPO?.customer?.companyName || '—';
+  const displayCustPart = jobCard.customerPartNo || product?.code || '—';
+  const displayProdName = (product?.name && product.name !== displayCustPart ? product.name : (displayCustPart !== '—' ? displayCustPart : '')) || '—';
+
+  // Accurate Numeric Calculations & Clean Formatting
   const totalPcbs = jobCard.totalPcbQty || (jobCard.custPnlQty && jobCard.custPnlQty > 50 ? jobCard.custPnlQty : (jobCard.prodPnlQty ? jobCard.prodPnlQty * 4 : 0));
-  const rawAreaSqm = Number(
-    jobCard.custPnlAreaSqm || 
-    (jobCard.totalPcbQty && jobCard.prodPnlAreaSqm ? (jobCard.prodPnlAreaSqm / 1.1) : jobCard.prodPnlAreaSqm) || 
-    0
-  );
+  const rawAreaSqm = Number(jobCard.custPnlAreaSqm || jobCard.prodPnlAreaSqm || 0);
   const formattedArea = rawAreaSqm > 0 ? `${rawAreaSqm.toFixed(2)} SQM` : '— SQM';
 
   // Live Product Specs Extraction
-  const specLayers = product?.layers ? `${product.layers} Layers` : (jobCard.product?.layers ? `${jobCard.product.layers} Layers` : '—');
+  const specLayers = product?.layers ? `${product.layers} Layers` : (jobCard.product?.layers && !isDemoProduct ? `${jobCard.product.layers} Layers` : '—');
   const specThickness = product?.thicknessMm 
     ? `${product.thicknessMm} mm` 
-    : (product?.thickness ? (String(product.thickness).includes('mm') ? product.thickness : `${product.thickness} mm`) : (jobCard.product?.thicknessMm ? `${jobCard.product.thicknessMm} mm` : (jobCard.product?.thickness || '—')));
-  const specCopper = product?.copperWeight || product?.copper || jobCard.product?.copperWeight || jobCard.product?.copper || '—';
-  const specFinish = product?.surfaceFinish || jobCard.product?.surfaceFinish || '—';
-  const specMask = product?.solderMask || jobCard.product?.solderMask || '—';
-  const specMaterial = product?.materialType || product?.material || jobCard.product?.materialType || 'FR-4';
+    : (product?.thickness ? (String(product.thickness).includes('mm') ? product.thickness : `${product.thickness} mm`) : (jobCard.product?.thicknessMm && !isDemoProduct ? `${jobCard.product.thicknessMm} mm` : (jobCard.product?.thickness && !isDemoProduct ? jobCard.product.thickness : '—')));
+  const specCopper = product?.copperWeight || product?.copper || (!isDemoProduct && (jobCard.product?.copperWeight || jobCard.product?.copper)) || '—';
+  const specFinish = product?.surfaceFinish || (!isDemoProduct && jobCard.product?.surfaceFinish) || '—';
+  const specMask = product?.solderMask || (!isDemoProduct && jobCard.product?.solderMask) || '—';
+  const specMaterial = product?.materialType || product?.material || (!isDemoProduct && jobCard.product?.materialType) || '—';
 
-  const qrDataPayload = [
-    pdfDocumentUrl,
-    `--------------------------------------`,
-    `RF ELECTRO TECH ERP - INDUSTRIAL TRAVELER TAG`,
-    `JOB CARD NO: ${jobCard.jobCardNo}`,
-    `CUSTOMER CODE: ${jobCard.customerCode || 'DIRECT'}`,
-    `RFE PART CODE: ${jobCard.rfePartCode || 'N/A'}`,
-    `CUST PART NO: ${jobCard.customerPartNo || 'N/A'}`,
-    `TOTAL PCB QTY: ${totalPcbs} PCB`,
-    `WIP AREA: ${rawAreaSqm > 0 ? rawAreaSqm.toFixed(2) : '0'} SQM`,
-    `CURRENT STAGE: ${jobCard.currentStageName || PF01_STAGES[0]}`,
-    `PRIORITY: ${jobCard.priority || 'NORMAL'}`,
-    `TARGET DATE: ${jobCard.targetDate || 'N/A'}`,
-    `STATUS: ${jobCard.status || 'CREATED'}`,
-    product?.layers ? `LAYERS: ${product.layers}L` : '',
-    product?.thicknessMm ? `THICKNESS: ${product.thicknessMm}mm` : '',
-    product?.copperWeight ? `COPPER: ${product.copperWeight}` : '',
-    product?.surfaceFinish ? `FINISH: ${product.surfaceFinish}` : '',
-  ].filter(Boolean).join('\n');
-
+  // Real live QR and Barcode data payloads
+  const qrDataPayload = pdfDocumentUrl;
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrDataPayload)}`;
-  const barcodeImageUrl = `https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(jobCard.jobCardNo)}&scale=3&rotate=N&includetext`;
+  const barcodeImageUrl = `https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(targetJobNo)}&scale=3&rotate=N`;
 
   const priorityBadgeStyle = 
     jobCard.priority === 'MOST URGENT' ? 'bg-rose-500 text-white border-rose-600 animate-pulse' :
     jobCard.priority === 'HIGH' ? 'bg-amber-400 text-slate-950 border-amber-500 font-black' :
     'bg-emerald-500 text-white border-emerald-600 font-bold';
 
+  const isUrgent = jobCard.priority === 'MOST URGENT' || jobCard.priority === 'HIGH';
+
   return (
-    <div className="bg-white border-2 border-slate-900 rounded-3xl p-5 sm:p-7 shadow-2xl max-w-5xl w-full mx-auto text-slate-900 font-sans print:shadow-none print:border-black space-y-6">
+    <div className="w-full max-w-5xl mx-auto font-quicksand">
       
-      {/* 1. Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b-2 border-slate-900 pb-4">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-slate-950 text-amber-400 flex items-center justify-center font-black text-xl shadow-md border border-slate-900 shrink-0">
-            <Printer className="w-6 h-6 stroke-[2.5]" />
+      {/* 1. TOP EXECUTIVE CONTROL BAR (Web-only, hidden in print - EXACTLY MATCHES PDF TOP BAR) */}
+      <div className="mb-3 bg-slate-900 text-white p-3 rounded-lg shadow-xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 print:hidden backdrop-blur-md">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded bg-slate-800 text-slate-200 border border-slate-700 flex items-center justify-center font-bold text-xs shrink-0">
+            <FileText className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${isFetchingSpecs ? 'bg-amber-500 animate-spin' : 'bg-emerald-500 animate-pulse'}`}></span>
-              <h4 className="text-xs font-black tracking-widest uppercase text-slate-900 font-mono">
-                RF ELECTRO TECH ERP • INDUSTRIAL TRAVELER TAG
-              </h4>
-            </div>
-            <h2 className="text-xl sm:text-2xl font-black font-mono text-slate-950 mt-0.5 tracking-tight flex items-center gap-3">
-              <span>{jobCard.jobCardNo}</span>
-              <span className={`text-xs px-3 py-0.5 rounded-lg border uppercase tracking-wider ${priorityBadgeStyle}`}>
-                {jobCard.priority || 'NORMAL'}
+              <h1 className="font-bold text-xs sm:text-sm text-white tracking-wide uppercase">
+                PCB Job Traveler Route Sheet
+              </h1>
+              <span className="text-[10px] bg-slate-800 text-slate-300 border border-slate-700 px-2 py-0.5 rounded font-mono font-semibold">
+                DOC ID: RFE-TRV-01
               </span>
-            </h2>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Job Card No: <strong className="text-white font-mono">{targetJobNo}</strong> • Production Floor Copy
+            </p>
           </div>
         </div>
 
-        {/* Quick Header Actions */}
-        <div className="flex items-center gap-2.5 shrink-0">
-          <Link
-            href={`/job-cards-pdf/${jobCard.id || jobCard.jobCardNo}`}
-            target="_blank"
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center gap-1.5 border border-slate-300 transition-all cursor-pointer"
-          >
-            <FileText className="w-4 h-4 stroke-[2]" />
-            <span>Open PDF Report ↗</span>
-          </Link>
+        <div className="flex items-center gap-2 shrink-0">
+          {jobCard.photoUrl && (
+            <button
+              onClick={() => (onViewPhoto ? onViewPhoto(jobCard.photoUrl!) : window.open(jobCard.photoUrl, '_blank'))}
+              className="px-3.5 py-1.5 bg-blue-900/60 hover:bg-blue-800 text-blue-200 text-xs font-semibold rounded flex items-center gap-1.5 transition-all cursor-pointer border border-blue-700 active:scale-95"
+              title="View Attached Original Physical Job Card Photo"
+            >
+              <Camera className="w-3.5 h-3.5 text-blue-300" />
+              <span>Original Photo</span>
+            </button>
+          )}
+
+          {onOpenPdf ? (
+            <button
+              onClick={onOpenPdf}
+              className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded flex items-center gap-1.5 transition-all cursor-pointer border border-slate-700 active:scale-95"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Open Process Sheet</span>
+            </button>
+          ) : (
+            <Link
+              href={`/job-cards-pdf/${jobCard.id || jobCard.jobCardNo}`}
+              target="_blank"
+              className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded flex items-center gap-1.5 transition-all cursor-pointer border border-slate-700 active:scale-95"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Open Process Sheet ↗</span>
+            </Link>
+          )}
 
           {onPrint && (
             <button
               onClick={onPrint}
-              className="px-5 py-2 bg-slate-950 hover:bg-slate-800 text-white font-extrabold rounded-xl text-xs flex items-center gap-2 shadow-md transition-all cursor-pointer active:scale-95 border border-slate-900"
+              className="px-4 py-1.5 bg-white hover:bg-slate-100 text-slate-950 text-xs font-bold rounded flex items-center gap-2 transition-all cursor-pointer border border-slate-300 shadow-sm active:scale-95"
             >
-              <Printer className="w-4 h-4 text-amber-400" />
-              <span>Print Sticker Tag</span>
+              <Printer className="w-4 h-4 text-slate-900 stroke-[2.2]" />
+              <span>PRINT / SAVE AS PDF</span>
             </button>
           )}
 
           {onClose && (
             <button
               onClick={onClose}
-              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition-all cursor-pointer"
+              className="w-8 h-8 rounded text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition-all cursor-pointer text-sm font-bold ml-1"
+              title="Close"
             >
               ✕
             </button>
@@ -427,238 +445,226 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose }: { jobCard: JobCard; onPrint
         </div>
       </div>
 
-      {/* 2. Main Horizontal Landscape 3-Column Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-sans">
+      {/* 2. MAIN PRINTABLE A4 INVOICE ROUTE SHEET (100% IDENTICAL TO PDF PAGE) */}
+      <div className="bg-white border border-slate-300 rounded-sm p-6 sm:p-7 shadow-2xl print:border-none print:shadow-none print:p-0 print:m-0 space-y-4">
         
-        {/* LEFT COLUMN: Barcode & QR Code Box (4 Cols) */}
-        <div className="lg:col-span-4 bg-slate-50/80 border border-slate-200 rounded-2xl p-4 space-y-3.5 shadow-2xs">
+        {/* DOCUMENT HEADER: Industrial Corporate Header */}
+        <div className="border-b-2 border-slate-900 pb-3 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           
-          <div className="flex items-center gap-3.5 bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
-            {/* Scannable QR Code */}
-            <div className="w-28 h-28 bg-white p-1.5 border border-slate-200 rounded-xl shrink-0 flex items-center justify-center shadow-2xs overflow-hidden">
+          {/* Company Branding & Quality System */}
+          <div className="flex items-start gap-3">
+            <div className="w-14 h-14 shrink-0 flex items-center justify-center">
+              <img
+                src="/Assets/Screenshot_2026-07-04_162637-removebg-preview copy.png"
+                alt="RF Electro Tech Logo"
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = '/Assets/Screenshot_2026-07-04_162637-removebg-preview.png';
+                }}
+              />
+            </div>
+            <div>
+              <h2 className="text-lg sm:text-xl font-black text-slate-950 tracking-tight uppercase">
+                RF ELECTRO TECH (INDIA) PVT. LTD.
+              </h2>
+              <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mt-0.5">
+                PCB MANUFACTURING DIVISION • PRODUCTION ROUTE TRAVELER
+              </p>
+              <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                Certified IPC-A-600 Acceptability of Printed Boards • ISO 9001:2015 Quality System
+              </p>
+            </div>
+          </div>
+
+          {/* Document Control Table (Invoice-Style Header Box) */}
+          <div className="border border-slate-300 rounded overflow-hidden text-xs shrink-0 min-w-[240px]">
+            <div className="bg-slate-100 px-3 py-1 border-b border-slate-300 flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">TRAVELER NO</span>
+              <span className="text-[10px] font-mono text-slate-500">REV: 02</span>
+            </div>
+            <div className="px-3 py-1.5 bg-white border-b border-slate-200">
+              <span className="font-mono font-black text-base sm:text-lg text-slate-950 tracking-tight block select-all">
+                {targetJobNo}
+              </span>
+            </div>
+            <div className="px-3 py-1 bg-slate-50 flex items-center justify-between text-[11px]">
+              <span className="text-slate-600">Issue Date: <strong>{jobCard.targetDate || '—'}</strong></span>
+              <span className={`px-2 py-0.5 rounded font-bold uppercase text-[9px] border ${isUrgent ? 'border-red-400 bg-red-50 text-red-800' : 'border-slate-300 bg-white text-slate-800'}`}>
+                {jobCard.priority || 'NORMAL'}
+              </span>
+            </div>
+          </div>
+
+        </div>
+
+        {/* SECTION 1: TWO-COLUMN INVOICE-STYLE SPECIFICATIONS & ORDER INFO */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          
+          {/* Card A: Order & Customer Details (Tabular Invoice Grid) */}
+          <div className="border border-slate-300 rounded overflow-hidden bg-white text-xs">
+            <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-300 flex items-center justify-between">
+              <h3 className="font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5 text-[11px]">
+                <Building2 className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                1. CUSTOMER & ORDER PARTICULARS
+              </h3>
+              <span className="text-[10px] font-mono text-slate-500">SEC-A</span>
+            </div>
+
+            <table className="w-full border-collapse">
+              <tbody className="divide-y divide-slate-200">
+                <tr>
+                  <td className="py-1.5 px-3 bg-slate-50 text-slate-600 font-semibold w-40 border-r border-slate-200 text-[11px]">Customer Name</td>
+                  <td className="py-1.5 px-3 font-semibold text-slate-900 truncate max-w-[220px] text-[11px]">{customerPO?.customer?.companyName || displayCustCode}</td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 px-3 bg-slate-50 text-slate-600 font-semibold border-r border-slate-200 text-[11px]">Customer Code</td>
+                  <td className="py-1.5 px-3 font-semibold text-slate-900 font-mono text-[11px]">{displayCustCode}</td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 px-3 bg-slate-50 text-slate-600 font-semibold border-r border-slate-200 text-[11px]">Purchase Order (PO) #</td>
+                  <td className="py-1.5 px-3 font-semibold text-slate-900 font-mono text-[11px]">{customerPO?.poNo || jobCard.poNumber || '—'}</td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 px-3 bg-slate-50 text-slate-600 font-semibold border-r border-slate-200 text-[11px]">Customer Part No</td>
+                  <td className="py-1.5 px-3 font-semibold text-slate-900 text-[11px]">{displayCustPart}</td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 px-3 bg-slate-50 text-slate-600 font-semibold border-r border-slate-200 text-[11px]">R.F.E. Part Code</td>
+                  <td className="py-1.5 px-3 font-semibold text-slate-900 font-mono text-[11px]">{displayRfePart}</td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 px-3 bg-slate-50 text-slate-600 font-semibold border-r border-slate-200 text-[11px]">Target Completion</td>
+                  <td className="py-1.5 px-3 font-semibold text-slate-900 text-[11px]">{jobCard.targetDate || '—'}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Card B: Technical Specifications & Quantities (Tabular Invoice Grid) */}
+          <div className="border border-slate-300 rounded overflow-hidden bg-white text-xs">
+            <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-300 flex items-center justify-between">
+              <h3 className="font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5 text-[11px]">
+                <Cpu className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                2. TECHNICAL SPECIFICATIONS & WIP
+              </h3>
+              <span className="text-[10px] font-mono text-slate-500">SEC-B</span>
+            </div>
+
+            <table className="w-full border-collapse">
+              <tbody className="divide-y divide-slate-200">
+                <tr>
+                  <td className="py-1.5 px-3 bg-slate-50 text-slate-600 font-semibold w-40 border-r border-slate-200 text-[11px]">Product Description</td>
+                  <td className="py-1.5 px-3 font-semibold text-slate-900 truncate max-w-[220px] text-[11px]">{displayProdName}</td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 px-3 bg-slate-50 text-slate-600 font-semibold border-r border-slate-200 text-[11px]">Layer Count & Thickness</td>
+                  <td className="py-1.5 px-3 font-semibold text-slate-900 text-[11px]">
+                    {specLayers !== '—' ? specLayers : '—'}{specThickness !== '—' ? ` • ${specThickness}` : ''}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 px-3 bg-slate-50 text-slate-600 font-semibold border-r border-slate-200 text-[11px]">Copper & Surface Finish</td>
+                  <td className="py-1.5 px-3 font-semibold text-slate-900 text-[11px]">
+                    {specCopper !== '—' ? specCopper : '—'}{specFinish !== '—' ? ` • ${specFinish}` : ''}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 px-3 bg-slate-50 text-slate-600 font-semibold border-r border-slate-200 text-[11px]">Solder Mask</td>
+                  <td className="py-1.5 px-3 font-semibold text-slate-900 text-[11px]">{specMask}</td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 px-3 bg-slate-50 text-slate-600 font-semibold border-r border-slate-200 text-[11px]">Total PCB Quantity</td>
+                  <td className="py-1.5 px-3 font-bold text-slate-900 font-mono text-[11px]">
+                    {totalPcbs > 0 ? `${totalPcbs} PCBs` : '—'}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-1.5 px-3 bg-slate-50 text-slate-600 font-semibold border-r border-slate-200 text-[11px]">Panels & WIP Area</td>
+                  <td className="py-1.5 px-3 font-semibold text-slate-900 text-[11px]">
+                    {jobCard.prodPnlQty ? `${jobCard.prodPnlQty} Panels • ` : ''}{formattedArea}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+
+        {/* SECTION 2: VERIFICATION & SHOP FLOOR 2D TRACKING STRIP */}
+        <div className="border border-slate-300 rounded p-3 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+          
+          {/* QR Code & Mobile Document Tracking */}
+          <div className="flex items-center gap-3">
+            <div className="w-16 h-16 bg-white p-1 rounded border border-slate-300 shrink-0 flex items-center justify-center">
               <img
                 src={qrImageUrl}
-                alt={`QR Code for ${jobCard.jobCardNo}`}
+                alt="Verification QR Code"
                 className="w-full h-full object-contain"
                 onError={(e) => {
                   (e.currentTarget as HTMLImageElement).src = `https://quickchart.io/qr?text=${encodeURIComponent(qrDataPayload)}&size=300`;
                 }}
               />
             </div>
-
-            {/* QR Quick Details */}
-            <div className="space-y-2 text-xs min-w-0 flex-1 font-mono">
-              <div>
-                <span className="text-[9px] text-slate-400 uppercase block font-bold">WIP JOB NO</span>
-                <strong className="font-mono font-black text-sm text-slate-950 bg-slate-100 px-2.5 py-0.5 rounded-md border border-slate-300 inline-block">
-                  {jobCard.subJobCardNo || jobCard.jobCardNo}
-                </strong>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <QrCode className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                <h4 className="font-bold text-xs text-slate-950 uppercase tracking-wide">
+                  2D TRAVELER ROUTING QR
+                </h4>
               </div>
-              <div>
-                <span className="text-[9px] text-slate-400 uppercase block font-bold">CUSTOMER CODE</span>
-                <span className="font-bold text-slate-900 truncate block text-xs">{jobCard.customerCode || '—'}</span>
-              </div>
-              <div>
-                <span className="text-[9px] text-slate-400 uppercase block font-bold">RFE PART CODE</span>
-                <span className="font-mono font-extrabold text-blue-700 text-xs truncate block">{jobCard.rfePartCode || '—'}</span>
-              </div>
+              <p className="text-[11px] text-slate-600 mt-0.5 max-w-sm">
+                Scan with shop-floor mobile terminal or scanner for live stage tracking and WIP transit logging.
+              </p>
+              <span className="text-[10px] font-mono text-slate-500 font-medium block mt-0.5">
+                Traceability Payload: {targetJobNo}
+              </span>
             </div>
           </div>
 
-          {/* Code128 Scannable Barcode */}
-          <div className="bg-white p-3 rounded-xl border border-slate-200 text-center space-y-1 shadow-2xs">
-            <img
-              src={barcodeImageUrl}
-              alt={`Barcode for ${jobCard.jobCardNo}`}
-              className="w-full h-10 object-contain mx-auto"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = 'none';
-              }}
-            />
-            <span className="text-[11px] font-mono text-slate-800 tracking-widest font-black block">
-              *{jobCard.subJobCardNo || jobCard.jobCardNo}*
+          {/* Vector Code 128 Scannable Barcode */}
+          <div className="text-center shrink-0 bg-white p-2.5 rounded border border-slate-300 min-w-[210px]">
+            <div className="w-full flex items-center justify-center max-w-[210px] mx-auto overflow-hidden min-h-[38px]">
+              <BarcodeDisplay text={targetJobNo} barcodeImageUrl={barcodeImageUrl} />
+            </div>
+            <span className="text-xs text-slate-900 font-mono font-bold tracking-widest block mt-1 select-all">
+              *{targetJobNo}*
             </span>
           </div>
 
-          {/* Real Scan Notice */}
-          <div className="bg-emerald-50/80 border border-emerald-200/80 p-2.5 rounded-xl text-center">
-            <p className="text-[10px] font-extrabold text-emerald-900 flex items-center justify-center gap-1.5 font-mono">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              SCANNABLE TRAVELER TAG
-            </p>
-            <p className="text-[9px] text-emerald-700 mt-0.5">Scan with camera or 2D scanner for live floor tracking</p>
-          </div>
-
-          {/* Compact Scan Target Link */}
-          <div className="text-[10px] font-mono text-slate-400 flex items-center justify-between px-1 print:hidden">
-            <span className="truncate max-w-[200px]">URL: {formattedHost}</span>
-            <button
-              onClick={() => setIsEditingHost(!isEditingHost)}
-              className="text-slate-600 hover:text-slate-900 underline cursor-pointer ml-1 shrink-0"
-            >
-              {isEditingHost ? 'Close' : 'Config'}
-            </button>
-          </div>
-          {isEditingHost && (
-            <div className="p-2 bg-white border border-slate-200 rounded-xl space-y-1.5 shadow-xs print:hidden">
-              <input
-                type="text"
-                value={serverHost}
-                onChange={(e) => handleSaveHost(e.target.value)}
-                placeholder="Custom server URL..."
-                className="w-full text-[11px] font-mono bg-slate-50 border border-slate-300 rounded px-2 py-1 text-slate-900 focus:outline-none"
-              />
-            </div>
-          )}
         </div>
 
-        {/* MIDDLE COLUMN: Specifications Grid & Live Product Specs (5 Cols) */}
-        <div className="lg:col-span-5 space-y-3.5">
-          <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-4 space-y-3.5 shadow-2xs">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-              <h5 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5 font-mono">
-                <FileText className="w-4 h-4 text-slate-700 shrink-0" />
-                JOB PARAMETERS & PRODUCTION SPECS
-              </h5>
-              <div className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full ${isFetchingSpecs ? 'bg-amber-500 animate-spin' : 'bg-emerald-500'}`} />
-                <span className="text-[10px] font-mono font-bold text-slate-500 uppercase">
-                  {isFetchingSpecs ? 'Syncing...' : 'LIVE'}
-                </span>
-              </div>
-            </div>
-
-            {/* 6 Primary Job Parameter Cards */}
-            <div className="grid grid-cols-2 gap-2 text-xs font-sans">
-              <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">CUSTOMER PART NO</span>
-                <strong className="text-slate-900 font-bold block truncate text-xs" title={jobCard.customerPartNo}>
-                  {jobCard.customerPartNo || '—'}
-                </strong>
-              </div>
-
-              <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">R.F.E. PART CODE</span>
-                <strong className="text-blue-700 font-mono font-black block text-xs tracking-tight">
-                  {jobCard.rfePartCode || '—'}
-                </strong>
-              </div>
-
-              <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">TOTAL PCB QTY</span>
-                <strong className="text-indigo-700 font-mono font-black block text-xs">
-                  {totalPcbs} PCB
-                </strong>
-              </div>
-
-              <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">TOTAL WIP AREA</span>
-                <strong className="text-emerald-700 font-mono font-black block text-xs">
-                  {formattedArea}
-                </strong>
-              </div>
-
-              <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">CURRENT STAGE</span>
-                <span className="inline-block font-extrabold text-[11px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 truncate max-w-full font-mono">
-                  {jobCard.currentStageName || PF01_STAGES[0]}
-                </span>
-              </div>
-
-              <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                <span className="text-[9px] text-slate-400 font-mono uppercase block font-bold">TARGET DATE</span>
-                <strong className="text-slate-900 font-mono font-bold block text-xs">
-                  {jobCard.targetDate || '—'}
-                </strong>
-              </div>
-            </div>
-
-            {/* LIVE PRODUCT SPECIFICATIONS SHOWCASE */}
-            <div className="bg-white rounded-xl border border-slate-200 p-3 space-y-2 shadow-2xs">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 gap-2">
-                <span className="text-[10px] font-black text-slate-800 font-mono uppercase flex items-center gap-1.5 shrink-0">
-                  <Cpu className="w-3.5 h-3.5 text-blue-600" />
-                  PRODUCT SPECIFICATIONS
-                </span>
-                <span className="text-[10px] text-slate-500 font-mono truncate max-w-[180px] text-right">
-                  {product?.name || jobCard.customerPartNo || 'Standard PCB'}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-1.5 text-center">
-                <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-200">
-                  <span className="text-[8px] font-mono text-slate-400 uppercase block font-bold">LAYERS</span>
-                  <span className="text-[11px] font-mono font-extrabold text-slate-900">{specLayers}</span>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-200">
-                  <span className="text-[8px] font-mono text-slate-400 uppercase block font-bold">THICKNESS</span>
-                  <span className="text-[11px] font-mono font-extrabold text-slate-900">{specThickness}</span>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-200">
-                  <span className="text-[8px] font-mono text-slate-400 uppercase block font-bold">COPPER</span>
-                  <span className="text-[11px] font-mono font-extrabold text-slate-900">{specCopper}</span>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-200">
-                  <span className="text-[8px] font-mono text-slate-400 uppercase block font-bold">FINISH</span>
-                  <span className="text-[11px] font-mono font-extrabold text-blue-700 truncate block">{specFinish}</span>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-200">
-                  <span className="text-[8px] font-mono text-slate-400 uppercase block font-bold">MASK</span>
-                  <span className="text-[11px] font-mono font-extrabold text-emerald-700 truncate block">{specMask}</span>
-                </div>
-                <div className="bg-slate-50 rounded-lg p-1.5 border border-slate-200">
-                  <span className="text-[8px] font-mono text-slate-400 uppercase block font-bold">MATERIAL</span>
-                  <span className="text-[11px] font-mono font-extrabold text-slate-800 truncate block">{specMaterial}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* RIGHT COLUMN: Sub-Job Lots Breakdown & Info (3 Cols) */}
-        <div className="lg:col-span-3 space-y-3.5 flex flex-col justify-between self-stretch">
-          <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-4 space-y-3 shadow-2xs">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-              <h5 className="text-xs font-black text-slate-900 uppercase tracking-wider font-mono flex items-center gap-1">
+        {/* SECTION 3: SUB-LOTS LIST (Only displayed when split sub-lots exist) */}
+        {jobCard.subJobCards && jobCard.subJobCards.length > 1 && (
+          <div className="border border-slate-300 rounded overflow-hidden bg-white text-xs">
+            <div className="bg-slate-100 px-3 py-1.5 border-b border-slate-300 flex items-center justify-between">
+              <h3 className="font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5 text-[11px]">
                 <Split className="w-3.5 h-3.5 text-slate-700" />
-                SUB-LOTS ({jobCard.subJobCards?.length || 1})
-              </h5>
-              <span className="text-[11px] font-mono font-black text-slate-900 bg-slate-200 px-2 py-0.5 rounded border border-slate-300">
-                {totalPcbs} PCBs
-              </span>
+                SUB-LOT TRACEABILITY BREAKDOWN ({jobCard.subJobCards.length} LOTS)
+              </h3>
+              <span className="text-[10px] font-bold text-slate-600">TOTAL BATCH: {totalPcbs} PCBs</span>
             </div>
-
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-1 custom-scrollbar">
-              {(jobCard.subJobCards && jobCard.subJobCards.length > 0 ? jobCard.subJobCards : [{ id: 'sub-single', subJobCardNo: jobCard.subJobCardNo || jobCard.jobCardNo, totalPcbQty: totalPcbs }]).map((sub) => {
-                const subPcb = (sub as any).totalPcbQty || ((sub as any).qty && (sub as any).qty > 50 ? (sub as any).qty : totalPcbs);
+            <div className="divide-y divide-slate-200">
+              {jobCard.subJobCards.map((sub, idx) => {
+                const subPcb = (sub as any).totalPcbQty || ((sub as any).qty && (sub as any).qty > 0 ? (sub as any).qty : totalPcbs);
                 return (
-                  <div key={sub.id} className="bg-white p-2.5 rounded-xl border border-slate-200 flex items-center justify-between text-xs font-sans shadow-2xs">
-                    <div>
-                      <span className="font-mono font-black text-slate-950 bg-slate-100 px-2 py-0.5 rounded text-[11px] border border-slate-300 block">
+                  <div key={sub.id} className="py-1.5 px-3 flex items-center justify-between text-[11px] bg-white hover:bg-slate-50">
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono font-bold bg-slate-200 text-slate-800 px-1.5 py-0.5 rounded text-[10px]">
+                        LOT {idx + 1}
+                      </span>
+                      <span className="font-mono font-bold text-slate-900 select-all">
                         {sub.subJobCardNo}
                       </span>
                     </div>
-                    <div className="text-right font-mono">
-                      <span className="font-black text-blue-700 text-xs">{subPcb} PCBs</span>
-                    </div>
+                    <span className="font-mono font-bold text-slate-900">
+                      {subPcb > 0 ? `${subPcb} PCBs` : '—'}
+                    </span>
                   </div>
                 );
               })}
             </div>
           </div>
-
-          {/* Clean footer action */}
-          <div className="pt-2">
-            <Link
-              href={`/job-cards-pdf/${jobCard.id || jobCard.jobCardNo}`}
-              target="_blank"
-              className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
-            >
-              <FileText className="w-4 h-4 stroke-[2]" />
-              <span>OPEN FULL JOB CARD PDF ↗</span>
-            </Link>
-          </div>
-        </div>
+        )}
 
       </div>
     </div>
@@ -715,6 +721,7 @@ export default function JobCardsPage() {
   const [movementTab, setMovementTab] = useState<'VIEW' | 'FULL' | 'PARTIAL'>('VIEW');
   const [showReportDrawer, setShowReportDrawer] = useState(false);
   const [showQrModal, setShowQrModal] = useState<JobCard | null>(null);
+  const [pdfPreviewJob, setPdfPreviewJob] = useState<JobCard | null>(null);
   const [deleteConfirmCard, setDeleteConfirmCard] = useState<JobCard | null>(null);
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   const [serverHost, setServerHost] = useState<string>('rf-electro-tech-erp.onrender.com');
@@ -951,22 +958,22 @@ export default function JobCardsPage() {
     targetDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
     launchDate: new Date().toISOString().split('T')[0],
     priority: 'NORMAL' as 'MOST URGENT' | 'HIGH' | 'NORMAL',
-    prodPnlQty: 40,
-    custPnlQty: 80,
-    totalPcbQty: 160,
-    prodPnlAreaSqm: 50,
-    custPnlAreaSqm: 45,
+    prodPnlQty: 0,
+    custPnlQty: 0,
+    totalPcbQty: 0,
+    prodPnlAreaSqm: 0,
+    custPnlAreaSqm: 0,
     jobFlowSelection: 'PF-01',
     autoLaunch: false,
     enablePreSplit: false,
-    splitCount: 2,
-    customSplits: [{ subNo: '1', qty: 80 }, { subNo: '2', qty: 80 }],
+    splitCount: 1,
+    customSplits: [],
     layers: 2,
     thicknessMm: 1.6,
-    copperWeight: '1oz',
-    surfaceFinish: 'HASL Lead-Free',
-    solderMask: 'Green',
-    materialType: 'FR-4',
+    copperWeight: '',
+    surfaceFinish: '',
+    solderMask: '',
+    materialType: '',
   });
 
   const handleOpenCreateModal = () => {
@@ -983,22 +990,22 @@ export default function JobCardsPage() {
       targetDate: nextWeek,
       launchDate: today,
       priority: 'NORMAL',
-      prodPnlQty: 40,
-      custPnlQty: 80,
-      totalPcbQty: 160,
-      prodPnlAreaSqm: 50,
-      custPnlAreaSqm: 45,
+      prodPnlQty: 0,
+      custPnlQty: 0,
+      totalPcbQty: 0,
+      prodPnlAreaSqm: 0,
+      custPnlAreaSqm: 0,
       jobFlowSelection: 'PF-01',
       autoLaunch: false,
       enablePreSplit: false,
-      splitCount: 2,
-      customSplits: [{ subNo: `${nextNo}-1`, qty: 80 }, { subNo: `${nextNo}-2`, qty: 80 }],
+      splitCount: 1,
+      customSplits: [],
       layers: 2,
       thicknessMm: 1.6,
-      copperWeight: '1oz',
-      surfaceFinish: 'HASL Lead-Free',
-      solderMask: 'Green',
-      materialType: 'FR-4',
+      copperWeight: '',
+      surfaceFinish: '',
+      solderMask: '',
+      materialType: '',
     });
     setShowGenerateModal(true);
   };
@@ -1015,26 +1022,47 @@ export default function JobCardsPage() {
       targetDate: card.targetDate || '',
       launchDate: launchDateStr,
       priority: card.priority || 'NORMAL',
-      prodPnlQty: card.prodPnlQty || 40,
-      custPnlQty: card.custPnlQty || 80,
-      totalPcbQty: card.totalPcbQty || 160,
-      prodPnlAreaSqm: card.prodPnlAreaSqm || 50,
-      custPnlAreaSqm: card.custPnlAreaSqm || 45,
+      prodPnlQty: card.prodPnlQty || 0,
+      custPnlQty: card.custPnlQty || 0,
+      totalPcbQty: card.totalPcbQty || 0,
+      prodPnlAreaSqm: card.prodPnlAreaSqm || 0,
+      custPnlAreaSqm: card.custPnlAreaSqm || 0,
       jobFlowSelection: card.jobFlowSelection || 'PF-01',
       autoLaunch: card.status === 'IN_PROGRESS',
       enablePreSplit: false,
       splitCount: card.subJobCards?.length || 1,
       customSplits: card.subJobCards
-        ? card.subJobCards.map((s) => ({ subNo: s.subJobCardNo, qty: s.totalPcbQty || s.qty || 80 }))
-        : [{ subNo: `${card.jobCardNo}-1`, qty: card.totalPcbQty || 160 }],
+        ? card.subJobCards.map((s) => ({ subNo: s.subJobCardNo, qty: s.totalPcbQty || s.qty || 0 }))
+        : [{ subNo: `${card.jobCardNo}-1`, qty: card.totalPcbQty || 0 }],
       layers: card.product?.layers || 2,
       thicknessMm: Number(card.product?.thicknessMm) || 1.6,
-      copperWeight: card.product?.copperWeight || card.product?.copper || '1oz',
-      surfaceFinish: card.product?.surfaceFinish || 'HASL Lead-Free',
-      solderMask: card.product?.solderMask || 'Green',
-      materialType: card.product?.materialType || 'FR-4',
+      copperWeight: card.product?.copperWeight || card.product?.copper || '',
+      surfaceFinish: card.product?.surfaceFinish || '',
+      solderMask: card.product?.solderMask || '',
+      materialType: card.product?.materialType || '',
     });
     setShowGenerateModal(true);
+  };
+
+  const handleProcessPhotoFile = async (file: File) => {
+    if (!file) return;
+    try {
+      const res = await compressImageFile(file);
+      if (res) {
+        setLaunchForm((prev) => ({ ...prev, photoUrl: res }));
+        showToast('Job Card photo attached successfully!', 'success');
+      }
+    } catch {
+      const reader = new FileReader();
+      reader.onload = (uploadEvt) => {
+        const res = uploadEvt.target?.result as string;
+        if (res) {
+          setLaunchForm((prev) => ({ ...prev, photoUrl: res }));
+          showToast('Job Card photo attached successfully!', 'success');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   // Sync state from backend API if available
@@ -1065,14 +1093,19 @@ export default function JobCardsPage() {
         const data = await res.json();
         if (Array.isArray(data)) {
           const mapped: JobCard[] = data.flatMap((j: any) => {
-            const masterPcbQty = j.totalPcbQty || (j.custPnlQty && j.custPnlQty > 50 ? j.custPnlQty : (j.prodPnlQty ? j.prodPnlQty * 4 : 160));
-            const masterAreaSqm = j.custPnlAreaSqm || j.prodPnlAreaSqm || 45;
+            const masterPcbQty = Number(j.totalPcbQty || (j.custPnlQty && j.custPnlQty > 0 ? j.custPnlQty : (j.prodPnlQty ? j.prodPnlQty * 4 : 0)));
+            const masterAreaSqm = Number(j.custPnlAreaSqm || j.prodPnlAreaSqm || 0);
+
+            // Guard against demo seed product leakage onto cards without their own part codes
+            const isDemoSeedProd = j.product?.name === 'Main Motherboard V2' && (!j.customerPartNo || j.customerPartNo !== 'PCB-MB-V2');
+            const cleanProd = isDemoSeedProd ? null : j.product;
+            const cleanCust = (isDemoSeedProd && j.customerPO?.customer?.companyName === 'Acme Electronics Ltd' && !j.customerCode) ? null : j.customerPO?.customer;
 
             const subLots = Array.isArray(j.subJobCards) ? j.subJobCards : [];
             if (subLots.length > 0) {
               const mappedSubs: JobCard[] = subLots.map((sub: any) => {
-                const subPcbQty = sub.totalPcbQty || sub.qty || masterPcbQty;
-                const subAreaSqm = sub.custPnlAreaSqm || sub.prodPnlAreaSqm || masterAreaSqm;
+                const subPcbQty = Number(sub.totalPcbQty || sub.qty || masterPcbQty);
+                const subAreaSqm = Number(sub.custPnlAreaSqm || sub.prodPnlAreaSqm || masterAreaSqm);
                 const inFlight = inFlightMovements.current.get(sub.id) || (sub.subJobCardNo ? inFlightMovements.current.get(sub.subJobCardNo) : undefined);
                 const rawStage = (inFlight && inFlight.stageName) || sub.currentStage?.name || j.currentStageName || PF01_STAGES[0];
                 let stageIdx = (inFlight && inFlight.stageIdx !== undefined)
@@ -1103,12 +1136,12 @@ export default function JobCardsPage() {
                   jobCardNo: j.jobCardNo,
                   subJobCardNo: finalSubNo,
                   photoUrl: j.photoUrl || '',
-                  customerPartNo: j.customerPartNo || j.product?.code || '',
-                  rfePartCode: j.rfePartCode || j.product?.specCardNo || '',
-                  customerCode: j.customerCode || j.customerPO?.customer?.code || '',
-                  targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
+                  customerPartNo: j.customerPartNo || cleanProd?.code || '',
+                  rfePartCode: j.rfePartCode || cleanProd?.specCardNo || '',
+                  customerCode: j.customerCode || cleanCust?.code || cleanCust?.companyName || '',
+                  targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '',
                   priority: j.priority || 'NORMAL',
-                  prodPnlQty: Math.ceil(subPcbQty / 4),
+                  prodPnlQty: subPcbQty > 0 ? Math.ceil(subPcbQty / 4) : 0,
                   custPnlQty: subPcbQty,
                   totalPcbQty: subPcbQty,
                   prodPnlAreaSqm: subAreaSqm,
@@ -1159,7 +1192,7 @@ export default function JobCardsPage() {
                     ...existing,
                     totalPcbQty: combinedQty,
                     custPnlQty: combinedQty,
-                    prodPnlQty: Math.ceil(combinedQty / 4),
+                    prodPnlQty: combinedQty > 0 ? Math.ceil(combinedQty / 4) : 0,
                     custPnlAreaSqm: combinedArea,
                     prodPnlAreaSqm: combinedArea,
                     rejectedPcbQty: combinedRejQty,
@@ -1197,12 +1230,12 @@ export default function JobCardsPage() {
               jobCardNo: j.jobCardNo,
               subJobCardNo: j.jobCardNo,
               photoUrl: j.photoUrl || '',
-              customerPartNo: j.customerPartNo || j.product?.code || '',
-              rfePartCode: j.rfePartCode || j.product?.specCardNo || '',
-              customerCode: j.customerCode || j.customerPO?.customer?.code || '',
-              targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '2026-09-28',
+              customerPartNo: j.customerPartNo || cleanProd?.code || '',
+              rfePartCode: j.rfePartCode || cleanProd?.specCardNo || '',
+              customerCode: j.customerCode || cleanCust?.code || cleanCust?.companyName || '',
+              targetDate: j.targetDate ? new Date(j.targetDate).toISOString().split('T')[0] : '',
               priority: j.priority || 'NORMAL',
-              prodPnlQty: Math.ceil(masterPcbQty / 4),
+              prodPnlQty: j.prodPnlQty ? Number(j.prodPnlQty) : (masterPcbQty > 0 ? Math.ceil(masterPcbQty / 4) : 0),
               custPnlQty: masterPcbQty,
               totalPcbQty: masterPcbQty,
               prodPnlAreaSqm: masterAreaSqm,
@@ -1513,7 +1546,7 @@ export default function JobCardsPage() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historySearchQuery, setHistorySearchQuery] = useState('');
   const [historyFilterType, setHistoryFilterType] = useState<'ALL' | 'FORWARD' | 'REJECTION' | 'INCOMPLETE'>('ALL');
-  const [historyViewMode, setHistoryViewMode] = useState<'timeline' | 'table'>('table');
+  const [historyViewMode, setHistoryViewMode] = useState<'timeline' | 'table'>('timeline');
   const [historyLastUpdated, setHistoryLastUpdated] = useState<string>('');
 
   const fetchJobCardHistory = async (job: JobCard) => {
@@ -1526,7 +1559,7 @@ export default function JobCardsPage() {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
 
-      // 1. Query by jobCardNo first (canonical parent ID on backend)
+      // Query real live stage movement & traceability history from backend
       let rawLogs: any[] = [];
       const primaryTarget = job.jobCardNo || job.parentJobCardId || job.id;
       let res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(primaryTarget)}/history`, { headers });
@@ -1542,91 +1575,12 @@ export default function JobCardsPage() {
         }
       }
 
-      // 2. Merge local rejection logs if any exist on this card
-      if (job.rejectionLogs && job.rejectionLogs.length > 0) {
-        const localRejLogs = job.rejectionLogs.map((r, i) => ({
-          id: `rej-${i}-${Date.now()}`,
-          createdAt: r.timestamp || new Date().toISOString(),
-          subJobCard: { subJobCardNo: job.jobCardNo },
-          stage: { name: r.stageName },
-          stageName: r.stageName,
-          qtyReceived: job.totalPcbQty || 160,
-          qtyForwarded: Math.max(0, (job.totalPcbQty || 160) - (r.rejectedPcbQty || 0)),
-          qtyProcessed: job.totalPcbQty || 160,
-          qtyRejected: r.rejectedPcbQty || 0,
-          qtyHold: 0,
-          rejectionReason: r.remark || 'Defect logged during quality inspection',
-          remarkType: 'REJECTION',
-          remarks: `[DEFECT AT STAGE: ${r.stageName}] ${r.remark} (${r.rejectedPcbQty} PCBs / ${r.rejectedAreaSqm} Sqm)`,
-          createdBy: {
-            id: 'qc-inspector',
-            name: 'Quality Inspector',
-            email: 'quality@rfelectrotech.com',
-            role: { name: 'QC_INSPECTOR' },
-            department: { name: 'Quality Assurance' },
-          },
-        }));
-        const existingTimestamps = new Set(rawLogs.map((l: any) => l.createdAt));
-        const filteredLocalRej = localRejLogs.filter((l) => !existingTimestamps.has(l.createdAt));
-        rawLogs = [...filteredLocalRej, ...rawLogs];
-      }
-
-      // 3. If card is launched and in-progress, ensure current active stage is represented
-      if (job.status !== 'UNLAUNCHED') {
-        const activeStageName = job.currentStageName || PF01_STAGES[job.currentStageIndex || 0] || '1. SHEARING';
-        const hasActiveLog = rawLogs.some((l) => l.stage?.name === activeStageName || String(l.remarks || '').includes(activeStageName));
-        if (!hasActiveLog && rawLogs.length > 0) {
-          rawLogs.unshift({
-            id: `active-curr-${job.id}`,
-            createdAt: new Date().toISOString(),
-            subJobCard: { subJobCardNo: job.jobCardNo },
-            stage: { name: activeStageName },
-            qtyReceived: job.totalPcbQty || (job.custPnlQty && job.custPnlQty > 50 ? job.custPnlQty : 160),
-            qtyForwarded: job.totalPcbQty || (job.custPnlQty && job.custPnlQty > 50 ? job.custPnlQty : 160),
-            qtyProcessed: job.totalPcbQty || (job.custPnlQty && job.custPnlQty > 50 ? job.custPnlQty : 160),
-            qtyRejected: 0,
-            qtyHold: 0,
-            remarkType: 'CURRENT_STAGE',
-            remarks: `In active production at stage: ${activeStageName} (${job.totalPcbQty || 160} PCBs)`,
-            createdBy: {
-              id: 'floor-op',
-              name: 'Production Floor',
-              email: 'operator@rfelectrotech.com',
-              role: { name: 'OPERATOR' },
-              department: { name: 'Shop Floor' },
-            },
-          });
-        }
-      }
-
-      // 4. If still empty, synthesize Initial Launch entry
-      if (rawLogs.length === 0) {
-        rawLogs.push({
-          id: `init-${job.id}`,
-          createdAt: job.launchedAt || job.createdAt || new Date().toISOString(),
-          subJobCard: { subJobCardNo: job.jobCardNo },
-          stage: { name: '1. SHEARING (INITIAL LAUNCH)' },
-          qtyReceived: job.totalPcbQty || 160,
-          qtyForwarded: job.totalPcbQty || 160,
-          qtyProcessed: job.totalPcbQty || 160,
-          qtyRejected: 0,
-          qtyHold: 0,
-          remarkType: 'INITIAL_LAUNCH',
-          remarks: 'Job Card released to shop floor for production launch',
-          createdBy: {
-            id: (job as any).createdById || 'planner',
-            name: 'Production Planner',
-            email: 'planner@rfelectrotech.com',
-            role: { name: 'PLANNER' },
-            department: { name: 'Planning & Control' },
-          },
-        });
-      }
-
+      // 100% Live database records only - NO mock or synthetic rows
       setHistoryLogs(rawLogs);
       setHistoryLastUpdated(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     } catch (err) {
       console.error('Failed to fetch job card history', err);
+      setHistoryLogs([]);
     } finally {
       setIsHistoryLoading(false);
     }
@@ -1722,6 +1676,7 @@ export default function JobCardsPage() {
     deliveryStatus: 'DELIVERED',
     receiverName: '',
     receiverMobile: '',
+    deliveryPhotoUrl: '',
     deliveryRemarks: '',
     failureReason: '',
   });
@@ -1730,13 +1685,35 @@ export default function JobCardsPage() {
   const handleOpenDeliveryModal = (dispatch: any, job?: JobCard) => {
     setSelectedDispatchForDelivery({ ...dispatch, jobCardNo: job?.jobCardNo || dispatch?.jobCard?.jobCardNo });
     setDeliveryForm({
-      deliveryStatus: 'DELIVERED',
-      receiverName: '',
-      receiverMobile: '',
-      deliveryRemarks: 'Shipment delivered in intact condition. Delivery Challan signed by customer gate / receiving department.',
-      failureReason: '',
+      deliveryStatus: dispatch?.deliveryStatus === 'DISPATCHED' ? 'DELIVERED' : (dispatch?.deliveryStatus || 'DELIVERED'),
+      receiverName: dispatch?.receiverName || '',
+      receiverMobile: dispatch?.receiverMobile || '',
+      deliveryPhotoUrl: dispatch?.deliveryPhotoUrl || '',
+      deliveryRemarks: dispatch?.deliveryRemarks || 'Shipment delivered in intact condition. Delivery Challan signed by customer gate / receiving department.',
+      failureReason: dispatch?.failureReason || '',
     });
     setIsDeliveryModalOpen(true);
+  };
+
+  const handleProcessDeliveryPodPhoto = async (file: File) => {
+    if (!file) return;
+    try {
+      const res = await compressImageFile(file);
+      if (res) {
+        setDeliveryForm((prev) => ({ ...prev, deliveryPhotoUrl: res }));
+        showToast('Signed delivery challan photo attached!', 'success');
+      }
+    } catch {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const res = e.target?.result as string;
+        if (res) {
+          setDeliveryForm((prev) => ({ ...prev, deliveryPhotoUrl: res }));
+          showToast('Signed delivery challan photo attached!', 'success');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleUpdateDelivery = async (e: React.FormEvent) => {
@@ -1824,10 +1801,27 @@ export default function JobCardsPage() {
     (async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        let storedUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
+        let storedUserEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
+        let storedUserName = typeof window !== 'undefined' ? localStorage.getItem('userName') : null;
+
+        if ((!storedUserId || !storedUserEmail) && token && typeof token === 'string' && token.includes('.')) {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            if (payload.sub || payload.id) storedUserId = payload.sub || payload.id;
+            if (payload.email) storedUserEmail = payload.email;
+            if (payload.name) storedUserName = payload.name;
+          } catch (_) {}
+        }
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         };
+        const launchPayload = JSON.stringify({
+          userId: storedUserId,
+          userEmail: storedUserEmail,
+          userName: storedUserName,
+        });
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 3500);
 
@@ -1835,6 +1829,7 @@ export default function JobCardsPage() {
         let res = await fetch(`${getApiBaseUrl()}/job-cards/${launchTarget}/launch`, {
           method: 'POST',
           headers,
+          body: launchPayload,
           signal: controller.signal,
         });
         clearTimeout(timeoutId);
@@ -1845,6 +1840,7 @@ export default function JobCardsPage() {
           await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(cardNo)}/launch`, {
             method: 'POST',
             headers,
+            body: launchPayload,
             signal: fbCtrl.signal,
           });
           clearTimeout(fbTimeout);
@@ -1939,25 +1935,25 @@ export default function JobCardsPage() {
         totalPcbQty: totalPcb,
         custPnlQty: totalPcb,
         prodPnlQty: Math.ceil(totalPcb / 4),
-        custPnlAreaSqm: Number(launchForm.custPnlAreaSqm) || 45,
-        prodPnlAreaSqm: Number(Number(launchForm.custPnlAreaSqm || 45) * 1.1) || 50,
+        custPnlAreaSqm: Number(launchForm.custPnlAreaSqm) || 0,
+        prodPnlAreaSqm: Number(launchForm.prodPnlAreaSqm) || Number(launchForm.custPnlAreaSqm) || 0,
         jobFlowSelection: launchForm.jobFlowSelection,
         status: finalStatus as any,
         subJobCards: preservedSubCards,
         isNewlyCreated: finalStatus === 'UNLAUNCHED',
         product: {
           ...existing.product,
-          name: launchForm.customerPartNo,
-          code: launchForm.customerPartNo,
-          specCardNo: launchForm.rfePartCode,
-          layers: Number(launchForm.layers) || 2,
-          thicknessMm: Number(launchForm.thicknessMm) || 1.6,
-          thickness: `${Number(launchForm.thicknessMm) || 1.6} mm`,
-          copper: launchForm.copperWeight || '1oz',
-          copperWeight: launchForm.copperWeight || '1oz',
-          surfaceFinish: launchForm.surfaceFinish || 'HASL Lead-Free',
-          solderMask: launchForm.solderMask || 'Green',
-          materialType: launchForm.materialType || 'FR-4',
+          name: launchForm.customerPartNo || existing.product?.name || '—',
+          code: launchForm.customerPartNo || existing.product?.code || '',
+          specCardNo: launchForm.rfePartCode || existing.product?.specCardNo || '',
+          layers: Number(launchForm.layers) || existing.product?.layers || 2,
+          thicknessMm: Number(launchForm.thicknessMm) || existing.product?.thicknessMm || 1.6,
+          thickness: launchForm.thicknessMm ? `${launchForm.thicknessMm} mm` : (existing.product?.thickness || '—'),
+          copper: launchForm.copperWeight || existing.product?.copper || '',
+          copperWeight: launchForm.copperWeight || existing.product?.copperWeight || '',
+          surfaceFinish: launchForm.surfaceFinish || existing.product?.surfaceFinish || '',
+          solderMask: launchForm.solderMask || existing.product?.solderMask || '',
+          materialType: launchForm.materialType || existing.product?.materialType || '',
         },
       };
 
@@ -1997,11 +1993,11 @@ export default function JobCardsPage() {
         customerCode: launchForm.customerCode,
         targetDate: launchForm.targetDate,
         priority: launchForm.priority,
-        prodPnlQty: Math.ceil(totalPcb / 4),
+        prodPnlQty: Number(launchForm.prodPnlQty) || (totalPcb > 0 ? Math.ceil(totalPcb / 4) : 0),
         custPnlQty: totalPcb,
         totalPcbQty: totalPcb,
-        prodPnlAreaSqm: Number(Number(launchForm.custPnlAreaSqm || 45) * 1.1) || 50,
-        custPnlAreaSqm: Number(launchForm.custPnlAreaSqm) || 45,
+        prodPnlAreaSqm: Number(launchForm.prodPnlAreaSqm) || Number(launchForm.custPnlAreaSqm) || 0,
+        custPnlAreaSqm: Number(launchForm.custPnlAreaSqm) || 0,
         jobFlowSelection: launchForm.jobFlowSelection,
         currentStageIndex: 0,
         currentStageName: PF01_STAGES[0],
@@ -2011,22 +2007,22 @@ export default function JobCardsPage() {
         qrCodeValue: `${jcNo}-PARENT`,
         createdAt: new Date().toISOString(),
         customerPO: {
-          poNo: `PO-${launchForm.customerCode}`,
+          poNo: launchForm.customerCode ? `PO-${launchForm.customerCode}` : '—',
           orderQty: totalPcb,
-          customer: { companyName: launchForm.customerCode },
+          customer: { companyName: launchForm.customerCode || '—' },
         },
         product: {
-          name: launchForm.customerPartNo,
-          code: launchForm.customerPartNo,
-          specCardNo: launchForm.rfePartCode,
+          name: launchForm.customerPartNo || '—',
+          code: launchForm.customerPartNo || '',
+          specCardNo: launchForm.rfePartCode || '',
           layers: Number(launchForm.layers) || 2,
           thicknessMm: Number(launchForm.thicknessMm) || 1.6,
-          thickness: `${Number(launchForm.thicknessMm) || 1.6} mm`,
-          copper: launchForm.copperWeight || '1oz',
-          copperWeight: launchForm.copperWeight || '1oz',
-          surfaceFinish: launchForm.surfaceFinish || 'HASL Lead-Free',
-          solderMask: launchForm.solderMask || 'Green',
-          materialType: launchForm.materialType || 'FR-4',
+          thickness: launchForm.thicknessMm ? `${launchForm.thicknessMm} mm` : '—',
+          copper: launchForm.copperWeight || '',
+          copperWeight: launchForm.copperWeight || '',
+          surfaceFinish: launchForm.surfaceFinish || '',
+          solderMask: launchForm.solderMask || '',
+          materialType: launchForm.materialType || '',
         },
         subJobCards: subJobCardsList,
         isNewlyCreated: !launchForm.autoLaunch,
@@ -2040,6 +2036,9 @@ export default function JobCardsPage() {
           Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
         },
         body: JSON.stringify({
+          userId: typeof window !== 'undefined' ? localStorage.getItem('userId') : null,
+          userEmail: typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null,
+          userName: typeof window !== 'undefined' ? localStorage.getItem('userName') : null,
           jobCardNo: jcNo,
           photoUrl: launchForm.photoUrl,
           customerPartNo: launchForm.customerPartNo,
@@ -2048,20 +2047,20 @@ export default function JobCardsPage() {
           targetDate: launchForm.targetDate,
           launchedAt: launchIsoDate,
           priority: launchForm.priority,
-          prodPnlQty: Math.ceil(totalPcb / 4),
+          prodPnlQty: Number(launchForm.prodPnlQty) || (totalPcb > 0 ? Math.ceil(totalPcb / 4) : 0),
           custPnlQty: totalPcb,
           totalPcbQty: totalPcb,
-          prodPnlAreaSqm: launchForm.prodPnlAreaSqm,
-          custPnlAreaSqm: launchForm.custPnlAreaSqm,
+          prodPnlAreaSqm: Number(launchForm.prodPnlAreaSqm) || 0,
+          custPnlAreaSqm: Number(launchForm.custPnlAreaSqm) || 0,
           jobFlowSelection: launchForm.jobFlowSelection,
           autoLaunch: launchForm.autoLaunch,
           splits: apiSplits,
           layers: Number(launchForm.layers) || 2,
           thicknessMm: Number(launchForm.thicknessMm) || 1.6,
-          copperWeight: launchForm.copperWeight || '1oz',
-          surfaceFinish: launchForm.surfaceFinish || 'HASL Lead-Free',
-          solderMask: launchForm.solderMask || 'Green',
-          materialType: launchForm.materialType || 'FR-4',
+          copperWeight: launchForm.copperWeight || '',
+          surfaceFinish: launchForm.surfaceFinish || '',
+          solderMask: launchForm.solderMask || '',
+          materialType: launchForm.materialType || '',
         }),
       });
 
@@ -2131,7 +2130,13 @@ export default function JobCardsPage() {
           await fetch(`${getApiBaseUrl()}/job-cards/${id}/move-stage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-            body: JSON.stringify({ status: 'COMPLETED', jobCardNo: card.jobCardNo }),
+            body: JSON.stringify({
+              status: 'COMPLETED',
+              jobCardNo: card.jobCardNo,
+              userId: typeof window !== 'undefined' ? localStorage.getItem('userId') : null,
+              userEmail: typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null,
+              userName: typeof window !== 'undefined' ? localStorage.getItem('userName') : null,
+            }),
           });
         } catch (_) {}
       })();
@@ -2200,6 +2205,18 @@ export default function JobCardsPage() {
     (async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        let storedUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
+        let storedUserEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
+        let storedUserName = typeof window !== 'undefined' ? localStorage.getItem('userName') : null;
+
+        if ((!storedUserId || !storedUserEmail) && token && typeof token === 'string' && token.includes('.')) {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            if (payload.sub || payload.id) storedUserId = payload.sub || payload.id;
+            if (payload.email) storedUserEmail = payload.email;
+            if (payload.name) storedUserName = payload.name;
+          } catch (_) {}
+        }
         const targetSubNo = subCardNo;
         const primaryTarget = encodeURIComponent(cardId || targetSubNo);
         const controller = new AbortController();
@@ -2218,6 +2235,9 @@ export default function JobCardsPage() {
             currentStageName: card.currentStageName,
             remark: `Quick Stage Movement to ${nextStage}`,
             remarkType: 'FULL_MOVEMENT',
+            userId: storedUserId,
+            userEmail: storedUserEmail,
+            userName: storedUserName,
           }),
           signal: controller.signal,
         });
@@ -2239,6 +2259,9 @@ export default function JobCardsPage() {
               currentStageName: card.currentStageName,
               remark: `Quick Stage Movement to ${nextStage}`,
               remarkType: 'FULL_MOVEMENT',
+              userId: storedUserId,
+              userEmail: storedUserEmail,
+              userName: storedUserName,
             }),
             signal: fallbackCtrl.signal,
           });
@@ -2397,6 +2420,18 @@ export default function JobCardsPage() {
     (async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        let storedUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
+        let storedUserEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
+        let storedUserName = typeof window !== 'undefined' ? localStorage.getItem('userName') : null;
+
+        if ((!storedUserId || !storedUserEmail) && token && typeof token === 'string' && token.includes('.')) {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            if (payload.sub || payload.id) storedUserId = payload.sub || payload.id;
+            if (payload.email) storedUserEmail = payload.email;
+            if (payload.name) storedUserName = payload.name;
+          } catch (_) {}
+        }
         const primaryTarget = encodeURIComponent(targetSubId || targetSubNo);
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -2415,6 +2450,9 @@ export default function JobCardsPage() {
             rejectPcbQty: rejectPcb,
             remark: effectiveRemarks,
             remarkType: rejectPcb > 0 ? 'REJECTION' : 'FULL_MOVEMENT',
+            userId: storedUserId,
+            userEmail: storedUserEmail,
+            userName: storedUserName,
           }),
           signal: controller.signal,
         });
@@ -2437,6 +2475,9 @@ export default function JobCardsPage() {
               rejectPcbQty: rejectPcb,
               remark: effectiveRemarks,
               remarkType: rejectPcb > 0 ? 'REJECTION' : 'FULL_MOVEMENT',
+              userId: storedUserId,
+              userEmail: storedUserEmail,
+              userName: storedUserName,
             }),
             signal: fallbackCtrl.signal,
           });
@@ -2661,6 +2702,18 @@ export default function JobCardsPage() {
     (async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        let storedUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
+        let storedUserEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
+        let storedUserName = typeof window !== 'undefined' ? localStorage.getItem('userName') : null;
+
+        if ((!storedUserId || !storedUserEmail) && token && typeof token === 'string' && token.includes('.')) {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            if (payload.sub || payload.id) storedUserId = payload.sub || payload.id;
+            if (payload.email) storedUserEmail = payload.email;
+            if (payload.name) storedUserName = payload.name;
+          } catch (_) {}
+        }
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
 
@@ -2686,6 +2739,9 @@ export default function JobCardsPage() {
             pendingWorkReason: effectiveReason,
             remark: incompleteRemarks ? `${effectiveReason} • ${incompleteRemarks}` : `Incomplete Movement: ${effectiveReason}`,
             remarkType: 'INCOMPLETE_MOVEMENT',
+            userId: storedUserId,
+            userEmail: storedUserEmail,
+            userName: storedUserName,
           }),
           signal: controller.signal,
         });
@@ -3984,6 +4040,23 @@ export default function JobCardsPage() {
                           >
                             <Printer className="w-3.5 h-3.5" />
                           </button>
+                          <button
+                            onClick={() => setPdfPreviewJob(jc)}
+                            title="View Job Card Route Sheet PDF"
+                            className="text-slate-600 hover:text-slate-950 cursor-pointer p-0.5 shrink-0"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                          </button>
+                          {jc.photoUrl && (
+                            <button
+                              type="button"
+                              onClick={() => setPhotoLightbox(jc.photoUrl || null)}
+                              title="View Attached Original Physical Job Card Photo"
+                              className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded cursor-pointer p-0.5 shrink-0 transition-colors"
+                            >
+                              <Camera className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           <span>{jc.subJobCardNo || jc.jobCardNo}</span>
                           {isNewTagVisible && (
                             <span className="px-1.5 py-0.5 bg-emerald-600 text-white font-black text-[9px] rounded uppercase tracking-wider animate-pulse shrink-0 shadow-2xs">
@@ -4223,6 +4296,13 @@ export default function JobCardsPage() {
                         className="text-amber-800 hover:text-amber-950 p-1 bg-amber-50 border border-amber-200 rounded-md cursor-pointer shrink-0 shadow-2xs active:scale-95"
                       >
                         <Printer className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setPdfPreviewJob(jc)}
+                        title="View Job Card Route Sheet PDF"
+                        className="text-slate-700 hover:text-slate-950 p-1 bg-slate-100 border border-slate-200 rounded-md cursor-pointer shrink-0 shadow-2xs active:scale-95"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
                       </button>
                       <span className="font-mono font-extrabold text-sm text-slate-900 tracking-tight">
                         {jc.subJobCardNo || jc.jobCardNo}
@@ -4651,6 +4731,23 @@ export default function JobCardsPage() {
                               >
                                 <Printer className="w-3.5 h-3.5" />
                               </button>
+                              <button
+                                onClick={() => setPdfPreviewJob(jc)}
+                                title="View Job Card Route Sheet PDF"
+                                className="text-slate-600 hover:text-slate-950 cursor-pointer p-0.5 shrink-0"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                              </button>
+                              {jc.photoUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPhotoLightbox(jc.photoUrl || null)}
+                                  title="View Attached Original Physical Job Card Photo"
+                                  className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded cursor-pointer p-0.5 shrink-0 transition-colors"
+                                >
+                                  <Camera className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                               <span>{jc.subJobCardNo || jc.jobCardNo}</span>
                             </div>
                           </td>
@@ -4718,10 +4815,22 @@ export default function JobCardsPage() {
                           {/* 12. Stage */}
                           <td className="py-2.5 px-3 border-r border-slate-200 font-bold text-slate-900 whitespace-nowrap">
                             {isDelivered ? (
-                              <span className="px-2.5 py-1 rounded-lg text-[11px] font-extrabold bg-purple-100 text-purple-900 border border-purple-300 font-mono inline-flex items-center gap-1.5 shadow-2xs">
-                                <ShieldCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                                DELIVERED ({latestDispatch?.receiverName || 'STORE'})
-                              </span>
+                              <div className="flex flex-col gap-1 items-start">
+                                <span className="px-2.5 py-1 rounded-lg text-[11px] font-extrabold bg-purple-100 text-purple-900 border border-purple-300 font-mono inline-flex items-center gap-1.5 shadow-2xs">
+                                  <ShieldCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                                  DELIVERED ({latestDispatch?.receiverName || 'STORE'})
+                                </span>
+                                {latestDispatch?.deliveryPhotoUrl && (
+                                  <button
+                                    onClick={() => setPhotoLightbox(latestDispatch.deliveryPhotoUrl)}
+                                    className="text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200 inline-flex items-center gap-1 cursor-pointer transition-colors"
+                                    title="Click to view signed proof of delivery photo"
+                                  >
+                                    <Camera className="w-2.5 h-2.5 text-blue-600" />
+                                    <span>Signed POD Photo</span>
+                                  </button>
+                                )}
+                              </div>
                             ) : isDispatched ? (
                               <span className="px-2.5 py-1 rounded-lg text-[11px] font-extrabold bg-blue-100 text-blue-900 border border-blue-300 font-mono inline-flex items-center gap-1.5 shadow-2xs">
                                 <Truck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
@@ -4773,6 +4882,40 @@ export default function JobCardsPage() {
                                 </button>
                               )}
 
+                              {isDelivered && latestDispatch?.deliveryPhotoUrl && (
+                                <button
+                                  onClick={() => setPhotoLightbox(latestDispatch.deliveryPhotoUrl)}
+                                  className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg text-[11px] flex items-center gap-1 shadow-2xs transition-all active:scale-95 cursor-pointer border border-blue-200"
+                                  title="View Signed Delivery Challan Photo"
+                                >
+                                  <Eye className="w-3 h-3 text-blue-600" />
+                                  <span>POD</span>
+                                </button>
+                              )}
+
+                              {isDelivered && latestDispatch && !latestDispatch?.deliveryPhotoUrl && (
+                                <button
+                                  onClick={() => handleOpenDeliveryModal(latestDispatch, jc)}
+                                  className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[11px] flex items-center gap-1 transition-all active:scale-95 cursor-pointer border border-slate-300"
+                                  title="Attach signed delivery challan photo"
+                                >
+                                  <Upload className="w-3 h-3 text-slate-600" />
+                                  <span>POD</span>
+                                </button>
+                              )}
+
+                              {latestDispatch && (
+                                <Link
+                                  href={`/challan-pdf/${encodeURIComponent(latestDispatch.dispatchNo || latestDispatch.id || jc.jobCardNo)}`}
+                                  target="_blank"
+                                  className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[11px] flex items-center gap-1 shadow-2xs transition-all active:scale-95 cursor-pointer border border-slate-200"
+                                  title="View & Print Official Delivery Challan / Gate Pass"
+                                >
+                                  <FileText className="w-3 h-3 text-blue-600" />
+                                  <span>Challan</span>
+                                </Link>
+                              )}
+
                               <button
                                 onClick={() => fetchJobCardHistory(jc)}
                                 className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[11px] flex items-center gap-1 transition-all active:scale-95 cursor-pointer border border-slate-200"
@@ -4781,46 +4924,47 @@ export default function JobCardsPage() {
                                 <History className="w-3 h-3" />
                                 <span>Audit</span>
                               </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-
-
-      {/* MODAL 1: ADD NEW JOB CARD */}
+      {/* MODAL 1: ADD NEW JOB CARD (Clean Professional Enterprise Design) */}
       {showGenerateModal && (
         <Portal>
-          <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm z-[9999] flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-            <div className="bg-white border border-slate-200/90 rounded-3xl w-full max-w-5xl shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900 flex flex-col max-h-[92vh] overflow-hidden my-auto">
+          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-3 sm:p-6 overflow-y-auto font-quicksand">
+            <div className="bg-white border border-slate-300 rounded-lg w-full max-w-6xl xl:max-w-7xl shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900 flex flex-col max-h-[92vh] overflow-hidden my-auto font-quicksand">
               
-              {/* Modal Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80 shrink-0">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-slate-950 flex items-center justify-center font-black shadow-sm border border-amber-300 shrink-0">
-                    {editingCardId ? <Pencil className="w-5 h-5 stroke-[2.5]" /> : <Plus className="w-5 h-5 stroke-[2.5]" />}
+              {/* Header */}
+              <div className="flex items-center justify-between px-7 py-5 sm:py-5.5 border-b border-slate-800 bg-slate-900 text-white shrink-0">
+                <div className="flex items-center gap-4 sm:gap-5">
+                  <div className="h-11 sm:h-12 flex items-center shrink-0">
+                    <img
+                      src="/Assets/logo-1.png"
+                      alt="RF Electro Tech"
+                      className="h-10 sm:h-11 max-h-12 w-auto object-contain"
+                    />
                   </div>
+                  <div className="h-9 sm:h-10 w-px bg-slate-700 hidden sm:block shrink-0" />
                   <div>
-                    <div className="flex items-center gap-2.5">
-                      <h3 className="font-extrabold text-slate-950 text-base sm:text-lg tracking-tight">
-                        {editingCardId ? 'Edit Job Card Parameters' : 'New Job Card Creation & Launch'}
+                    <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+                      <h3 className="font-bold text-white text-xl sm:text-2xl tracking-tight font-quicksand">
+                        {editingCardId ? 'Edit Job Card Parameters' : 'Create New Job Card'}
                       </h3>
-                      <span className="font-mono text-[11px] px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-extrabold border border-amber-300/80 shadow-2xs">
-                        {launchForm.jobCardNo || 'DRAFT'}
+                      <span className="font-mono text-xs sm:text-sm px-3 py-0.5 rounded-md bg-slate-800 text-slate-100 border border-slate-700 font-bold shadow-xs">
+                        #{launchForm.jobCardNo || 'DRAFT'}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {editingCardId 
-                        ? 'Modify PCB parameters and update existing job card record' 
-                        : 'Configure production parameters, generate industrial traveler QR tag & launch WIP'}
+                    <p className="text-xs sm:text-sm text-slate-400 mt-1 font-medium font-quicksand">
+                      RF Electro Tech (India) Pvt. Ltd. • IPC-A-600 Route Traveler Control
                     </p>
                   </div>
                 </div>
@@ -4829,205 +4973,28 @@ export default function JobCardsPage() {
                   type="button"
                   disabled={isSubmittingLaunch}
                   onClick={() => setShowGenerateModal(false)} 
-                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-10 h-10 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer text-xl font-bold disabled:opacity-40 shrink-0"
                   title="Close modal"
                 >
                   ✕
                 </button>
               </div>
 
-              {/* Scrollable Form Body */}
-              <form onSubmit={handleLaunchJobCard} className="flex-1 overflow-y-auto px-6 py-5 space-y-6 text-xs custom-scrollbar">
+              {/* Form Body */}
+              <form onSubmit={handleLaunchJobCard} className="flex-1 overflow-y-auto p-7 sm:p-8 space-y-8 text-sm custom-scrollbar bg-white font-quicksand">
                 
-                {/* 1. Job Card Physical Photo Attachment */}
-                <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4 space-y-3 shadow-2xs">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
-                        <Camera className="w-3.5 h-3.5" />
-                      </div>
-                      <span className="font-bold text-slate-800 text-xs tracking-tight">
-                        Original Physical Job Card Photo <span className="text-rose-500">*</span>
-                      </span>
-                    </div>
-                    {launchForm.photoUrl && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Photo Attached
-                      </span>
-                    )}
-                  </div>
-
-                  <input
-                    type="file"
-                    id="jobCardPhotoFileInput"
-                    accept="image/*"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        try {
-                          const res = await compressImageFile(file);
-                          if (res) {
-                            setLaunchForm({ ...launchForm, photoUrl: res });
-                          }
-                        } catch {
-                          const reader = new FileReader();
-                          reader.onload = (uploadEvt) => {
-                            const res = uploadEvt.target?.result as string;
-                            if (res) {
-                              setLaunchForm({ ...launchForm, photoUrl: res });
-                            }
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }
-                    }}
-                    className="hidden"
-                  />
-
-                  {launchForm.photoUrl ? (
-                    /* Attached Photo Preview State */
-                    <div className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
-                      <div className="flex items-center gap-3">
-                        <div 
-                          onClick={() => setPhotoLightbox(launchForm.photoUrl)}
-                          className="relative group cursor-pointer w-14 h-14 rounded-xl overflow-hidden border border-slate-200 shrink-0 bg-slate-100 shadow-2xs"
-                          title="Click to view full preview"
-                        >
-                          <img
-                            src={launchForm.photoUrl}
-                            alt="Job Card Document"
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                          />
-                          <div className="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                            <Eye className="w-4 h-4" />
-                          </div>
-                        </div>
-                        <div>
-                          <p className="font-bold text-slate-900 text-xs">Physical Job Card Document Attached</p>
-                          <p className="text-[11px] text-slate-500 font-mono truncate max-w-xs sm:max-w-md">
-                            {launchForm.photoUrl.startsWith('data:') ? 'Image uploaded from device (Base64)' : launchForm.photoUrl}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => setPhotoLightbox(launchForm.photoUrl)}
-                          className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-blue-200"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Preview</span>
-                        </button>
-                        <label
-                          htmlFor="jobCardPhotoFileInput"
-                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-slate-200"
-                        >
-                          <Upload className="w-3.5 h-3.5" />
-                          <span>Replace</span>
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => setLaunchForm({ ...launchForm, photoUrl: '' })}
-                          className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border border-rose-200"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                          <span>Remove</span>
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    /* Upload Picker State */
-                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                      <label
-                        htmlFor="jobCardPhotoFileInput"
-                        className="sm:col-span-6 border-2 border-dashed border-blue-200 hover:border-blue-400 bg-blue-50/40 hover:bg-blue-50/80 rounded-xl p-3 flex items-center justify-center gap-2.5 cursor-pointer transition-all text-blue-700 font-bold group shadow-2xs"
-                      >
-                        <div className="w-8 h-8 rounded-lg bg-blue-100 group-hover:bg-blue-200 text-blue-700 flex items-center justify-center transition-colors">
-                          <Upload className="w-4 h-4 stroke-[2.5]" />
-                        </div>
-                        <div className="text-left">
-                          <span className="block text-xs font-extrabold text-blue-900">Upload Photo from Device / Camera</span>
-                          <span className="block text-[10px] text-blue-600 font-normal">Click to browse or take snapshot</span>
-                        </div>
-                      </label>
-
-                      <div className="sm:col-span-6 flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/20 shadow-2xs">
-                        <ImageIcon className="w-4 h-4 text-slate-400 shrink-0 mr-2" />
-                        <input
-                          type="text"
-                          value={launchForm.photoUrl}
-                          onChange={(e) => setLaunchForm({ ...launchForm, photoUrl: e.target.value })}
-                          className="w-full bg-transparent text-xs text-slate-900 focus:outline-none placeholder:text-slate-400 font-mono"
-                          placeholder="Or paste direct image URL..."
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* 2. Job Identification & Timeline */}
-                <div className="space-y-2.5">
-                  <div className="flex items-center gap-2 text-slate-400 uppercase font-mono text-[10px] font-black tracking-wider">
-                    <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                    <span>1. Identification & Schedule</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
-                        Job Card No. <span className="text-rose-500">*</span>
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-2.5 font-mono text-slate-400 font-bold">#</span>
-                        <input
-                          type="text"
-                          required
-                          value={launchForm.jobCardNo}
-                          onChange={(e) => setLaunchForm({ ...launchForm, jobCardNo: e.target.value })}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-7 pr-3 py-2 text-xs font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs"
-                          placeholder="26-27-1731"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
-                        Launch Date <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="date"
-                        required
-                        value={launchForm.launchDate}
-                        onChange={(e) => setLaunchForm({ ...launchForm, launchDate: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all font-mono shadow-2xs"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
-                        Target Delivery Date <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="date"
-                        required
-                        value={launchForm.targetDate}
-                        onChange={(e) => setLaunchForm({ ...launchForm, targetDate: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all font-mono shadow-2xs"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. Customer & Part Code Master */}
-                <div className="space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-slate-400 uppercase font-mono text-[10px] font-black tracking-wider">
-                      <Building2 className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>2. Customer & Part Codes</span>
+                {/* 1. Order Identification & Schedule */}
+                <div className="space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-6 h-6 rounded bg-slate-900 text-white font-mono text-xs font-bold flex items-center justify-center shrink-0">1</span>
+                      <h4 className="font-bold text-slate-900 text-sm uppercase tracking-wider whitespace-nowrap">
+                        Order Identification & Schedule
+                      </h4>
                     </div>
                     {availableProducts.length > 0 && (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-slate-400 font-medium">Quick Preset:</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-600 font-semibold whitespace-nowrap">Load from Product Master:</span>
                         <select
                           onChange={(e) => {
                             const prod = availableProducts.find((p) => p.id === e.target.value || p.code === e.target.value);
@@ -5046,13 +5013,13 @@ export default function JobCardsPage() {
                               }));
                             }
                           }}
-                          className="text-[11px] bg-indigo-50/70 border border-indigo-200 text-indigo-900 rounded-lg px-2 py-0.5 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-2xs"
+                          className="text-xs sm:text-sm bg-slate-50 hover:bg-slate-100 border border-slate-300 text-slate-800 rounded-md px-3 py-1.5 font-semibold focus:outline-none focus:border-slate-900 cursor-pointer transition-colors max-w-xs"
                           defaultValue=""
                         >
                           <option value="" disabled>Load from Product Master...</option>
                           {availableProducts.map((p) => (
                             <option key={p.id} value={p.id}>
-                              {p.code} ({p.name}) — {p.layers || 2}L / {p.thicknessMm || '1.6'}mm
+                              {p.code} ({p.name}) — {p.layers || 2}L
                             </option>
                           ))}
                         </select>
@@ -5060,9 +5027,49 @@ export default function JobCardsPage() {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-5 sm:gap-y-6 pt-1">
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
+                        Job Card No. <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={launchForm.jobCardNo}
+                        onChange={(e) => setLaunchForm({ ...launchForm, jobCardNo: e.target.value })}
+                        className="w-full h-11 bg-white border border-slate-300 rounded-md px-4 py-2.5 text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
+                        placeholder="26-27-1731"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
+                        Launch Date <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={launchForm.launchDate}
+                        onChange={(e) => setLaunchForm({ ...launchForm, launchDate: e.target.value })}
+                        className="w-full h-11 bg-white border border-slate-300 rounded-md px-4 py-2.5 text-sm font-mono font-medium text-slate-900 focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
+                        Target Delivery Date <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={launchForm.targetDate}
+                        onChange={(e) => setLaunchForm({ ...launchForm, targetDate: e.target.value })}
+                        className="w-full h-11 bg-white border border-slate-300 rounded-md px-4 py-2.5 text-sm font-mono font-medium text-slate-900 focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
                         Customer Code <span className="text-rose-500">*</span>
                       </label>
                       <input
@@ -5070,13 +5077,13 @@ export default function JobCardsPage() {
                         required
                         value={launchForm.customerCode}
                         onChange={(e) => setLaunchForm({ ...launchForm, customerCode: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs"
+                        className="w-full h-11 bg-white border border-slate-300 rounded-md px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
                         placeholder="e.g. CUST-001"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
                         Customer Part No. <span className="text-rose-500">*</span>
                       </label>
                       <input
@@ -5084,45 +5091,205 @@ export default function JobCardsPage() {
                         required
                         value={launchForm.customerPartNo}
                         onChange={(e) => setLaunchForm({ ...launchForm, customerPartNo: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs"
+                        className="w-full h-11 bg-white border border-slate-300 rounded-md px-4 py-2.5 text-sm font-medium text-slate-900 focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
                         placeholder="Customer Part Number"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
                         R.F.E. Part Code <span className="text-rose-500">*</span>
                       </label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          required
-                          value={launchForm.rfePartCode}
-                          onChange={(e) => setLaunchForm({ ...launchForm, rfePartCode: e.target.value })}
-                          className="w-full bg-blue-50/50 border border-blue-200 rounded-xl px-3 py-2 text-xs font-mono font-black text-blue-700 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-2xs"
-                          placeholder="R.F.E. Part Code"
-                        />
-                        <span className="absolute right-3 top-2 text-[10px] uppercase font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">RFE</span>
-                      </div>
+                      <input
+                        type="text"
+                        required
+                        value={launchForm.rfePartCode}
+                        onChange={(e) => setLaunchForm({ ...launchForm, rfePartCode: e.target.value })}
+                        className="w-full h-11 bg-white border border-slate-300 rounded-md px-4 py-2.5 text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
+                        placeholder="R.F.E. Part Code"
+                      />
                     </div>
                   </div>
                 </div>
 
-                {/* 3. PCB Technical Specifications (Live Spec Card) */}
-                <div className="space-y-2.5">
-                  <div className="flex items-center gap-2 text-slate-400 uppercase font-mono text-[10px] font-black tracking-wider">
-                    <Cpu className="w-3.5 h-3.5 text-cyan-600" />
-                    <span>3. PCB Technical Specifications (Live Spec Card)</span>
+                {/* 2. Physical Job Card Verification */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-6 h-6 rounded bg-slate-900 text-white font-mono text-xs font-bold flex items-center justify-center shrink-0">2</span>
+                      <h4 className="font-bold text-slate-900 text-sm uppercase tracking-wider whitespace-nowrap flex items-center gap-1.5">
+                        <span>Physical Job Card Photo Verification</span>
+                        <span className="text-rose-500 font-bold">*</span>
+                      </h4>
+                    </div>
+                    {launchForm.photoUrl ? (
+                      <span className="text-xs sm:text-sm text-emerald-700 font-bold flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Hard Copy Attached
+                      </span>
+                    ) : (
+                      <span className="text-xs sm:text-sm text-slate-500 font-medium">
+                        Required for shopfloor release
+                      </span>
+                    )}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
+                  <input
+                    type="file"
+                    id="jobCardPhotoFileInput"
+                    accept="image/*"
+                    onClick={(e) => {
+                      (e.target as HTMLInputElement).value = '';
+                    }}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        await handleProcessPhotoFile(file);
+                      }
+                    }}
+                    className="hidden"
+                  />
+
+                  {launchForm.photoUrl ? (
+                    <div className="border border-slate-200 rounded-md p-4 bg-slate-50 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div 
+                          onClick={() => setPhotoLightbox(launchForm.photoUrl)}
+                          className="relative group cursor-pointer w-14 h-14 rounded border border-slate-300 shrink-0 bg-white overflow-hidden shadow-2xs"
+                          title="Inspect image"
+                        >
+                          <img
+                            src={launchForm.photoUrl}
+                            alt="Attached Job Card"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                            <Eye className="w-4 h-4" />
+                          </div>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-900 text-sm">Original Physical Job Card Document Verified</p>
+                          <p className="text-xs text-slate-500 truncate mt-0.5 font-medium">
+                            {launchForm.photoUrl.startsWith('data:') ? 'Image uploaded from device (Compressed Base64)' : launchForm.photoUrl}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setPhotoLightbox(launchForm.photoUrl)}
+                          className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded text-xs sm:text-sm font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Eye className="w-4 h-4" />
+                          <span>Inspect</span>
+                        </button>
+                        <label
+                          htmlFor="jobCardPhotoFileInput"
+                          className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded text-xs sm:text-sm font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Upload className="w-4 h-4" />
+                          <span>Replace</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setLaunchForm((prev) => ({ ...prev, photoUrl: '' }))}
+                          className="px-3.5 py-2 bg-white hover:bg-rose-50 text-rose-600 border border-slate-300 hover:border-rose-300 rounded text-xs sm:text-sm font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
+                        >
+                          <X className="w-4 h-4" />
+                          <span>Remove</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div 
+                      className="border border-dashed border-slate-300 hover:border-slate-500 rounded-md p-5 bg-slate-50 transition-colors space-y-3.5"
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const file = e.dataTransfer.files?.[0];
+                        if (file && file.type.startsWith('image/')) {
+                          handleProcessPhotoFile(file);
+                        } else {
+                          showToast('Please drop a valid image file (PNG, JPG, WEBP).', 'error');
+                        }
+                      }}
+                      onPaste={(e) => {
+                        const items = e.clipboardData?.items;
+                        if (items) {
+                          for (let i = 0; i < items.length; i++) {
+                            if (items[i].type.indexOf('image') !== -1) {
+                              const blob = items[i].getAsFile();
+                              if (blob) {
+                                handleProcessPhotoFile(blob);
+                                break;
+                              }
+                            }
+                          }
+                        }
+                      }}
+                    >
+                      <label
+                        htmlFor="jobCardPhotoFileInput"
+                        className="flex flex-col sm:flex-row items-center justify-center gap-3.5 cursor-pointer py-2 group"
+                      >
+                        <div className="w-10 h-10 rounded-full bg-slate-200 group-hover:bg-slate-900 group-hover:text-white text-slate-700 flex items-center justify-center transition-colors shrink-0">
+                          <Upload className="w-5 h-5" />
+                        </div>
+                        <div className="text-center sm:text-left">
+                          <span className="block text-sm font-bold text-slate-800">
+                            Click to upload original job card photo, or drag and drop here
+                          </span>
+                          <span className="block text-xs text-slate-500 font-normal mt-0.5">
+                            Supports PNG, JPG, WEBP • Clipboard paste (Ctrl+V) supported
+                          </span>
+                        </div>
+                      </label>
+
+                      <div className="flex items-center gap-2.5 pt-2 border-t border-slate-200">
+                        <span className="text-xs text-slate-600 shrink-0 font-semibold">Or paste image URL:</span>
+                        <input
+                          type="text"
+                          value={launchForm.photoUrl}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val.match(/^[a-zA-Z]:\\/) || val.startsWith('file://')) {
+                              showToast('Local C:\\ computer paths cannot be loaded directly by browsers. Please click "Upload Photo" instead.', 'error');
+                              return;
+                            }
+                            setLaunchForm((prev) => ({ ...prev, photoUrl: val }));
+                          }}
+                          className="flex-1 bg-white border border-slate-300 rounded px-3 py-1.5 text-xs sm:text-sm text-slate-800 focus:outline-none focus:border-slate-900 font-mono"
+                          placeholder="https://example.com/jobcard-photo.jpg"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Technical Specifications */}
+                <div className="space-y-5">
+                  <div className="border-b border-slate-200 pb-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-6 h-6 rounded bg-slate-900 text-white font-mono text-xs font-bold flex items-center justify-center shrink-0">3</span>
+                      <h4 className="font-bold text-slate-900 text-sm uppercase tracking-wider whitespace-nowrap">
+                        Technical Specifications (IPC-A-600 Standard)
+                      </h4>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-5 sm:gap-y-6 pt-1">
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
                         Layers <span className="text-rose-500">*</span>
                       </label>
                       <select
                         value={launchForm.layers}
                         onChange={(e) => setLaunchForm({ ...launchForm, layers: Number(e.target.value) || 2 })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs cursor-pointer"
+                        className="w-full h-11 bg-white border border-slate-300 rounded-md px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-slate-900 cursor-pointer font-medium"
                       >
                         <option value={1}>1 Layer (Single Sided)</option>
                         <option value={2}>2 Layers (Double Sided)</option>
@@ -5135,7 +5302,7 @@ export default function JobCardsPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
                         Thickness (mm) <span className="text-rose-500">*</span>
                       </label>
                       <input
@@ -5144,19 +5311,19 @@ export default function JobCardsPage() {
                         required
                         value={launchForm.thicknessMm}
                         onChange={(e) => setLaunchForm({ ...launchForm, thicknessMm: parseFloat(e.target.value) || 1.6 })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs"
+                        className="w-full h-11 bg-white border border-slate-300 rounded-md px-4 py-2.5 text-sm font-mono font-medium text-slate-800 focus:outline-none focus:border-slate-900"
                         placeholder="1.6"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
                         Copper Weight <span className="text-rose-500">*</span>
                       </label>
                       <select
                         value={launchForm.copperWeight}
                         onChange={(e) => setLaunchForm({ ...launchForm, copperWeight: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs cursor-pointer"
+                        className="w-full h-11 bg-white border border-slate-300 rounded-md px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-slate-900 cursor-pointer font-medium"
                       >
                         <option value="0.5oz">0.5 oz (18µm)</option>
                         <option value="1oz">1.0 oz (35µm)</option>
@@ -5167,13 +5334,13 @@ export default function JobCardsPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
                         Surface Finish <span className="text-rose-500">*</span>
                       </label>
                       <select
                         value={launchForm.surfaceFinish}
                         onChange={(e) => setLaunchForm({ ...launchForm, surfaceFinish: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs cursor-pointer"
+                        className="w-full h-11 bg-white border border-slate-300 rounded-md px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-slate-900 cursor-pointer font-medium"
                       >
                         <option value="HASL Lead-Free">HASL Lead-Free</option>
                         <option value="HASL Leaded">HASL Leaded</option>
@@ -5185,13 +5352,13 @@ export default function JobCardsPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
                         Solder Mask <span className="text-rose-500">*</span>
                       </label>
                       <select
                         value={launchForm.solderMask}
                         onChange={(e) => setLaunchForm({ ...launchForm, solderMask: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs cursor-pointer"
+                        className="w-full h-11 bg-white border border-slate-300 rounded-md px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-slate-900 cursor-pointer font-medium"
                       >
                         <option value="Green">Green</option>
                         <option value="Matt Green">Matt Green</option>
@@ -5205,115 +5372,113 @@ export default function JobCardsPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
                         Material Type <span className="text-rose-500">*</span>
                       </label>
                       <select
                         value={launchForm.materialType}
                         onChange={(e) => setLaunchForm({ ...launchForm, materialType: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all shadow-2xs cursor-pointer"
+                        className="w-full h-11 bg-white border border-slate-300 rounded-md px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-slate-900 cursor-pointer font-medium"
                       >
                         <option value="FR-4">FR-4 (TG140)</option>
                         <option value="FR-4 High TG">FR-4 High TG (TG170)</option>
                         <option value="Aluminum">Aluminum Base</option>
                         <option value="Copper Base">Copper Base</option>
-                        <option value="Rogers (High Frequency)">Rogers High Freq</option>
+                        <option value="Rogers (High Frequency)">Rogers High Frequency</option>
                         <option value="Polyimide">Polyimide (Flex)</option>
                       </select>
                     </div>
                   </div>
                 </div>
 
-                {/* 4. Production Volume & Parameters */}
-                <div className="space-y-2.5">
-                  <div className="flex items-center gap-2 text-slate-400 uppercase font-mono text-[10px] font-black tracking-wider">
-                    <Box className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>4. Production Volumes & Parameters</span>
+                {/* 4. Production Quantities & Flow Route */}
+                <div className="space-y-5">
+                  <div className="border-b border-slate-200 pb-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-6 h-6 rounded bg-slate-900 text-white font-mono text-xs font-bold flex items-center justify-center shrink-0">4</span>
+                      <h4 className="font-bold text-slate-900 text-sm uppercase tracking-wider whitespace-nowrap">
+                        Production Quantities & Flow Route
+                      </h4>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-5 sm:gap-y-6 pt-1">
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
                         Priority <span className="text-rose-500">*</span>
                       </label>
                       <select
                         value={launchForm.priority}
                         onChange={(e: any) => setLaunchForm({ ...launchForm, priority: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs cursor-pointer"
+                        className="w-full h-11 bg-white border border-slate-300 rounded-md px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-slate-900 cursor-pointer font-semibold"
                       >
-                        <option value="MOST URGENT">⚡ MOST URGENT</option>
-                        <option value="HIGH">🔥 HIGH</option>
-                        <option value="NORMAL">🟢 NORMAL</option>
+                        <option value="NORMAL">Normal Priority</option>
+                        <option value="HIGH">High Priority</option>
+                        <option value="MOST URGENT">Urgent Priority</option>
                       </select>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-extrabold text-slate-900 mb-1">
-                        Total PCB Qty <span className="text-rose-500">*</span>
+                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
+                        Total Quantity (PCBs) <span className="text-rose-500">*</span>
                       </label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          required
-                          value={launchForm.totalPcbQty || ''}
-                          onChange={(e) => {
-                            const qty = Number(e.target.value) || 0;
-                            const pnlCount = Math.ceil(qty / 4) || 10;
-                            const calculatedArea = Number((qty * unitPcbAreaSqm).toFixed(2));
-                            setLaunchForm({
-                              ...launchForm,
-                              totalPcbQty: qty,
-                              prodPnlQty: pnlCount,
-                              custPnlQty: qty,
-                              custPnlAreaSqm: calculatedArea,
-                              prodPnlAreaSqm: Number((calculatedArea * 1.1).toFixed(2)),
-                            });
-                          }}
-                          className="w-full bg-amber-50/60 border border-amber-300 rounded-xl pl-3 pr-11 py-2 text-xs font-mono font-black text-slate-950 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs"
-                          placeholder="160"
-                        />
-                        <span className="absolute right-2.5 top-2 text-[10px] font-bold text-amber-800 bg-amber-200/80 px-1.5 py-0.5 rounded">PCBs</span>
-                      </div>
+                      <input
+                        type="number"
+                        required
+                        value={launchForm.totalPcbQty || ''}
+                        onChange={(e) => {
+                          const qty = Number(e.target.value) || 0;
+                          const pnlCount = Math.ceil(qty / 4) || 10;
+                          const calculatedArea = Number((qty * unitPcbAreaSqm).toFixed(2));
+                          setLaunchForm({
+                            ...launchForm,
+                            totalPcbQty: qty,
+                            prodPnlQty: pnlCount,
+                            custPnlQty: qty,
+                            custPnlAreaSqm: calculatedArea,
+                            prodPnlAreaSqm: Number((calculatedArea * 1.1).toFixed(2)),
+                          });
+                        }}
+                        className="w-full h-11 bg-white border border-slate-300 rounded-md px-4 py-2.5 text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-slate-900"
+                        placeholder="160"
+                      />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-extrabold text-slate-900 mb-1">
-                        Total PCB Area (Sqm) <span className="text-rose-500">*</span>
+                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
+                        Total Area (Sqm) <span className="text-rose-500">*</span>
                       </label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          step="0.01"
-                          required
-                          value={launchForm.custPnlAreaSqm || ''}
-                          onChange={(e) => {
-                            const area = Number(e.target.value) || 0;
-                            const newUnitArea = launchForm.totalPcbQty > 0 ? area / launchForm.totalPcbQty : 0.28125;
-                            setUnitPcbAreaSqm(newUnitArea);
-                            setLaunchForm({
-                              ...launchForm,
-                              custPnlAreaSqm: area,
-                              prodPnlAreaSqm: Number((area * 1.1).toFixed(2)),
-                            });
-                          }}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-3 pr-9 py-2 text-xs font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs"
-                          placeholder="45"
-                        />
-                        <span className="absolute right-2.5 top-2 text-[10px] font-bold text-slate-500 bg-slate-200/80 px-1.5 py-0.5 rounded">m²</span>
-                      </div>
-                      <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md font-mono">
-                        <span>{launchForm.totalPcbQty || 0} × {unitPcbAreaSqm.toFixed(4)} m²</span>
-                        <span className="font-bold text-amber-800">={(Number(launchForm.custPnlAreaSqm) || 0).toFixed(2)} m²</span>
-                      </div>
+                      <input
+                        type="number"
+                        step="0.01"
+                        required
+                        value={launchForm.custPnlAreaSqm || ''}
+                        onChange={(e) => {
+                          const area = Number(e.target.value) || 0;
+                          const newUnitArea = launchForm.totalPcbQty > 0 ? area / launchForm.totalPcbQty : 0.28125;
+                          setUnitPcbAreaSqm(newUnitArea);
+                          setLaunchForm({
+                            ...launchForm,
+                            custPnlAreaSqm: area,
+                            prodPnlAreaSqm: Number((area * 1.1).toFixed(2)),
+                          });
+                        }}
+                        className="w-full h-11 bg-white border border-slate-300 rounded-md px-4 py-2.5 text-sm font-mono font-semibold text-slate-900 focus:outline-none focus:border-slate-900"
+                        placeholder="45"
+                      />
+                      <p className="text-xs text-slate-500 mt-1.5 font-mono font-medium">
+                        {launchForm.totalPcbQty || 0} × {unitPcbAreaSqm.toFixed(4)} m² = {(Number(launchForm.custPnlAreaSqm) || 0).toFixed(2)} m²
+                      </p>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
                         Job Flow Route <span className="text-rose-500">*</span>
                       </label>
                       <select
                         value={launchForm.jobFlowSelection}
                         onChange={(e) => setLaunchForm({ ...launchForm, jobFlowSelection: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:bg-white focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all shadow-2xs cursor-pointer"
+                        className="w-full h-11 bg-white border border-slate-300 rounded-md px-4 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-slate-900 cursor-pointer font-medium"
                       >
                         <option value="PF-01">PF-01 Standard Flow (20 Stages)</option>
                       </select>
@@ -5321,27 +5486,40 @@ export default function JobCardsPage() {
                   </div>
                 </div>
 
-                {/* 5. Production Options: Pre-Launch Lot Splitting & Direct Launch */}
-                <div className="space-y-3 pt-1">
-                  <div className="flex items-center gap-2 text-slate-400 uppercase font-mono text-[10px] font-black tracking-wider">
-                    <Workflow className="w-3.5 h-3.5 text-purple-600" />
-                    <span>5. Production Launch & Lot Splitting</span>
+                {/* 5. Floor Release & Lot Options */}
+                <div className="space-y-4 pt-2">
+                  <div className="border-b border-slate-200 pb-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-6 h-6 rounded bg-slate-900 text-white font-mono text-xs font-bold flex items-center justify-center shrink-0">5</span>
+                      <h4 className="font-bold text-slate-900 text-sm uppercase tracking-wider whitespace-nowrap">
+                        Floor Release & Traveler Options
+                      </h4>
+                    </div>
                   </div>
 
-                  {/* Pre-Launch Sub-Job Card Split Card */}
-                  <div className={`border rounded-2xl p-4 transition-all shadow-2xs ${launchForm.enablePreSplit ? 'bg-amber-50/70 border-amber-300' : 'bg-slate-50/70 border-slate-200'}`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${launchForm.enablePreSplit ? 'bg-amber-200 text-amber-950' : 'bg-slate-200 text-slate-600'}`}>
-                          <Split className="w-4 h-4 stroke-[2.5]" />
-                        </div>
-                        <div>
-                          <span className="font-extrabold text-slate-950 text-xs block">Pre-Launch Sub-Job Card Lot Splitting</span>
-                          <span className="text-[11px] text-slate-500">Divide order volume into multiple travelers before releasing to floor</span>
-                        </div>
+                  <div className="space-y-3">
+                    {/* Direct Launch Checkbox */}
+                    <label className="flex items-start gap-3.5 p-4 border border-slate-200 rounded-md hover:bg-slate-50 transition-colors cursor-pointer bg-white">
+                      <input
+                        type="checkbox"
+                        id="autoLaunch"
+                        checked={launchForm.autoLaunch}
+                        onChange={(e) => setLaunchForm({ ...launchForm, autoLaunch: e.target.checked })}
+                        className="w-5 h-5 mt-0.5 text-slate-900 rounded border-slate-300 focus:ring-slate-900 cursor-pointer accent-slate-900 shrink-0"
+                      />
+                      <div>
+                        <span className="font-bold text-slate-900 text-sm block">
+                          Immediately dispatch traveler to Stage 1 Production (1. SHEARING)
+                        </span>
+                        <span className="text-slate-500 text-xs block mt-0.5 font-medium">
+                          Marks job card as IN_PROGRESS and makes it available to the cutting floor right away.
+                        </span>
                       </div>
+                    </label>
 
-                      <label className="relative inline-flex items-center cursor-pointer">
+                    {/* Pre-Launch Sub-Job Card Split Checkbox */}
+                    <div className="border border-slate-200 rounded-md p-4 bg-white space-y-3.5">
+                      <label className="flex items-start gap-3.5 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={launchForm.enablePreSplit}
@@ -5360,188 +5538,163 @@ export default function JobCardsPage() {
                                 : [],
                             });
                           }}
-                          className="sr-only peer"
+                          className="w-4.5 h-4.5 mt-0.5 text-slate-900 rounded border-slate-300 focus:ring-slate-900 cursor-pointer accent-slate-900"
                         />
-                        <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
-                      </label>
-                    </div>
-
-                    {launchForm.enablePreSplit && (
-                      <div className="space-y-3 pt-3.5 border-t border-amber-200/80 mt-3.5">
-                        {/* Quick Presets */}
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[10px] text-amber-900 font-extrabold uppercase font-mono">Presets:</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const total = launchForm.prodPnlQty || 40;
-                              const h = Math.floor(total / 2);
-                              setLaunchForm({
-                                ...launchForm,
-                                customSplits: [
-                                  { subNo: `${launchForm.jobCardNo}-1`, qty: h },
-                                  { subNo: `${launchForm.jobCardNo}-2`, qty: total - h },
-                                ],
-                              });
-                            }}
-                            className="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 text-amber-950 text-xs font-bold rounded-lg cursor-pointer transition-colors shadow-2xs border border-amber-300"
-                          >
-                            Split in 2 (50/50)
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const total = launchForm.prodPnlQty || 40;
-                              const part = Math.floor(total / 4);
-                              const rem = total - part * 3;
-                              setLaunchForm({
-                                ...launchForm,
-                                customSplits: [
-                                  { subNo: `${launchForm.jobCardNo}-1`, qty: part },
-                                  { subNo: `${launchForm.jobCardNo}-2`, qty: part },
-                                  { subNo: `${launchForm.jobCardNo}-3`, qty: part },
-                                  { subNo: `${launchForm.jobCardNo}-4`, qty: rem },
-                                ],
-                              });
-                            }}
-                            className="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 text-amber-950 text-xs font-bold rounded-lg cursor-pointer transition-colors shadow-2xs border border-amber-300"
-                          >
-                            Split in 4 Lots
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const count = launchForm.customSplits.length + 1;
-                              setLaunchForm({
-                                ...launchForm,
-                                customSplits: [
-                                  ...launchForm.customSplits,
-                                  { subNo: `${launchForm.jobCardNo}-${count}`, qty: 5 },
-                                ],
-                              });
-                            }}
-                            className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-extrabold rounded-lg cursor-pointer transition-colors shadow-2xs border border-amber-600 flex items-center gap-1"
-                          >
-                            <Plus className="w-3 h-3 stroke-[3]" /> Add Lot
-                          </button>
+                        <div>
+                          <span className="font-bold text-slate-900 text-sm block">
+                            Pre-launch lot splitting (divide volume into multiple travelers)
+                          </span>
+                          <span className="text-slate-500 text-xs block mt-0.5 font-medium">
+                            Split the job card into sub-lots (-1, -2, etc.) prior to releasing to the shop floor.
+                          </span>
                         </div>
+                      </label>
 
-                        {/* Sub-Job Cards Items Grid */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {launchForm.customSplits.map((item, idx) => (
-                            <div key={idx} className="flex items-center gap-2 bg-white p-2.5 rounded-xl border border-amber-200 shadow-2xs">
-                              <span className="text-[10px] font-mono font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">#{idx + 1}</span>
-                              <input
-                                type="text"
-                                value={item.subNo}
-                                onChange={(e) => {
-                                  const updated = [...launchForm.customSplits];
-                                  updated[idx].subNo = e.target.value;
-                                  setLaunchForm({ ...launchForm, customSplits: updated });
+                      {launchForm.enablePreSplit && (
+                        <div className="pt-3 border-t border-slate-200 space-y-3.5 pl-8">
+                          <div className="flex flex-wrap items-center justify-between gap-2.5">
+                            <span className="text-xs sm:text-sm text-slate-700 font-bold">Sub-Lot Allocation:</span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const total = launchForm.prodPnlQty || 40;
+                                  const h = Math.floor(total / 2);
+                                  setLaunchForm({
+                                    ...launchForm,
+                                    customSplits: [
+                                      { subNo: `${launchForm.jobCardNo}-1`, qty: h },
+                                      { subNo: `${launchForm.jobCardNo}-2`, qty: total - h },
+                                    ],
+                                  });
                                 }}
-                                className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-mono font-bold focus:bg-white focus:outline-none focus:border-amber-500"
-                              />
-                              <div className="flex items-center gap-1 font-mono text-xs">
+                                className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-semibold rounded border border-slate-300 cursor-pointer transition-colors"
+                              >
+                                50/50 Split
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const total = launchForm.prodPnlQty || 40;
+                                  const part = Math.floor(total / 4);
+                                  const rem = total - part * 3;
+                                  setLaunchForm({
+                                    ...launchForm,
+                                    customSplits: [
+                                      { subNo: `${launchForm.jobCardNo}-1`, qty: part },
+                                      { subNo: `${launchForm.jobCardNo}-2`, qty: part },
+                                      { subNo: `${launchForm.jobCardNo}-3`, qty: part },
+                                      { subNo: `${launchForm.jobCardNo}-4`, qty: rem },
+                                    ],
+                                  });
+                                }}
+                                className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-semibold rounded border border-slate-300 cursor-pointer transition-colors"
+                              >
+                                Split in 4
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const count = launchForm.customSplits.length + 1;
+                                  setLaunchForm({
+                                    ...launchForm,
+                                    customSplits: [
+                                      ...launchForm.customSplits,
+                                      { subNo: `${launchForm.jobCardNo}-${count}`, qty: 5 },
+                                    ],
+                                  });
+                                }}
+                                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold rounded cursor-pointer transition-colors"
+                              >
+                                + Add Lot
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            {launchForm.customSplits.map((item, idx) => (
+                              <div key={idx} className="flex items-center gap-2.5 bg-slate-50 p-2.5 rounded border border-slate-200">
+                                <span className="text-xs font-mono font-bold text-slate-500 w-6">#{idx + 1}</span>
                                 <input
-                                  type="number"
-                                  value={item.qty}
+                                  type="text"
+                                  value={item.subNo}
                                   onChange={(e) => {
                                     const updated = [...launchForm.customSplits];
-                                    updated[idx].qty = Number(e.target.value);
+                                    updated[idx].subNo = e.target.value;
                                     setLaunchForm({ ...launchForm, customSplits: updated });
                                   }}
-                                  className="w-16 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-blue-700 text-right focus:bg-white focus:outline-none focus:border-amber-500"
+                                  className="flex-1 bg-white border border-slate-300 rounded px-3 py-1.5 text-xs sm:text-sm font-mono font-bold focus:outline-none focus:border-slate-900"
                                 />
-                                <span className="text-[10px] text-slate-500 font-sans font-bold">PCB</span>
+                                <div className="flex items-center gap-1.5 font-mono text-xs sm:text-sm">
+                                  <input
+                                    type="number"
+                                    value={item.qty}
+                                    onChange={(e) => {
+                                      const updated = [...launchForm.customSplits];
+                                      updated[idx].qty = Number(e.target.value);
+                                      setLaunchForm({ ...launchForm, customSplits: updated });
+                                    }}
+                                    className="w-18 bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs sm:text-sm font-bold text-slate-900 text-right focus:outline-none focus:border-slate-900"
+                                  />
+                                  <span className="text-xs text-slate-500 font-sans font-medium">PCB</span>
+                                </div>
+                                {launchForm.customSplits.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = launchForm.customSplits.filter((_, i) => i !== idx);
+                                      setLaunchForm({ ...launchForm, customSplits: updated });
+                                    }}
+                                    className="text-slate-400 hover:text-rose-600 p-1.5 rounded cursor-pointer transition-colors"
+                                    title="Remove lot"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
                               </div>
-                              {launchForm.customSplits.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const updated = launchForm.customSplits.filter((_, i) => i !== idx);
-                                    setLaunchForm({ ...launchForm, customSplits: updated });
-                                  }}
-                                  className="text-slate-400 hover:text-rose-600 text-xs font-bold p-1 rounded-md hover:bg-rose-50 cursor-pointer transition-colors"
-                                  title="Delete lot"
-                                >
-                                  ✕
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
+                            ))}
+                          </div>
 
-                        {/* Sum Validation Indicator */}
-                        {(() => {
-                          const sum = launchForm.customSplits.reduce((acc, curr) => acc + (Number(curr.qty) || 0), 0);
-                          const target = launchForm.prodPnlQty || 40;
-                          const isValid = sum === target;
-                          return (
-                            <div className={`p-2.5 rounded-xl text-xs font-bold flex items-center justify-between shadow-2xs ${isValid ? 'bg-emerald-50 text-emerald-900 border border-emerald-300' : 'bg-rose-50 text-rose-900 border border-rose-300'}`}>
-                              <span className="flex items-center gap-1.5 font-mono">
-                                <span>Sum of Sub-Lots: <strong>{sum}</strong> PCB</span>
-                                <span className="text-slate-400">/</span>
-                                <span>Total Target: <strong>{target}</strong> PCB</span>
-                              </span>
-                              <span>{isValid ? '✓ Split Allocation Balanced' : '⚠️ Must equal Total PCB'}</span>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Direct Launch into Stage 1 Production Checkbox Card */}
-                  <div className={`border rounded-2xl p-4 transition-all shadow-2xs ${launchForm.autoLaunch ? 'bg-emerald-50/80 border-emerald-300' : 'bg-slate-50/70 border-slate-200'}`}>
-                    <label className="flex items-center justify-between cursor-pointer">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${launchForm.autoLaunch ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
-                          <Zap className="w-4 h-4 stroke-[2.5]" />
+                          {(() => {
+                            const sum = launchForm.customSplits.reduce((acc, curr) => acc + (Number(curr.qty) || 0), 0);
+                            const target = launchForm.prodPnlQty || 40;
+                            const isValid = sum === target;
+                            return (
+                              <div className={`p-3 rounded-md text-xs sm:text-sm font-bold flex items-center justify-between border ${isValid ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'}`}>
+                                <span className="font-mono">
+                                  Allocated: <strong>{sum}</strong> / Target: <strong>{target}</strong> PCBs
+                                </span>
+                                <span>{isValid ? '✓ Allocation Balanced' : '⚠️ Sub-lot sum must match total volume'}</span>
+                              </div>
+                            );
+                          })()}
                         </div>
-                        <div>
-                          <span className="font-extrabold text-slate-950 text-xs block">
-                            Directly Launch into Stage 1 Production (1. SHEARING)
-                          </span>
-                          <span className="text-[11px] text-slate-500">
-                            Instantly mark traveler as IN_PROGRESS and dispatch to cutting shopfloor immediately
-                          </span>
-                        </div>
-                      </div>
-                      <input
-                        type="checkbox"
-                        id="autoLaunch"
-                        checked={launchForm.autoLaunch}
-                        onChange={(e) => setLaunchForm({ ...launchForm, autoLaunch: e.target.checked })}
-                        className="w-5 h-5 text-emerald-600 rounded-md border-slate-300 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
-                      />
-                    </label>
+                      )}
+                    </div>
                   </div>
                 </div>
 
               </form>
 
-              {/* Modal Footer Actions */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 bg-slate-50 border-t border-slate-200/80 shrink-0">
-                {isSubmittingLaunch ? (
-                  <div className="text-xs text-amber-700 font-bold flex items-center gap-2 animate-pulse">
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-600" />
-                    <span>{editingCardId ? 'Saving changes & updating WIP record...' : 'Generating industrial barcode traveler & launching WIP...'}</span>
-                  </div>
-                ) : (
-                  <div className="text-xs text-slate-500 hidden sm:flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>Ready to dispatch to production</span>
-                  </div>
-                )}
+              {/* Footer Actions */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-7 py-4 sm:py-5 bg-slate-50 border-t border-slate-200 shrink-0 font-quicksand">
+                <div className="text-xs sm:text-sm text-slate-600 font-medium">
+                  {isSubmittingLaunch ? (
+                    <span className="flex items-center gap-2 text-slate-700">
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>{editingCardId ? 'Saving changes to database...' : 'Creating job card and generating traveler...'}</span>
+                    </span>
+                  ) : (
+                    <span>Ready to dispatch to production • Standard Flow PF-01</span>
+                  )}
+                </div>
 
                 <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
                   <button
                     type="button"
                     disabled={isSubmittingLaunch}
                     onClick={() => setShowGenerateModal(false)}
-                    className="px-5 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs transition-all shadow-2xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="px-5 py-2.5 rounded-md border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs sm:text-sm transition-colors cursor-pointer disabled:opacity-40"
                   >
                     Cancel
                   </button>
@@ -5550,19 +5703,19 @@ export default function JobCardsPage() {
                     type="button"
                     disabled={isSubmittingLaunch}
                     onClick={(e) => handleLaunchJobCard(e as any)}
-                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black text-xs shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-75 disabled:cursor-not-allowed disabled:transform-none"
+                    className="px-7 py-2.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm shadow-sm transition-colors flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-75 disabled:cursor-not-allowed"
                   >
                     {isSubmittingLaunch ? (
-                      <RefreshCw className="w-4 h-4 text-slate-950 stroke-[2.5] animate-spin" />
+                      <RefreshCw className="w-4 h-4 text-white animate-spin" />
                     ) : editingCardId ? (
-                      <CheckCircle2 className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+                      <CheckCircle2 className="w-4 h-4 text-white" />
                     ) : (
-                      <Plus className="w-4 h-4 text-slate-950 stroke-[3]" />
+                      <Plus className="w-4 h-4 text-white stroke-[2.5]" />
                     )}
                     <span>
                       {isSubmittingLaunch
-                        ? editingCardId ? 'SAVING CHANGES...' : 'CREATING JOB CARD...'
-                        : editingCardId ? 'SAVE CHANGES' : 'LAUNCH JOB'}
+                        ? editingCardId ? 'Saving Changes...' : 'Creating Job Card...'
+                        : editingCardId ? 'Save Changes' : 'Launch Job Card'}
                     </span>
                   </button>
                 </div>
@@ -5920,15 +6073,14 @@ export default function JobCardsPage() {
                             <span>VIEW & PRINT QR TAG</span>
                           </button>
 
-                          <a
-                            href={`/job-cards-pdf/${selectedMovementJob.id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => setPdfPreviewJob(selectedMovementJob)}
                             className="py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black rounded-2xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md text-center transition-all active:scale-98 border border-amber-600/80"
                           >
                             <FileText className="w-4 h-4" />
                             <span>OPEN JOB CARD PDF</span>
-                          </a>
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -6524,7 +6676,77 @@ export default function JobCardsPage() {
                 jobCard={showQrModal}
                 onPrint={() => window.print()}
                 onClose={() => setShowQrModal(null)}
+                onOpenPdf={() => {
+                  const targetJob = showQrModal;
+                  setShowQrModal(null);
+                  setPdfPreviewJob(targetJob);
+                }}
+                onViewPhoto={(url) => setPhotoLightbox(url)}
               />
+            </div>
+          </div>
+        </Portal>
+      )}
+
+      {/* MODAL 7: LIVE PCB JOB CARD ROUTE SHEET PDF PREVIEW WITH BACKDROP BLUR */}
+      {pdfPreviewJob && (
+        <Portal>
+          <div 
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setPdfPreviewJob(null);
+            }}
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[10001] flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-hidden animate-in fade-in duration-200"
+          >
+            <div className="relative w-full max-w-6xl h-[94vh] flex flex-col bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              {/* Floating Top Control Bar */}
+              <div className="flex items-center justify-between px-4 py-3 bg-slate-950 border-b border-slate-800 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center font-bold text-xs shrink-0">
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-xs sm:text-sm text-white font-quicksand uppercase tracking-wide">
+                        PCB Job Traveler Route Sheet PDF
+                      </h3>
+                      <span className="text-[10px] bg-slate-800 text-slate-300 border border-slate-700 px-2 py-0.5 rounded font-mono font-semibold">
+                        DOC ID: RFE-TRV-01
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-quicksand mt-0.5">
+                      Job Card No: <strong className="text-white font-mono">{pdfPreviewJob.subJobCardNo || pdfPreviewJob.jobCardNo}</strong> • Production Floor Route Traveler
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <a
+                    href={`/job-cards-pdf/${encodeURIComponent(pdfPreviewJob.id || pdfPreviewJob.jobCardNo)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-quicksand font-bold rounded-lg border border-slate-700 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95"
+                    title="Open in new browser tab"
+                  >
+                    <span>Full Tab ↗</span>
+                  </a>
+                  <button
+                    onClick={() => setPdfPreviewJob(null)}
+                    className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg text-sm font-bold transition-all cursor-pointer active:scale-95"
+                    title="Close preview"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* Iframe displaying the route sheet */}
+              <div className="flex-1 w-full h-full bg-slate-950/80 overflow-hidden relative">
+                <iframe
+                  src={`/job-cards-pdf/${encodeURIComponent(pdfPreviewJob.id || pdfPreviewJob.jobCardNo)}`}
+                  title={`Job Card PDF Preview - ${pdfPreviewJob.subJobCardNo || pdfPreviewJob.jobCardNo}`}
+                  className="w-full h-full border-0"
+                />
+              </div>
             </div>
           </div>
         </Portal>
@@ -6631,39 +6853,65 @@ export default function JobCardsPage() {
       {/* MODAL 7: JOB CARD TRACEABILITY & STAGE MOVEMENT HISTORY */}
       {historyModalJob && (
         <Portal>
-          <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs z-[10000] flex items-center justify-center p-2 sm:p-4 overflow-hidden font-sans text-slate-900">
-            <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-6xl h-[92vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-[10000] flex items-center justify-center p-2 sm:p-4 overflow-hidden font-sans text-slate-900">
+            <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-5xl h-[92vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
 
               {/* ── Modal Top Header ── */}
               <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white shrink-0 border-b border-slate-800">
                 <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center shrink-0">
                     <History className="w-5 h-5 text-blue-400" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2.5 flex-wrap">
-                      <h3 className="font-bold text-white text-base tracking-tight">Stage Movement & Traceability History</h3>
-                      <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-slate-800 text-blue-300 border border-slate-700 font-mono">
+                      <h3 className="font-bold text-white text-base tracking-tight">Stage Movement & Live History</h3>
+                      <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-blue-900/60 text-blue-200 border border-blue-700/60 font-mono">
                         {historyModalJob.jobCardNo}
                       </span>
                       {historyModalJob.customerCode && (
-                        <span className="px-2.5 py-0.5 rounded-md text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 font-mono">
+                        <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700">
                           {historyModalJob.customerCode}
                         </span>
                       )}
                       {historyModalJob.customerPartNo && (
-                        <span className="px-2.5 py-0.5 rounded-md text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 font-mono">
+                        <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 font-mono">
                           Part: {historyModalJob.customerPartNo}
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5 font-sans">
-                      Complete chronological stage ledger • Operator IDs & timestamps • ISO Traceability Record
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Live shop floor movement ledger • 100% Real-time database record
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  {/* View Mode Toggle: Timeline vs Table */}
+                  <div className="bg-slate-800 p-0.5 rounded-lg border border-slate-700 flex items-center gap-0.5">
+                    <button
+                      onClick={() => setHistoryViewMode('timeline')}
+                      className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+                        historyViewMode === 'timeline'
+                          ? 'bg-blue-600 text-white shadow-xs font-bold'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>Timeline</span>
+                    </button>
+                    <button
+                      onClick={() => setHistoryViewMode('table')}
+                      className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+                        historyViewMode === 'table'
+                          ? 'bg-blue-600 text-white shadow-xs font-bold'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>Table</span>
+                    </button>
+                  </div>
+
                   <button
                     onClick={() => fetchJobCardHistory(historyModalJob)}
                     disabled={isHistoryLoading}
@@ -6673,6 +6921,7 @@ export default function JobCardsPage() {
                     <RefreshCw className={`w-3.5 h-3.5 ${isHistoryLoading ? 'animate-spin text-blue-400' : 'text-slate-300'}`} />
                     <span className="hidden sm:inline">{isHistoryLoading ? 'Syncing...' : 'Refresh'}</span>
                   </button>
+
                   <button
                     onClick={() => { setHistoryModalJob(null); setHistoryLogs([]); setHistorySearchQuery(''); }}
                     className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
@@ -6683,133 +6932,80 @@ export default function JobCardsPage() {
                 </div>
               </div>
 
-              {/* ── Summary & Metrics Bar ── */}
+              {/* ── Summary & Metrics Bar (Clean, Unified 4-Card Strip) ── */}
               <div className="px-6 py-3.5 bg-slate-50 border-b border-slate-200 shrink-0">
                 {(() => {
-                  const defectLogs = historyLogs.filter((l: any) => (l.qtyRejected || 0) > 0 || String(l.remarkType || '').toUpperCase().includes('REJECT'));
-                  const totalRejFromLogs = defectLogs.reduce((acc: number, l: any) => acc + (l.qtyRejected || 0), 0);
-                  const totalScrapQty = totalRejFromLogs || historyModalJob.rejectedPcbQty || 0;
-                  const totalBatchQty = historyModalJob.totalPcbQty || historyModalJob.custPnlQty || 160;
+                  const defectLogs = historyLogs.filter((l: any) => (Number(l.qtyRejected) || 0) > 0 || String(l.remarkType || '').toUpperCase().includes('REJECT'));
+                  const totalScrapQty = defectLogs.reduce((acc: number, l: any) => acc + (Number(l.qtyRejected) || 0), 0) || (historyModalJob.rejectedPcbQty || 0);
+                  const totalBatchQty = historyModalJob.totalPcbQty || historyModalJob.custPnlQty || historyModalJob.totalQty || 0;
                   const goodQty = Math.max(0, totalBatchQty - totalScrapQty);
                   const yieldPercent = totalBatchQty > 0 ? ((goodQty / totalBatchQty) * 100).toFixed(1) : '100.0';
                   const activeStage = historyModalJob.currentStageName || PF01_STAGES[historyModalJob.currentStageIndex || 0] || '1. SHEARING';
-
-                  const partialLogs = historyLogs.filter((l: any) => {
-                    const isRej = (l.qtyRejected || 0) > 0 || String(l.remarkType || '').toUpperCase().includes('REJECT');
-                    const isInc = l.remarkType === 'INCOMPLETE_MOVEMENT' || ((l.qtyForwarded || 0) < (l.qtyReceived || 0) && (l.qtyReceived || 0) > 0);
-                    return !isRej && isInc;
-                  });
-                  const totalPartialHoldQty = partialLogs.reduce((acc: number, l: any) => {
-                    const hold = l.qtyHold !== undefined && l.qtyHold !== null ? Number(l.qtyHold) : Math.max(0, (l.qtyReceived || 0) - (l.qtyForwarded || 0) - (l.qtyRejected || 0));
-                    return acc + hold;
-                  }, 0);
+                  const isCompleted = historyModalJob.status === 'COMPLETED';
+                  const isUnlaunched = historyModalJob.status === 'UNLAUNCHED';
 
                   return (
-                    <div className="space-y-2.5">
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
-                        {/* Batch Volume */}
-                        <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Total Volume</span>
-                          <div className="flex items-baseline gap-1.5 mt-0.5">
-                            <strong className="text-xl font-extrabold text-slate-900 font-mono">{totalBatchQty}</strong>
-                            <span className="text-xs font-semibold text-slate-500">PCBs</span>
-                          </div>
-                          <span className="text-[11px] text-slate-500 font-mono block mt-0.5">
-                            Area: {Number(historyModalJob.custPnlAreaSqm || historyModalJob.prodPnlAreaSqm || 0).toFixed(2)} SQM
-                          </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                      {/* 1. Active Stage Card */}
+                      <div className="bg-white border border-blue-200/80 rounded-xl p-3 shadow-2xs">
+                        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider block font-mono">Current Stage</span>
+                        <div className="font-bold text-slate-900 text-sm truncate mt-0.5" title={activeStage}>
+                          {activeStage}
                         </div>
-
-                        {/* Good / In Production */}
-                        <div className="bg-white border border-emerald-200/90 rounded-xl p-3 shadow-2xs">
-                          <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block font-mono">Good / In Production</span>
-                          <div className="flex items-baseline gap-1.5 mt-0.5">
-                            <strong className="text-xl font-extrabold text-emerald-800 font-mono">{goodQty}</strong>
-                            <span className="text-xs font-semibold text-emerald-600">PCBs</span>
-                          </div>
-                          <span className="text-[11px] text-emerald-700 font-mono font-semibold block mt-0.5">
-                            Yield: {yieldPercent}%
-                          </span>
-                        </div>
-
-                        {/* Partial / Hold WIP */}
-                        <div className={`bg-white rounded-xl p-3 shadow-2xs border ${totalPartialHoldQty > 0 ? 'border-amber-300 ring-1 ring-amber-100' : 'border-slate-200'}`}>
-                          <span className={`text-[10px] font-bold uppercase tracking-wider block font-mono ${totalPartialHoldQty > 0 ? 'text-amber-800' : 'text-slate-400'}`}>
-                            Partial / Hold WIP
-                          </span>
-                          <div className="flex items-baseline gap-1.5 mt-0.5">
-                            <strong className={`text-xl font-extrabold font-mono ${totalPartialHoldQty > 0 ? 'text-amber-900' : 'text-slate-700'}`}>
-                              {totalPartialHoldQty}
-                            </strong>
-                            <span className={`text-xs font-semibold ${totalPartialHoldQty > 0 ? 'text-amber-700' : 'text-slate-500'}`}>PCBs</span>
-                          </div>
-                          <span className={`text-[11px] font-mono block mt-0.5 ${totalPartialHoldQty > 0 ? 'text-amber-700 font-semibold' : 'text-slate-400'}`}>
-                            {partialLogs.length > 0 ? `${partialLogs.length} Partial Transfer(s)` : 'Zero Hold WIP'}
-                          </span>
-                        </div>
-
-                        {/* Rejected / Scrap */}
-                        <div className={`bg-white rounded-xl p-3 shadow-2xs border ${totalScrapQty > 0 ? 'border-rose-300 ring-1 ring-rose-100' : 'border-slate-200'}`}>
-                          <span className={`text-[10px] font-bold uppercase tracking-wider block font-mono ${totalScrapQty > 0 ? 'text-rose-700' : 'text-slate-400'}`}>
-                            Rejected / Scrap
-                          </span>
-                          <div className="flex items-baseline gap-1.5 mt-0.5">
-                            <strong className={`text-xl font-extrabold font-mono ${totalScrapQty > 0 ? 'text-rose-800' : 'text-slate-700'}`}>
-                              {totalScrapQty}
-                            </strong>
-                            <span className={`text-xs font-semibold ${totalScrapQty > 0 ? 'text-rose-600' : 'text-slate-500'}`}>PCBs</span>
-                          </div>
-                          <span className={`text-[11px] font-mono block mt-0.5 ${totalScrapQty > 0 ? 'text-rose-700 font-semibold' : 'text-slate-400'}`}>
-                            {totalScrapQty > 0 ? `${((totalScrapQty / totalBatchQty) * 100).toFixed(1)}% Scrap Rate` : 'Zero Scrap Logged'}
-                          </span>
-                        </div>
-
-                        {/* Active Stage */}
-                        <div className="bg-white border border-blue-200 rounded-xl p-3 shadow-2xs">
-                          <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block font-mono">Current Active Stage</span>
-                          <strong className="text-blue-900 font-mono font-bold block truncate mt-0.5 text-xs" title={activeStage}>
-                            {activeStage}
-                          </strong>
-                          <span className="text-[11px] text-blue-600 font-medium block mt-0.5">
-                            Status: In Production
-                          </span>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          {isCompleted ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Finished
+                            </span>
+                          ) : isUnlaunched ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700">
+                              <Clock className="w-3.5 h-3.5 text-amber-500" /> Pending Launch
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700">
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+                              </span>
+                              In Production
+                            </span>
+                          )}
                         </div>
                       </div>
 
-                      {/* Specs Strip */}
-                      <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-slate-600">
-                        {historyModalJob.product && (
-                          <>
-                            <span className="bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-600 font-mono">
-                              {historyModalJob.product.layers ? `${historyModalJob.product.layers} Layers` : '2 Layers'}
-                            </span>
-                            <span className="bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-600 font-mono">
-                              {historyModalJob.product.thicknessMm ? `${historyModalJob.product.thicknessMm} mm` : '1.6 mm'}
-                            </span>
-                            <span className="bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-600 font-mono">
-                              {historyModalJob.product.copperWeight || '1oz'}
-                            </span>
-                            <span className="bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-600 font-mono">
-                              {historyModalJob.product.surfaceFinish || 'HASL Lead-Free'}
-                            </span>
-                          </>
-                        )}
-                        {defectLogs.length > 0 && (
-                          <span className="bg-rose-100 text-rose-900 border border-rose-300 font-bold px-2 py-0.5 rounded font-mono text-[11px] flex items-center gap-1">
-                            <AlertTriangle className="w-3.5 h-3.5 text-rose-700" />
-                            {defectLogs.length} Quality Defect Event(s)
-                          </span>
-                        )}
-                        {partialLogs.length > 0 && (
-                          <span className="bg-amber-100 text-amber-900 border border-amber-300 font-bold px-2 py-0.5 rounded font-mono text-[11px] flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 text-amber-700" />
-                            {partialLogs.length} Partial Transfer(s) ({totalPartialHoldQty} Left)
-                          </span>
-                        )}
-                        {historyLastUpdated && (
-                          <span className="ml-auto text-[10px] text-slate-400 font-mono">
-                            Synced at {historyLastUpdated}
-                          </span>
-                        )}
+                      {/* 2. Total Volume Card */}
+                      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Lot Quantity</span>
+                        <div className="flex items-baseline gap-1 mt-0.5">
+                          <strong className="text-lg font-black text-slate-900 font-mono">{totalBatchQty}</strong>
+                          <span className="text-xs text-slate-500 font-medium">PCBs</span>
+                        </div>
+                        <span className="text-[11px] text-slate-500 block mt-1 font-mono">
+                          Area: {Number(historyModalJob.custPnlAreaSqm || historyModalJob.prodPnlAreaSqm || 0).toFixed(2)} m²
+                        </span>
+                      </div>
+
+                      {/* 3. Quality & Yield Card */}
+                      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Quality & Yield</span>
+                        <div className="flex items-baseline gap-1 mt-0.5">
+                          <strong className="text-lg font-black text-emerald-700 font-mono">{goodQty}</strong>
+                          <span className="text-xs text-slate-500 font-medium">Good ({yieldPercent}%)</span>
+                        </div>
+                        <span className={`text-[11px] block mt-1 font-semibold ${totalScrapQty > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
+                          {totalScrapQty > 0 ? `⚠️ ${totalScrapQty} Scrap Logged` : '✓ Zero Scrap Logged'}
+                        </span>
+                      </div>
+
+                      {/* 4. Process Flow & Specs Card */}
+                      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Process Flow</span>
+                        <div className="font-bold text-slate-800 text-sm truncate mt-0.5">
+                          {historyModalJob.jobFlowSelection || 'PF-01 (Standard)'}
+                        </div>
+                        <span className="text-[11px] text-slate-500 block mt-1">
+                          {historyModalJob.product?.layers ? `${historyModalJob.product.layers} Layers` : '2 Layers'} • {historyModalJob.product?.surfaceFinish || 'HASL'}
+                        </span>
                       </div>
                     </div>
                   );
@@ -6825,8 +7021,8 @@ export default function JobCardsPage() {
                       type="text"
                       value={historySearchQuery}
                       onChange={(e) => setHistorySearchQuery(e.target.value)}
-                      placeholder="Search stage name, operator, notes..."
-                      className="w-full pl-8.5 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs placeholder:text-slate-400 focus:outline-none focus:border-slate-400 focus:bg-white transition-all text-slate-800 font-sans"
+                      placeholder="Search stage, operator, remark..."
+                      className="w-full pl-8.5 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs placeholder:text-slate-400 focus:outline-none focus:border-blue-400 focus:bg-white transition-all text-slate-800"
                     />
                     {historySearchQuery && (
                       <button
@@ -6839,12 +7035,12 @@ export default function JobCardsPage() {
                   <select
                     value={historyFilterType}
                     onChange={(e) => setHistoryFilterType(e.target.value as any)}
-                    className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-700 focus:outline-none focus:border-slate-400 cursor-pointer shrink-0"
+                    className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:border-blue-400 cursor-pointer shrink-0 font-medium"
                   >
-                    <option value="ALL">All Records</option>
-                    <option value="FORWARD">Stage Forward Only</option>
-                    <option value="INCOMPLETE">Partially Moved Qty</option>
-                    <option value="REJECTION">Defects / Rejections</option>
+                    <option value="ALL">All Events</option>
+                    <option value="FORWARD">Stage Movements Only</option>
+                    <option value="REJECTION">Defects & Rejections</option>
+                    <option value="INCOMPLETE">Partial Transfers</option>
                   </select>
                 </div>
 
@@ -6852,7 +7048,7 @@ export default function JobCardsPage() {
                   {historyLogs.length > 0 && (
                     <button
                       onClick={() => {
-                        let csvContent = "data:text/csv;charset=utf-8,Step No,Timestamp,Job Card No,Sub Lot,Process Stage,Event Type,Qty Received,Qty Forwarded,Qty Rejected,Qty Hold,Operator Name,Operator Role,Operator ID,Remarks\n";
+                        let csvContent = "data:text/csv;charset=utf-8,Step No,Date & Time,Job Card No,Sub Lot,Process Stage,Event Type,Qty Received,Qty Forwarded,Qty Rejected,Operator Name,Operator Role,Remarks\n";
                         historyLogs.forEach((l: any, i: number) => {
                           const dateStr = l.createdAt ? new Date(l.createdAt).toLocaleString('en-GB') : '-';
                           const stageName = `"${(l.stage?.name || l.stageName || '-').replace(/"/g, '""')}"`;
@@ -6860,18 +7056,17 @@ export default function JobCardsPage() {
                           const eventType = l.remarkType || 'STAGE_MOVEMENT';
                           const opName = `"${(l.createdBy?.name || 'Operator').replace(/"/g, '""')}"`;
                           const opRole = `"${(l.createdBy?.role?.name || 'Staff').replace(/"/g, '""')}"`;
-                          const opId = l.createdBy?.id || l.createdById || '-';
                           const remarkStr = `"${(l.remarks || l.rejectionReason || '').replace(/"/g, '""')}"`;
-                          csvContent += `${historyLogs.length - i},${dateStr},${historyModalJob.jobCardNo},${subNo},${stageName},${eventType},${l.qtyReceived || 0},${l.qtyForwarded || 0},${l.qtyRejected || 0},${l.qtyHold || 0},${opName},${opRole},${opId},${remarkStr}\n`;
+                          csvContent += `${historyLogs.length - i},${dateStr},${historyModalJob.jobCardNo},${subNo},${stageName},${eventType},${l.qtyReceived || 0},${l.qtyForwarded || 0},${l.qtyRejected || 0},${opName},${opRole},${remarkStr}\n`;
                         });
                         const encodedUri = encodeURI(csvContent);
                         const link = document.createElement("a");
                         link.setAttribute("href", encodedUri);
-                        link.setAttribute("download", `traceability_ledger_${historyModalJob.jobCardNo}_${new Date().toISOString().split('T')[0]}.csv`);
+                        link.setAttribute("download", `history_${historyModalJob.jobCardNo}_${new Date().toISOString().split('T')[0]}.csv`);
                         document.body.appendChild(link); link.click(); document.body.removeChild(link);
                       }}
                       className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium rounded-lg text-xs flex items-center gap-1.5 border border-slate-200 cursor-pointer transition-colors shadow-2xs"
-                      title="Export entire ledger as CSV file"
+                      title="Export live history as CSV"
                     >
                       <Download className="w-3.5 h-3.5 text-slate-500" />
                       <span>Export CSV</span>
@@ -6880,11 +7075,11 @@ export default function JobCardsPage() {
                 </div>
               </div>
 
-              {/* ── Main Scrollable Table Area (Spacious & Clean) ── */}
-              <div className="flex-1 overflow-y-auto bg-white">
+              {/* ── Main Content Area (Timeline vs Table) ── */}
+              <div className="flex-1 overflow-y-auto bg-slate-50/50 p-4 sm:p-6">
                 {(() => {
                   const filtered = historyLogs.filter((log: any) => {
-                    const isRej = (log.qtyRejected || 0) > 0 || String(log.remarkType || '').toUpperCase().includes('REJECT');
+                    const isRej = (Number(log.qtyRejected) || 0) > 0 || String(log.remarkType || '').toUpperCase().includes('REJECT');
                     const isInc = log.remarkType === 'INCOMPLETE_MOVEMENT' || ((log.qtyForwarded || 0) < (log.qtyReceived || 0) && (log.qtyReceived || 0) > 0);
 
                     if (historyFilterType === 'REJECTION') {
@@ -6900,13 +7095,12 @@ export default function JobCardsPage() {
                       const q = historySearchQuery.toLowerCase();
                       const stage = String(log.stage?.name || log.stageName || '').toLowerCase();
                       const opName = String(log.createdBy?.name || '').toLowerCase();
-                      const opEmail = String(log.createdBy?.email || '').toLowerCase();
-                      const opId = String(log.createdBy?.id || log.createdById || '').toLowerCase();
+                      const opRole = String(log.createdBy?.role?.name || '').toLowerCase();
+                      const opDept = String(log.createdBy?.department?.name || '').toLowerCase();
                       const remarks = String(log.remarks || '').toLowerCase();
                       const reason = String(log.rejectionReason || '').toLowerCase();
                       const subNo = String(log.subJobCard?.subJobCardNo || '').toLowerCase();
-                      const idStr = String(log.id || '').toLowerCase();
-                      return stage.includes(q) || opName.includes(q) || opEmail.includes(q) || opId.includes(q) || remarks.includes(q) || reason.includes(q) || subNo.includes(q) || idStr.includes(q);
+                      return stage.includes(q) || opName.includes(q) || opRole.includes(q) || opDept.includes(q) || remarks.includes(q) || reason.includes(q) || subNo.includes(q);
                     }
 
                     return true;
@@ -6915,182 +7109,296 @@ export default function JobCardsPage() {
                   if (isHistoryLoading) {
                     return (
                       <div className="py-24 text-center flex flex-col items-center justify-center gap-3">
-                        <RefreshCw className="w-6 h-6 text-blue-600 animate-spin" />
-                        <span className="text-xs text-slate-600 font-medium font-mono">Loading live traceability ledger records...</span>
+                        <RefreshCw className="w-7 h-7 text-blue-600 animate-spin" />
+                        <span className="text-xs text-slate-600 font-medium">Fetching authentic live stage logs from database...</span>
                       </div>
                     );
                   }
 
                   if (filtered.length === 0) {
+                    const activeStage = historyModalJob.currentStageName || PF01_STAGES[historyModalJob.currentStageIndex || 0] || '1. SHEARING';
                     return (
-                      <div className="py-20 text-center space-y-2">
-                        <Clock className="w-8 h-8 text-slate-300 mx-auto" />
-                        <p className="font-bold text-slate-700 text-sm">No stage movement records found.</p>
-                        <p className="text-xs text-slate-400">
-                          {historySearchQuery ? 'No results matched your search criteria.' : 'Records are created automatically when shop floor operators move or reject units.'}
+                      <div className="py-20 text-center space-y-3 max-w-md mx-auto">
+                        <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
+                          <Clock className="w-6 h-6" />
+                        </div>
+                        <h4 className="font-bold text-slate-800 text-sm">No Movement History Recorded Yet</h4>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          {historySearchQuery
+                            ? 'No stage movement events match your search query.'
+                            : `This Job Card was launched and is currently awaiting processing at "${activeStage}". Movements will automatically log here as operators advance the lot.`}
                         </p>
                       </div>
                     );
                   }
 
+                  const activeStage = historyModalJob.currentStageName || PF01_STAGES[historyModalJob.currentStageIndex || 0] || '1. SHEARING';
+                  const isCompleted = historyModalJob.status === 'COMPLETED';
+
+                  // ── VIEW 1: TIMELINE VIEW ──
+                  if (historyViewMode === 'timeline') {
+                    return (
+                      <div className="max-w-3xl mx-auto space-y-4">
+                        {/* Current Active Status Indicator at top of timeline (if card in production) */}
+                        {!isCompleted && historyModalJob.status !== 'UNLAUNCHED' && (
+                          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3.5 shadow-2xs">
+                            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                              <span className="relative flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+                              </span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded font-mono">
+                                  CURRENT ACTIVE STAGE
+                                </span>
+                                <span className="text-xs text-blue-600 font-medium">In Production on Shop Floor</span>
+                              </div>
+                              <h4 className="font-extrabold text-slate-900 text-base mt-1">
+                                {activeStage}
+                              </h4>
+                              <p className="text-xs text-slate-600 mt-0.5">
+                                Lot is currently at this workstation. Once the operator finishes and moves it, the next live record will appear below.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Chronological Event Cards */}
+                        <div className="relative pl-6 space-y-4 before:content-[''] before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200">
+                          {filtered.map((log: any, idx: number) => {
+                            const dateObj = log.createdAt ? new Date(log.createdAt) : null;
+                            const dateStr = dateObj ? dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+                            const timeStr = dateObj ? dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+                            
+                            const isRej = (Number(log.qtyRejected) || 0) > 0 || String(log.remarkType || '').toUpperCase().includes('REJECT');
+                            const isInit = String(log.remarkType || '').includes('INITIAL_LAUNCH') || String(log.id || '').includes('initial-launch');
+                            const isComp = String(log.remarkType || '').includes('JOB_COMPLETED') || String(log.id || '').includes('completed-summary');
+                            const isSplit = String(log.remarkType || '').includes('SPLIT');
+                            const isInc = !isRej && (isSplit || log.remarkType === 'INCOMPLETE_MOVEMENT' || ((log.qtyForwarded || 0) < (log.qtyReceived || 0) && (log.qtyReceived || 0) > 0));
+                            
+                            const stageName = log.stage?.name || log.stageName || 'Stage Movement';
+                            const subNo = log.subJobCard?.subJobCardNo || historyModalJob.jobCardNo;
+                            const opName = log.createdBy?.name || 'Shop Floor Operator';
+                            const opRole = log.createdBy?.role?.name || 'Operator';
+                            const opDept = log.createdBy?.department?.name || '';
+                            const stepNumber = filtered.length - idx;
+
+                            return (
+                              <div key={log.id || idx} className="relative group">
+                                {/* Dot on timeline */}
+                                <div className={`absolute -left-6 top-3.5 w-5 h-5 rounded-full border-2 border-white shadow-xs flex items-center justify-center ${
+                                  isRej ? 'bg-rose-600 text-white' :
+                                  isComp ? 'bg-purple-600 text-white' :
+                                  isInit ? 'bg-blue-600 text-white' :
+                                  isSplit ? 'bg-amber-500 text-white' :
+                                  isInc ? 'bg-amber-500 text-white' :
+                                  'bg-emerald-600 text-white'
+                                }`}>
+                                  {isRej ? (
+                                    <AlertTriangle className="w-2.5 h-2.5" />
+                                  ) : isComp ? (
+                                    <CheckCircle2 className="w-2.5 h-2.5" />
+                                  ) : isInit ? (
+                                    <Zap className="w-2.5 h-2.5" />
+                                  ) : (
+                                    <ArrowRight className="w-2.5 h-2.5" />
+                                  )}
+                                </div>
+
+                                {/* Event Card */}
+                                <div className="bg-white border border-slate-200/90 rounded-xl p-4 shadow-2xs hover:shadow-xs transition-shadow">
+                                  {/* Card Header: Step #, Stage Name, Status Badge, Timestamp */}
+                                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-xs font-mono font-bold text-slate-400">
+                                        #{stepNumber}
+                                      </span>
+                                      <h5 className="font-bold text-slate-900 text-sm">
+                                        {stageName}
+                                      </h5>
+                                      {subNo && subNo !== historyModalJob.jobCardNo && (
+                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-600 border border-slate-200">
+                                          Lot: {subNo}
+                                        </span>
+                                      )}
+                                      {/* Status Badge */}
+                                      {isRej ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                          Defect Logged ({log.qtyRejected} PCBs)
+                                        </span>
+                                      ) : isComp ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                                          Production Completed
+                                        </span>
+                                      ) : isInit ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                          Production Launched
+                                        </span>
+                                      ) : isSplit ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                          Lot Split & Forwarded
+                                        </span>
+                                      ) : isInc ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                          Partial Movement
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                          Stage Completed & Forwarded
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {/* Timestamp */}
+                                    <div className="text-right shrink-0">
+                                      <div className="text-xs font-bold text-slate-800">{dateStr}</div>
+                                      <div className="text-[10px] text-slate-400 font-mono">{timeStr}</div>
+                                    </div>
+                                  </div>
+
+                                  {/* Quantity Flow Badges */}
+                                  <div className="flex items-center gap-3 flex-wrap mt-2.5 pt-2 border-t border-slate-100 text-xs">
+                                    <div className="flex items-center gap-1 text-slate-600">
+                                      <span className="text-[10px] text-slate-400 uppercase font-mono font-medium">Qty:</span>
+                                      <span className="font-mono font-bold text-slate-800">{log.qtyForwarded || log.qtyReceived || 0} PCBs Passed</span>
+                                    </div>
+
+                                    {log.qtyReceived !== undefined && log.qtyReceived !== log.qtyForwarded && (
+                                      <div className="text-[11px] text-slate-400 font-mono">
+                                        (Recv: {log.qtyReceived})
+                                      </div>
+                                    )}
+
+                                    {log.qtyRejected > 0 && (
+                                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-200 font-mono">
+                                        ⚠️ {log.qtyRejected} Rejected
+                                      </span>
+                                    )}
+
+                                    {/* Operator Info */}
+                                    <div className="ml-auto flex items-center gap-1.5 text-xs text-slate-600">
+                                      <User className="w-3.5 h-3.5 text-slate-400" />
+                                      <span className="font-semibold text-slate-800">{opName}</span>
+                                      <span className="text-[11px] text-slate-400">({opRole}{opDept ? ` • ${opDept}` : ''})</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Remarks Box (clean, if present) */}
+                                  {(log.remarks || log.rejectionReason) && (
+                                    <div className="mt-2.5 bg-slate-50 border border-slate-200/80 rounded-lg p-2 text-xs text-slate-700 font-sans">
+                                      <span className="font-medium text-slate-500 mr-1.5">Note:</span>
+                                      <span>{log.remarks || log.rejectionReason}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // ── VIEW 2: CLEAN TABLE VIEW ──
                   return (
-                    <table className="w-full text-left border-collapse text-xs">
-                      {/* Sticky Table Header */}
-                      <thead className="sticky top-0 z-20 bg-slate-100 text-slate-600 border-b border-slate-200 font-mono text-[11px] uppercase tracking-wider font-bold shadow-2xs">
-                        <tr>
-                          <th className="py-3 px-4 w-12 text-center">#</th>
-                          <th className="py-3 px-4 w-40">Date & Time</th>
-                          <th className="py-3 px-4">Process Stage</th>
-                          <th className="py-3 px-4 w-36">Stage Status</th>
-                          <th className="py-3 px-4 text-right w-20">In (Recv)</th>
-                          <th className="py-3 px-4 text-right w-20">Out (Fwd)</th>
-                          <th className="py-3 px-4 text-right w-24">Partial / Hold</th>
-                          <th className="py-3 px-4 text-right w-20">Scrap</th>
-                          <th className="py-3 px-4 w-44">Operator & Role</th>
-                          <th className="py-3 px-4">Remarks / Defect Details</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 text-slate-800 font-sans">
-                        {filtered.map((log: any, idx: number) => {
-                          const dateObj = log.createdAt ? new Date(log.createdAt) : null;
-                          const dateStr = dateObj ? dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
-                          const timeStr = dateObj ? dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
-                          const isRej = (log.qtyRejected || 0) > 0 || String(log.remarkType || '').toUpperCase().includes('REJECT');
-                          const isCurr = String(log.remarkType || '').includes('CURRENT_STAGE');
-                          const isInit = String(log.remarkType || '').includes('INITIAL_LAUNCH');
-                          const isComp = String(log.remarkType || '').includes('JOB_COMPLETED');
-                          const isInc = !isRej && (log.remarkType === 'INCOMPLETE_MOVEMENT' || ((log.qtyForwarded || 0) < (log.qtyReceived || 0) && (log.qtyReceived || 0) > 0));
-                          const remainingHold = log.qtyHold !== undefined && log.qtyHold !== null ? Number(log.qtyHold) : Math.max(0, (log.qtyReceived || 0) - (log.qtyForwarded || 0) - (log.qtyRejected || 0));
-                          const stageName = log.stage?.name || log.stageName || 'Stage';
-                          const subNo = log.subJobCard?.subJobCardNo || historyModalJob.jobCardNo;
-                          const opName = log.createdBy?.name || 'Operator';
-                          const opRole = log.createdBy?.role?.name || '';
-                          const opDept = log.createdBy?.department?.name || '';
-                          const opEmail = log.createdBy?.email || '';
+                    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead className="bg-slate-100 text-slate-600 border-b border-slate-200 font-mono text-[11px] uppercase tracking-wider font-bold">
+                          <tr>
+                            <th className="py-3 px-4 w-12 text-center">#</th>
+                            <th className="py-3 px-4 w-40">Date & Time</th>
+                            <th className="py-3 px-4">Stage</th>
+                            <th className="py-3 px-4 w-36">Status</th>
+                            <th className="py-3 px-4 text-right w-28">Quantity</th>
+                            <th className="py-3 px-4 w-44">Operator</th>
+                            <th className="py-3 px-4">Remarks</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-slate-800">
+                          {filtered.map((log: any, idx: number) => {
+                            const dateObj = log.createdAt ? new Date(log.createdAt) : null;
+                            const dateStr = dateObj ? dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+                            const timeStr = dateObj ? dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+                            const isRej = (Number(log.qtyRejected) || 0) > 0 || String(log.remarkType || '').toUpperCase().includes('REJECT');
+                            const isInit = String(log.remarkType || '').includes('INITIAL_LAUNCH') || String(log.id || '').includes('initial-launch');
+                            const isComp = String(log.remarkType || '').includes('JOB_COMPLETED') || String(log.id || '').includes('completed-summary');
+                            const isSplit = String(log.remarkType || '').includes('SPLIT');
+                            const stageName = log.stage?.name || log.stageName || 'Stage';
+                            const subNo = log.subJobCard?.subJobCardNo || historyModalJob.jobCardNo;
+                            const opName = log.createdBy?.name || 'Operator';
+                            const opRole = log.createdBy?.role?.name || 'Staff';
+                            const stepNumber = filtered.length - idx;
 
-                          return (
-                            <tr
-                              key={log.id || idx}
-                              className={`hover:bg-slate-50/90 transition-colors ${isRej ? 'bg-rose-50/30' : isInc ? 'bg-amber-50/30' : isCurr ? 'bg-blue-50/20' : ''}`}
-                            >
-                              {/* Step Number */}
-                              <td className="py-3 px-4 text-center font-mono font-bold text-slate-400 text-xs">
-                                #{filtered.length - idx}
-                              </td>
-
-                              {/* Timestamp */}
-                              <td className="py-3 px-4 whitespace-nowrap font-mono text-[11px]">
-                                <div className="font-bold text-slate-900">{dateStr}</div>
-                                <div className="text-[10px] text-slate-400">{timeStr}</div>
-                              </td>
-
-                              {/* Process Stage */}
-                              <td className="py-3 px-4">
-                                <div className="font-bold text-slate-900 font-mono text-xs">
-                                  {stageName}
-                                </div>
-                                {subNo && subNo !== historyModalJob.jobCardNo && (
-                                  <div className="text-[10px] text-slate-400 font-mono">
-                                    Sub-Lot: {subNo}
-                                  </div>
-                                )}
-                              </td>
-
-                              {/* Stage Status Badge */}
-                              <td className="py-3 px-4 whitespace-nowrap">
-                                {isRej ? (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 font-mono">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
-                                    Defect Logged
-                                  </span>
-                                ) : isInc ? (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 font-mono">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                                    Partially Moved ({remainingHold} Left)
-                                  </span>
-                                ) : isCurr ? (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 font-mono">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-600" />
-                                    In Production
-                                  </span>
-                                ) : isInit ? (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 font-mono">
-                                    Launched
-                                  </span>
-                                ) : isComp ? (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono">
-                                    Completed
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono">
-                                    Forwarded
-                                  </span>
-                                )}
-                              </td>
-
-                              {/* Received */}
-                              <td className="py-3 px-4 text-right font-mono font-medium text-slate-700">
-                                {log.qtyReceived || 0}
-                              </td>
-
-                              {/* Forwarded */}
-                              <td className="py-3 px-4 text-right font-mono font-bold text-emerald-700">
-                                {log.qtyForwarded || 0}
-                              </td>
-
-                              {/* Partial / Hold */}
-                              <td className="py-3 px-4 text-right font-mono font-bold">
-                                {isInc && remainingHold > 0 ? (
-                                  <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                                    {remainingHold}
-                                  </span>
-                                ) : (
-                                  <span className="text-slate-300 font-normal">—</span>
-                                )}
-                              </td>
-
-                              {/* Scrap / Rejected */}
-                              <td className="py-3 px-4 text-right font-mono font-bold">
-                                {log.qtyRejected > 0 ? (
-                                  <span className="text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
-                                    {log.qtyRejected}
-                                  </span>
-                                ) : (
-                                  <span className="text-slate-300 font-normal">—</span>
-                                )}
-                              </td>
-
-                              {/* Operator & Role */}
-                              <td className="py-3 px-4 whitespace-nowrap">
-                                <div className="font-bold text-slate-900 text-xs">{opName}</div>
-                                <div className="text-[10px] text-slate-400 font-mono">
-                                  {opRole || 'Staff'}{opDept ? ` • ${opDept}` : ''}
-                                </div>
-                              </td>
-
-                              {/* Remarks & Reasons */}
-                              <td className="py-3 px-4 text-xs text-slate-600 max-w-sm">
-                                {log.remarks || log.rejectionReason ? (
-                                  <div className="font-mono text-[11px] bg-slate-50 p-1.5 rounded border border-slate-100 text-slate-800 leading-snug">
-                                    {log.remarks || log.rejectionReason}
-                                  </div>
-                                ) : (
-                                  <span className="text-slate-300">—</span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                            return (
+                              <tr key={log.id || idx} className={`hover:bg-slate-50/80 transition-colors ${isRej ? 'bg-rose-50/40' : ''}`}>
+                                <td className="py-3 px-4 text-center font-mono font-bold text-slate-400">
+                                  #{stepNumber}
+                                </td>
+                                <td className="py-3 px-4 whitespace-nowrap font-mono text-[11px]">
+                                  <div className="font-bold text-slate-900">{dateStr}</div>
+                                  <div className="text-[10px] text-slate-400">{timeStr}</div>
+                                </td>
+                                <td className="py-3 px-4">
+                                  <div className="font-bold text-slate-900 text-xs">{stageName}</div>
+                                  {subNo && subNo !== historyModalJob.jobCardNo && (
+                                    <div className="text-[10px] font-mono text-slate-500 font-semibold mt-0.5">
+                                      Lot: {subNo}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="py-3 px-4 whitespace-nowrap">
+                                  {isRej ? (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                      Defect Logged
+                                    </span>
+                                  ) : isComp ? (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                                      Completed
+                                    </span>
+                                  ) : isInit ? (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                      Launched
+                                    </span>
+                                  ) : isSplit ? (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                      Lot Split
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      Forwarded
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
+                                  {log.qtyForwarded || log.qtyReceived || 0} PCBs
+                                  {log.qtyRejected > 0 && (
+                                    <div className="text-[10px] text-rose-600">({log.qtyRejected} scrap)</div>
+                                  )}
+                                </td>
+                                <td className="py-3 px-4 whitespace-nowrap">
+                                  <div className="font-bold text-slate-900 text-xs">{opName}</div>
+                                  <div className="text-[10px] text-slate-400">{opRole}</div>
+                                </td>
+                                <td className="py-3 px-4 text-xs text-slate-600 max-w-xs truncate" title={log.remarks || log.rejectionReason || ''}>
+                                  {log.remarks || log.rejectionReason || '—'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   );
                 })()}
               </div>
 
               {/* ── Modal Footer ── */}
-              <div className="flex items-center justify-between px-6 py-3.5 border-t border-slate-200 bg-slate-50 shrink-0">
-                <span className="text-slate-500 font-mono text-xs">
-                  {historyLogs.length} live records in ledger • RF ELECTRO TECH ISO Traceability System
+              <div className="flex items-center justify-between px-6 py-3.5 border-t border-slate-200 bg-white shrink-0">
+                <span className="text-slate-500 text-xs flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span>{historyLogs.length} live records loaded directly from database</span>
                 </span>
                 <button
                   onClick={() => { setHistoryModalJob(null); setHistoryLogs([]); setHistorySearchQuery(''); }}
@@ -7147,7 +7455,7 @@ export default function JobCardsPage() {
                   <div>
                     <span className="text-[10px] font-bold text-slate-400 uppercase">Customer</span>
                     <div className="font-bold text-slate-900 truncate">
-                      {dispatchTargetJob.customerPO?.customer?.companyName || dispatchTargetJob.clientName || dispatchTargetJob.customer || 'Standard Customer'}
+                      {dispatchTargetJob.customerPO?.customer?.companyName || dispatchTargetJob.clientName || dispatchTargetJob.customer || '—'}
                     </div>
                   </div>
                   <div>
@@ -7396,6 +7704,105 @@ export default function JobCardsPage() {
                   />
                 </div>
 
+                {/* Proof of Delivery Photo Upload */}
+                <div className="space-y-2 pt-1 border-t border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-slate-800">
+                      SIGNED DELIVERY CHALLAN / PROOF OF DELIVERY (POD) PHOTO
+                    </label>
+                    {deliveryForm.deliveryPhotoUrl && (
+                      <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Attached
+                      </span>
+                    )}
+                  </div>
+
+                  <input
+                    type="file"
+                    id="jobCardPodPhotoInput"
+                    accept="image/*"
+                    capture="environment"
+                    onClick={(e) => {
+                      (e.target as HTMLInputElement).value = '';
+                    }}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        await handleProcessDeliveryPodPhoto(file);
+                      }
+                    }}
+                    className="hidden"
+                  />
+
+                  {deliveryForm.deliveryPhotoUrl ? (
+                    <div className="border border-slate-200 rounded-xl p-3 bg-slate-50 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          onClick={() => setPhotoLightbox(deliveryForm.deliveryPhotoUrl)}
+                          className="relative group cursor-pointer w-14 h-14 rounded-lg border border-slate-300 shrink-0 bg-white overflow-hidden shadow-2xs"
+                          title="Click to view full photo"
+                        >
+                          <img
+                            src={deliveryForm.deliveryPhotoUrl}
+                            alt="Delivery Proof"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          />
+                          <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                            <Eye className="w-4 h-4" />
+                          </div>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-900 text-xs truncate">Signed Delivery Challan Verified</p>
+                          <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                            {deliveryForm.deliveryPhotoUrl.startsWith('data:') ? 'Image uploaded from device (Compressed Base64)' : deliveryForm.deliveryPhotoUrl}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setPhotoLightbox(deliveryForm.deliveryPhotoUrl)}
+                          className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Inspect</span>
+                        </button>
+                        <label
+                          htmlFor="jobCardPodPhotoInput"
+                          className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>Replace</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setDeliveryForm((prev) => ({ ...prev, deliveryPhotoUrl: '' }))}
+                          className="px-2 py-1.5 bg-white hover:bg-rose-50 text-rose-600 border border-slate-300 hover:border-rose-300 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                          title="Remove photo"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      className="border border-dashed border-slate-300 hover:border-slate-500 rounded-xl p-4 bg-slate-50 transition-colors text-center cursor-pointer group"
+                      onClick={() => document.getElementById('jobCardPodPhotoInput')?.click()}
+                    >
+                      <div className="w-9 h-9 rounded-full bg-slate-200 group-hover:bg-slate-900 group-hover:text-white text-slate-700 flex items-center justify-center transition-colors mx-auto mb-2">
+                        <Camera className="w-4 h-4" />
+                      </div>
+                      <span className="block text-xs font-bold text-slate-800">
+                        Click to upload signed challan photo, or take camera picture
+                      </span>
+                      <span className="block text-[11px] text-slate-500 font-normal mt-0.5">
+                        Supports PNG, JPG, WEBP • Auto-compressed for instant sync
+                      </span>
+                    </div>
+                  )}
+                </div>
+
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
                     Proof of Delivery / Remarks
@@ -7451,6 +7858,54 @@ export default function JobCardsPage() {
         title="Shop Floor Mobile Scanner"
         subtitle="Point camera at printed Job Card QR Code or 1D Barcode"
       />
+
+      {/* MODAL 10: FULL-RESOLUTION PHOTO LIGHTBOX MODAL */}
+      {photoLightbox && (
+        <Portal>
+          <div 
+            className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[99999] flex items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={() => setPhotoLightbox(null)}
+          >
+            <div 
+              className="relative max-w-4xl max-h-[90vh] bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-5 py-3.5 bg-slate-950 border-b border-slate-800 text-white shrink-0">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span className="font-bold text-sm tracking-wide">Signed Delivery Challan / Proof of Delivery (POD)</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <a
+                    href={photoLightbox}
+                    download="proof-of-delivery.jpg"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-blue-400 hover:text-blue-300 font-semibold underline flex items-center gap-1"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Open Full Image</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setPhotoLightbox(null)}
+                    className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 hover:text-white transition-colors cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+              <div className="p-4 overflow-auto flex items-center justify-center max-h-[calc(90vh-60px)] bg-slate-950/50">
+                <img 
+                  src={photoLightbox} 
+                  alt="Delivery Proof Document" 
+                  className="max-h-[75vh] w-auto max-w-full object-contain rounded-lg shadow-lg border border-slate-800"
+                />
+              </div>
+            </div>
+          </div>
+        </Portal>
+      )}
 
     </div>
   );

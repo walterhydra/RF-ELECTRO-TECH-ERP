@@ -22,7 +22,7 @@ export class AuthController {
 
   @Post('request-otp')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Validate credentials and send 2FA OTP to milanpandavadra84@gmail.com' })
+  @ApiOperation({ summary: 'Validate credentials and send 2FA OTP to ocbpl.qms@gmail.com' })
   async requestOtp(@Body() body: { email?: string; password?: string }): Promise<any> {
     return this.authService.requestOtp(body.email || '', body.password || '');
   }
@@ -39,7 +39,7 @@ export class AuthController {
 
   @Post('resend-otp')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Resend fresh OTP code to milanpandavadra84@gmail.com' })
+  @ApiOperation({ summary: 'Resend fresh OTP code to ocbpl.qms@gmail.com' })
   async resendOtp(@Body() body: { tempToken?: string }): Promise<any> {
     return this.authService.resendOtp(body.tempToken || '');
   }

@@ -84,6 +84,25 @@ export async function fetchApi(urlOrPath: string, options: RequestInit = {}): Pr
   return fetch(fullUrl, { credentials: 'include', ...options, headers });
 }
 
+export function getAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'bypass-tunnel-reminder': 'true',
+    'Bypass-Tunnel-Reminder': 'true',
+  };
+  if (typeof window !== 'undefined') {
+    let token = localStorage.getItem('token');
+    if (!token && typeof document !== 'undefined') {
+      const match = document.cookie.match(/(?:^|;\s*)rf_session_token=([^;]+)/);
+      if (match) token = decodeURIComponent(match[1]);
+    }
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+  return headers;
+}
+
 /**
  * Compresses an image file (e.g. from camera/phone or local file upload)
  * down to max dimensions and JPEG/PNG quality, preventing huge 10MB+ payload transfers

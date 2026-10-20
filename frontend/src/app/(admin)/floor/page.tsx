@@ -24,9 +24,7 @@ import {
   Sliders,
   Box
 } from "lucide-react";
-import { getApiBaseUrl } from "@/lib/utils";
-
-const API = getApiBaseUrl();
+import { getApiBaseUrl, fetchApi } from "@/lib/utils";
 
 interface ProcessStage {
   id: string;
@@ -57,91 +55,36 @@ interface StageMetrics {
   status: "NORMAL" | "BUSY" | "BOTTLENECK" | "IDLE";
 }
 
-const MOCK_STAGE_METRICS: StageMetrics[] = [
-  {
-    stage: { id: 'stg-1', name: 'CAM & Gerber Verification', code: 'ENG-01', isActive: true, defaultOrder: 1 },
-    wipTotal: 2500,
-    status: 'NORMAL',
-    holdQty: 0,
-    rejectedQty: 0,
-    subJobCards: [
-      { id: 's1', subJobCardNo: 'JC-2026-002-A', qty: 2500, qtyReceived: 2500, qtyProcessed: 0, qtyHold: 0, qtyRejected: 0, status: 'UNLAUNCHED', jobCard: { jobCardNo: 'JC-2026-002', product: { code: 'PCB-PSU-10', name: 'Power Supply PCB' } } }
-    ]
-  },
-  {
-    stage: { id: 'stg-2', name: 'CNC Material Cutting', code: 'CNC-01', isActive: true, defaultOrder: 2 },
-    wipTotal: 1000,
-    status: 'NORMAL',
-    holdQty: 0,
-    rejectedQty: 0,
-    subJobCards: [
-      { id: 's2', subJobCardNo: 'JC-2026-001-B', qty: 1000, qtyReceived: 1000, qtyProcessed: 0, qtyHold: 0, qtyRejected: 0, status: 'IN_PROGRESS', jobCard: { jobCardNo: 'JC-2026-001', product: { code: 'PCB-MB-V2', name: 'Main Motherboard V2' } } }
-    ]
-  },
-  {
-    stage: { id: 'stg-3', name: 'CNC Drilling & Routing', code: 'CNC-02', isActive: true, defaultOrder: 3 },
-    wipTotal: 1500,
-    status: 'BUSY',
-    holdQty: 200,
-    rejectedQty: 10,
-    subJobCards: [
-      { id: 's3', subJobCardNo: 'JC-2026-001-A', qty: 1500, qtyReceived: 1500, qtyProcessed: 1300, qtyHold: 200, qtyRejected: 10, status: 'IN_PROGRESS', jobCard: { jobCardNo: 'JC-2026-001', product: { code: 'PCB-MB-V2', name: 'Main Motherboard V2' } } }
-    ]
-  },
-  {
-    stage: { id: 'stg-4', name: 'PTH Copper Plating', code: 'WET-01', isActive: true, defaultOrder: 4 },
-    wipTotal: 3500,
-    status: 'BOTTLENECK',
-    holdQty: 300,
-    rejectedQty: 25,
-    subJobCards: [
-      { id: 's4', subJobCardNo: 'JC-2026-003-A', qty: 3500, qtyReceived: 3500, qtyProcessed: 3200, qtyHold: 300, qtyRejected: 25, status: 'IN_PROGRESS', jobCard: { jobCardNo: 'JC-2026-003', product: { code: 'PCB-RF-01', name: 'RF Transceiver Board' } } }
-    ]
-  },
-  {
-    stage: { id: 'stg-5', name: 'AOI Optical Inspection', code: 'QC-01', isActive: true, defaultOrder: 5 },
-    wipTotal: 0,
-    status: 'IDLE',
-    holdQty: 0,
-    rejectedQty: 0,
-    subJobCards: []
-  },
-];
-
 export default function FloorMonitorPage() {
-  const [stageMetrics, setStageMetrics] = useState<StageMetrics[]>(MOCK_STAGE_METRICS);
-  const [loading, setLoading] = useState(false);
+  const [stageMetrics, setStageMetrics] = useState<StageMetrics[]>([]);
+  const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<string>("");
-  const [expandedStage, setExpandedStage] = useState<string | null>('stg-4');
+  const [expandedStage, setExpandedStage] = useState<string | null>(null);
 
   const loadFloorData = useCallback(async () => {
+    setLoading(true);
     try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-      const headers: any = { "Content-Type": "application/json" };
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-
       // Fetch stages
-      const stagesRes = await fetch(`${API}/process-stages`, { headers });
-      const stages: ProcessStage[] = stagesRes.ok ? await stagesRes.json() : [];
+      const stagesRes = await fetchApi('/process-stages');
+      const stagesData = stagesRes.ok ? await stagesRes.json() : [];
+      const stages: ProcessStage[] = Array.isArray(stagesData) ? stagesData : [];
 
       // Fetch all job cards
-      const jobCardsRes = await fetch(`${API}/job-cards`, { headers });
+      const jobCardsRes = await fetchApi('/job-cards');
+      const jobCardsData = jobCardsRes.ok ? await jobCardsRes.json() : [];
       let allSubJobCards: SubJobCardWip[] = [];
 
-      if (jobCardsRes.ok) {
-        const jobCards = await jobCardsRes.json();
-        const items = Array.isArray(jobCards) ? jobCards : jobCards.data || [];
-        items.forEach((jc: any) => {
-          if (jc.subJobCards) {
-            jc.subJobCards.forEach((sjc: any) => {
-              allSubJobCards.push({
-                ...sjc,
-                jobCard: { jobCardNo: jc.jobCardNo, product: jc.product },
-              });
+      const items = Array.isArray(jobCardsData) ? jobCardsData : jobCardsData?.data || [];
+      items.forEach((jc: any) => {
+        if (jc.subJobCards) {
+          jc.subJobCards.forEach((sjc: any) => {
+            allSubJobCards.push({
+              ...sjc,
+              jobCard: { jobCardNo: jc.jobCardNo, product: jc.product },
             });
-          }
-        });
-      }
+          });
+        }
+      });
 
       if (stages.length > 0) {
         const activeStages = stages
@@ -174,7 +117,12 @@ export default function FloorMonitorPage() {
           };
         });
 
-        if (metrics.length > 0) setStageMetrics(metrics);
+        setStageMetrics(metrics);
+        // Expand the first stage with active WIP if none selected
+        if (!expandedStage) {
+          const busyStage = metrics.find(m => m.wipTotal > 0);
+          if (busyStage) setExpandedStage(busyStage.stage.id);
+        }
       }
       setLastRefresh(new Date().toLocaleTimeString());
     } catch (err) {
@@ -182,7 +130,7 @@ export default function FloorMonitorPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [expandedStage]);
 
   useEffect(() => {
     loadFloorData();

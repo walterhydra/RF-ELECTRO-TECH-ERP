@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { getApiBaseUrl } from "@/lib/utils";
+import { getApiBaseUrl, fetchApi } from "@/lib/utils";
 import {
   Layers,
   Plus,
@@ -43,166 +43,6 @@ interface ProcessFlowMaster {
   steps?: { stepOrder: number; stage: ProcessStage }[];
 }
 
-const INITIAL_STAGES: ProcessStage[] = [
-  {
-    id: "1",
-    name: "CAM & Gerber Verification",
-    code: "CAM",
-    description: "Engineering verification, panelization & tool data generation",
-    defaultOrder: 10,
-    departmentId: "dep-1",
-    departmentName: "Engineering",
-    isActive: true,
-  },
-  {
-    id: "2",
-    name: "CNC Material Cutting",
-    code: "CUT",
-    description: "Laminate cutting to panel size & edge beveling",
-    defaultOrder: 20,
-    departmentId: "dep-2",
-    departmentName: "Mechanical",
-    isActive: true,
-  },
-  {
-    id: "3",
-    name: "CNC Drilling & Routing",
-    code: "DRL",
-    description: "Precision mechanical drilling of via and component holes",
-    defaultOrder: 30,
-    departmentId: "dep-2",
-    departmentName: "Mechanical",
-    isActive: true,
-  },
-  {
-    id: "4",
-    name: "Electroless Copper / Plating",
-    code: "PLT",
-    description: "PTH metallization & electrolytic copper build-up",
-    defaultOrder: 40,
-    departmentId: "dep-3",
-    departmentName: "Wet Processing",
-    isActive: true,
-  },
-  {
-    id: "5",
-    name: "Dry Film Imaging & Etching",
-    code: "ETCH",
-    description: "Photoresist lamination, UV exposure, development & acid etching",
-    defaultOrder: 50,
-    departmentId: "dep-3",
-    departmentName: "Wet Processing",
-    isActive: true,
-  },
-  {
-    id: "6",
-    name: "AOI (Automated Optical Inspection)",
-    code: "AOI",
-    description: "Optical inspection for shorts, opens, and line width defects",
-    defaultOrder: 60,
-    departmentId: "dep-4",
-    departmentName: "Quality Assurance",
-    isActive: true,
-  },
-  {
-    id: "7",
-    name: "LPI Solder Mask & Curing",
-    code: "SM",
-    description: "Liquid Photo Imageable green/black mask coating and thermal cure",
-    defaultOrder: 70,
-    departmentId: "dep-3",
-    departmentName: "Wet Processing",
-    isActive: true,
-  },
-  {
-    id: "8",
-    name: "Legend / Component Silkscreen",
-    code: "LEG",
-    description: "White/yellow ink component nomenclature printing",
-    defaultOrder: 80,
-    departmentId: "dep-3",
-    departmentName: "Wet Processing",
-    isActive: true,
-  },
-  {
-    id: "9",
-    name: "Surface Finish (ENIG / HASL)",
-    code: "FIN",
-    description: "Immersion Gold or Lead-Free Hot Air Solder Leveling coating",
-    defaultOrder: 90,
-    departmentId: "dep-3",
-    departmentName: "Wet Processing",
-    isActive: true,
-  },
-  {
-    id: "10",
-    name: "Electrical Testing (E-Test / Flying Probe)",
-    code: "TST",
-    description: "100% netlist continuity and high-voltage isolation testing",
-    defaultOrder: 100,
-    departmentId: "dep-4",
-    departmentName: "Quality Assurance",
-    isActive: true,
-  },
-  {
-    id: "11",
-    name: "Final CNC Routing & V-Scored Profiling",
-    code: "PROF",
-    description: "Individual board singulation and edge chamfering",
-    defaultOrder: 110,
-    departmentId: "dep-2",
-    departmentName: "Mechanical",
-    isActive: true,
-  },
-  {
-    id: "12",
-    name: "Final QC & Vacuum Packaging",
-    code: "FQC",
-    description: "Visual audit, certificate of conformance & moisture barrier seal",
-    defaultOrder: 120,
-    departmentId: "dep-4",
-    departmentName: "Quality Assurance",
-    isActive: true,
-  },
-];
-
-const INITIAL_FLOWS: ProcessFlowMaster[] = [
-  {
-    id: "flow-1",
-    name: "Standard 10-Stage Multilayer Flow",
-    totalSteps: 10,
-    isActive: true,
-    steps: [
-      { stepOrder: 1, stage: INITIAL_STAGES[0] },
-      { stepOrder: 2, stage: INITIAL_STAGES[1] },
-      { stepOrder: 3, stage: INITIAL_STAGES[2] },
-      { stepOrder: 4, stage: INITIAL_STAGES[3] },
-      { stepOrder: 5, stage: INITIAL_STAGES[4] },
-      { stepOrder: 6, stage: INITIAL_STAGES[5] },
-      { stepOrder: 7, stage: INITIAL_STAGES[6] },
-      { stepOrder: 8, stage: INITIAL_STAGES[7] },
-      { stepOrder: 9, stage: INITIAL_STAGES[8] },
-      { stepOrder: 10, stage: INITIAL_STAGES[11] },
-    ],
-  },
-  {
-    id: "flow-2",
-    name: "4-Layer Quick-Turn Routing Flow",
-    totalSteps: 8,
-    isActive: true,
-    steps: [
-      { stepOrder: 1, stage: INITIAL_STAGES[0] },
-      { stepOrder: 2, stage: INITIAL_STAGES[1] },
-      { stepOrder: 3, stage: INITIAL_STAGES[2] },
-      { stepOrder: 4, stage: INITIAL_STAGES[3] },
-      { stepOrder: 5, stage: INITIAL_STAGES[4] },
-      { stepOrder: 6, stage: INITIAL_STAGES[5] },
-      { stepOrder: 7, stage: INITIAL_STAGES[6] },
-      { stepOrder: 8, stage: INITIAL_STAGES[11] },
-    ],
-  },
-];
-
 const DEPARTMENTS = [
   "ALL",
   "Engineering",
@@ -228,8 +68,8 @@ const getDepartmentBadgeStyle = (deptName?: string) => {
 };
 
 export default function ProcessesPage() {
-  const [stages, setStages] = useState<ProcessStage[]>(INITIAL_STAGES);
-  const [flows, setFlows] = useState<ProcessFlowMaster[]>(INITIAL_FLOWS);
+  const [stages, setStages] = useState<ProcessStage[]>([]);
+  const [flows, setFlows] = useState<ProcessFlowMaster[]>([]);
   const [activeTab, setActiveTab] = useState<"stages" | "flows">("stages");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<string>("ALL");
@@ -254,19 +94,19 @@ export default function ProcessesPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch(`${getApiBaseUrl()}/process-stages`)
-      .then((res) => res.json())
+    fetchApi('/process-stages')
+      .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) setStages(data);
+        if (Array.isArray(data)) setStages(data);
       })
-      .catch(() => {});
+      .catch((err) => console.error("Failed to fetch process stages:", err));
 
-    fetch(`${getApiBaseUrl()}/process-stages/flows`)
-      .then((res) => res.json())
+    fetchApi('/process-stages/flows')
+      .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) setFlows(data);
+        if (Array.isArray(data)) setFlows(data);
       })
-      .catch(() => {});
+      .catch((err) => console.error("Failed to fetch process flows:", err));
   }, []);
 
   const handleOpenAdd = () => {
@@ -314,13 +154,12 @@ export default function ProcessesPage() {
 
     try {
       const method = editingStage ? "PATCH" : "POST";
-      const url = editingStage
-        ? `${getApiBaseUrl()}/process-stages/${editingStage.id}`
-        : `${getApiBaseUrl()}/process-stages`;
+      const endpoint = editingStage
+        ? `/process-stages/${editingStage.id}`
+        : `/process-stages`;
 
-      const res = await fetch(url, {
+      const res = await fetchApi(endpoint, {
         method,
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
 
@@ -338,41 +177,9 @@ export default function ProcessesPage() {
           );
         }
         setIsModalOpen(false);
-      } else {
-        if (editingStage) {
-          setStages(
-            stages.map((s) =>
-              s.id === editingStage.id ? { ...s, ...formData } : s
-            )
-          );
-        } else {
-          const newStage: ProcessStage = {
-            id: String(Date.now()),
-            ...formData,
-          };
-          setStages(
-            [...stages, newStage].sort((a, b) => a.defaultOrder - b.defaultOrder)
-          );
-        }
-        setIsModalOpen(false);
       }
-    } catch {
-      if (editingStage) {
-        setStages(
-          stages.map((s) =>
-            s.id === editingStage.id ? { ...s, ...formData } : s
-          )
-        );
-      } else {
-        const newStage: ProcessStage = {
-          id: String(Date.now()),
-          ...formData,
-        };
-        setStages(
-          [...stages, newStage].sort((a, b) => a.defaultOrder - b.defaultOrder)
-        );
-      }
-      setIsModalOpen(false);
+    } catch (err: any) {
+      setError(err?.message || "Failed to save process stage");
     }
   };
 
@@ -389,66 +196,32 @@ export default function ProcessesPage() {
         stageIds: selectedStageIds,
       };
 
-      const res = await fetch(
-        `${getApiBaseUrl()}/process-stages/flows`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
+      const res = await fetchApi('/process-stages/flows', {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
 
       if (res.ok) {
         const saved = await res.json();
         setFlows([...flows, saved]);
         setIsFlowModalOpen(false);
-      } else {
-        const flowSteps = selectedStageIds
-          .map((id, index) => {
-            const st = stages.find((s) => s.id === id);
-            return st ? { stepOrder: index + 1, stage: st } : null;
-          })
-          .filter(Boolean) as { stepOrder: number; stage: ProcessStage }[];
-
-        const newFlow: ProcessFlowMaster = {
-          id: String(Date.now()),
-          name: flowName,
-          totalSteps: flowSteps.length,
-          isActive: true,
-          steps: flowSteps,
-        };
-        setFlows([...flows, newFlow]);
-        setIsFlowModalOpen(false);
       }
-    } catch {
-      const flowSteps = selectedStageIds
-        .map((id, index) => {
-          const st = stages.find((s) => s.id === id);
-          return st ? { stepOrder: index + 1, stage: st } : null;
-        })
-        .filter(Boolean) as { stepOrder: number; stage: ProcessStage }[];
-
-      const newFlow: ProcessFlowMaster = {
-        id: String(Date.now()),
-        name: flowName,
-        totalSteps: flowSteps.length,
-        isActive: true,
-        steps: flowSteps,
-      };
-      setFlows([...flows, newFlow]);
-      setIsFlowModalOpen(false);
+    } catch (err: any) {
+      setError(err?.message || "Failed to create process flow");
     }
   };
 
   const toggleStatus = async (id: string) => {
     try {
-      await fetch(`${getApiBaseUrl()}/process-stages/${id}/status`, {
+      await fetchApi(`/process-stages/${id}/status`, {
         method: "PATCH",
       });
-    } catch {}
-    setStages(
-      stages.map((s) => (s.id === id ? { ...s, isActive: !s.isActive } : s))
-    );
+      setStages(
+        stages.map((s) => (s.id === id ? { ...s, isActive: !s.isActive } : s))
+      );
+    } catch (err) {
+      console.error("Failed to toggle process stage status:", err);
+    }
   };
 
   const toggleStageSelection = (id: string) => {

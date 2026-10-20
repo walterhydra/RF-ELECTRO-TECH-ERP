@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { QrCode, ArrowLeft, Wifi } from 'lucide-react';
+import { QrCode, ArrowLeft, Wifi, Layers, Truck, BarChart3, LayoutDashboard } from 'lucide-react';
 
 export default function MobileScannerLayout({
   children,
@@ -12,7 +12,7 @@ export default function MobileScannerLayout({
       {/* PWA App Header */}
       <header className="h-14 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 sticky top-0 z-20">
         <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="text-slate-400 hover:text-white">
+          <Link href="/dashboard" className="text-slate-400 hover:text-white" title="Back to Main Dashboard">
             <ArrowLeft className="w-5 h-5" />
           </Link>
           <div className="flex items-center gap-2">
@@ -32,14 +32,26 @@ export default function MobileScannerLayout({
       </main>
 
       {/* Bottom PWA Navigation */}
-      <footer className="h-16 bg-slate-900 border-t border-slate-800 flex items-center justify-around px-4">
-        <Link href="/scan" className="flex flex-col items-center gap-1 text-amber-400">
-          <QrCode className="w-5 h-5" />
+      <footer className="h-16 bg-slate-900 border-t border-slate-800 flex items-center justify-around px-2 z-20">
+        <Link href="/scan" className="flex flex-col items-center gap-0.5 text-amber-400 hover:text-amber-300">
+          <QrCode className="w-4 h-4" />
           <span className="text-[10px] font-mono font-bold">SCAN QR</span>
         </Link>
-        <Link href="/dispatch" className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-200">
-          <span className="w-5 h-5 rounded border border-current flex items-center justify-center text-xs font-mono">↗</span>
+        <Link href="/job-cards" className="flex flex-col items-center gap-0.5 text-slate-400 hover:text-slate-200">
+          <Layers className="w-4 h-4" />
+          <span className="text-[10px] font-mono">JOBS</span>
+        </Link>
+        <Link href="/dispatch" className="flex flex-col items-center gap-0.5 text-slate-400 hover:text-slate-200">
+          <Truck className="w-4 h-4" />
           <span className="text-[10px] font-mono">DISPATCH</span>
+        </Link>
+        <Link href="/reports" className="flex flex-col items-center gap-0.5 text-slate-400 hover:text-slate-200">
+          <BarChart3 className="w-4 h-4" />
+          <span className="text-[10px] font-mono">REPORTS</span>
+        </Link>
+        <Link href="/dashboard" className="flex flex-col items-center gap-0.5 text-slate-400 hover:text-slate-200">
+          <LayoutDashboard className="w-4 h-4" />
+          <span className="text-[10px] font-mono">MAIN ERP</span>
         </Link>
       </footer>
     </div>

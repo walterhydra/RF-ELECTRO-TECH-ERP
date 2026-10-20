@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   BarChart3, 
   Download, 
@@ -157,17 +157,118 @@ const REPORT_MODULES: ReportCardItem[] = [
   },
 ];
 
-const STAGE_PERFORMANCE = [
-  { code: 'ENG-01', name: 'CAM & Gerber Verification', input: 5000, output: 4980, scrap: 20, yield: 99.6, status: 'OPTIMAL' },
-  { code: 'CNC-01', name: 'CNC Material Cutting', input: 4980, output: 4950, scrap: 30, yield: 99.4, status: 'OPTIMAL' },
-  { code: 'CNC-02', name: 'CNC Drilling & Routing', input: 4950, output: 4880, scrap: 70, yield: 98.6, status: 'NORMAL' },
-  { code: 'WET-01', name: 'PTH Copper Plating', input: 4880, output: 4760, scrap: 120, yield: 97.5, status: 'ATTENTION' },
-  { code: 'QC-01', name: 'AOI Optical Inspection', input: 4760, output: 4740, scrap: 20, yield: 99.5, status: 'OPTIMAL' },
-];
+import { getApiBaseUrl, fetchApi } from '@/lib/utils';
 
 export default function ReportsPage() {
   const [selectedCategory, setSelectedCategory] = useState<'ALL' | 'QC' | 'FLOOR' | 'COMMERCIAL'>('ALL');
   const [timeRange, setTimeRange] = useState('THIS_MONTH');
+  const [stagePerformance, setStagePerformance] = useState<any[]>([]);
+  const [liveStats, setLiveStats] = useState<Record<string, { stat: string; trend: string; isPositive: boolean }>>({});
+
+  useEffect(() => {
+    Promise.all([
+      fetchApi('/process-stages').then((r) => (r.ok ? r.json() : [])),
+      fetchApi('/reports/dashboard-summary').then((r) => (r.ok ? r.json() : null)),
+      fetchApi('/reports/live-production-dashboard').then((r) => (r.ok ? r.json() : null)),
+      fetchApi('/reports/daily-production').then((r) => (r.ok ? r.json() : [])),
+      fetchApi('/reports/rejection-summary').then((r) => (r.ok ? r.json() : [])),
+    ])
+      .then(([stages, summary, liveDash, dailyProd, rejSummary]) => {
+        const statsMap: Record<string, { stat: string; trend: string; isPositive: boolean }> = {};
+
+        if (summary) {
+          statsMap['rejections'] = {
+            stat: `${summary.rejectionRate || '0.0'}%`,
+            trend: 'Live Rate',
+            isPositive: Number(summary.rejectionRate || 0) <= 2.5,
+          };
+          statsMap['wip'] = {
+            stat: `${(summary.totalWipQty || 0).toLocaleString()} PCS`,
+            trend: `${summary.activeJobCards?.length || 0} Active Lots`,
+            isPositive: true,
+          };
+        }
+        if (liveDash) {
+          statsMap['daily-production'] = {
+            stat: `${liveDash.kpis?.todayProductionSqm || 0} SQM`,
+            trend: `Min: ${liveDash.kpis?.todayTargetMin || 150} SQM`,
+            isPositive: (liveDash.kpis?.todayProductionSqm || 0) >= (liveDash.kpis?.todayTargetMin || 150),
+          };
+          statsMap['orders'] = {
+            stat: `${liveDash.kpis?.monthProductionSqm || 0} SQM`,
+            trend: 'Monthly Prod',
+            isPositive: true,
+          };
+          statsMap['dispatch'] = {
+            stat: `${liveDash.kpis?.monthDispatchedSqm || 0} SQM`,
+            trend: `${liveDash.kpis?.todayDispatchedSqm || 0} Today`,
+            isPositive: true,
+          };
+        }
+        const totalRework = Array.isArray(rejSummary)
+          ? rejSummary.reduce((acc: number, s: any) => acc + (s.totalReworked || 0), 0)
+          : 0;
+        statsMap['rework'] = {
+          stat: `${totalRework} PCS`,
+          trend: 'Active Queue',
+          isPositive: true,
+        };
+        statsMap['job-cards'] = {
+          stat: `${Array.isArray(stages) ? stages.length : 21} Stages`,
+          trend: 'Process Flow',
+          isPositive: true,
+        };
+        statsMap['traceability'] = {
+          stat: '100% Live',
+          trend: 'Full Audit Trail',
+          isPositive: true,
+        };
+        setLiveStats(statsMap);
+
+        if (Array.isArray(stages)) {
+          const stageProdMap = new Map<string, any>();
+          if (Array.isArray(dailyProd)) {
+            dailyProd.forEach((dp: any) => {
+              const key = (dp.stageName || '').toLowerCase().trim();
+              const existing = stageProdMap.get(key) || { received: 0, processed: 0, rejected: 0 };
+              existing.received += dp.qtyReceived || 0;
+              existing.processed += dp.qtyProcessed || 0;
+              existing.rejected += dp.qtyRejected || 0;
+              stageProdMap.set(key, existing);
+            });
+          }
+
+          setStagePerformance(
+            stages
+              .filter((s: any) => s.isActive)
+              .sort((a: any, b: any) => (a.defaultOrder || 0) - (b.defaultOrder || 0))
+              .map((s: any) => {
+                const cleanName = s.name.replace(/^\d+\.\s*/, '').toLowerCase().trim();
+                const metrics = stageProdMap.get(cleanName) || stageProdMap.get(s.name.toLowerCase().trim()) || {
+                  received: 0,
+                  processed: 0,
+                  rejected: 0,
+                };
+                const input = metrics.received || metrics.processed;
+                const output = metrics.processed;
+                const scrap = metrics.rejected;
+                const yieldPct =
+                  input > 0 && output > 0 ? Math.min(100, Math.round(((output - scrap) / input) * 100)) : 100;
+                return {
+                  code: s.code || s.name.slice(0, 3).toUpperCase(),
+                  name: s.name,
+                  input,
+                  output,
+                  scrap,
+                  yield: yieldPct,
+                  status: yieldPct >= 95 ? 'OPTIMAL' : 'REVIEW',
+                };
+              })
+          );
+        }
+      })
+      .catch((err) => console.error('Failed to load live data for reports hub:', err));
+  }, []);
 
   const filteredModules = selectedCategory === 'ALL' 
     ? REPORT_MODULES 
@@ -373,12 +474,12 @@ export default function ReportsPage() {
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
                 <div>
                   <span className="text-slate-400 text-[10px] font-medium block">{mod.statLabel}</span>
-                  <span className="font-bold text-slate-900 font-mono text-sm">{mod.liveStat}</span>
+                  <span className="font-bold text-slate-900 font-mono text-sm">{liveStats[mod.id]?.stat || mod.liveStat}</span>
                 </div>
                 <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                  mod.isPositive ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                  (liveStats[mod.id] ? liveStats[mod.id].isPositive : mod.isPositive) ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
                 }`}>
-                  {mod.trend}
+                  {liveStats[mod.id]?.trend || mod.trend}
                 </span>
               </div>
             </a>
@@ -417,7 +518,7 @@ export default function ReportsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs">
-              {STAGE_PERFORMANCE.map((stg) => (
+              {stagePerformance.map((stg) => (
                 <tr key={stg.code} className="hover:bg-slate-50/80 transition-colors">
                   <td className="py-3 px-4 font-mono font-bold text-slate-900">
                     <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200">{stg.code}</span>

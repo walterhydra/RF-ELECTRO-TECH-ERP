@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { getApiBaseUrl } from '@/lib/utils';
+import { getApiBaseUrl, fetchApi } from '@/lib/utils';
 import {
   Calendar,
   Layers,
@@ -73,12 +73,10 @@ export default function DailyJobMovementWipReportPage() {
 
   const fetchReportData = () => {
     setLoading(true);
-    fetch(
-      `${getApiBaseUrl()}/reports/daily-movement-wip?date=${selectedDate}&overdelayDays=${overdelayDays}`
-    )
-      .then((res) => res.json())
+    fetchApi(`/reports/daily-movement-wip?date=${selectedDate}&overdelayDays=${overdelayDays}`)
+      .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        setReport(data);
+        if (data) setReport(data);
         setLoading(false);
       })
       .catch((err) => {

@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Download, RefreshCw, ShoppingCart, Calendar, Building2, Cpu, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
-import { getApiBaseUrl } from '@/lib/utils';
+import { getApiBaseUrl, fetchApi } from '@/lib/utils';
 
 export default function OrdersReportPage() {
   const [data, setData] = useState<any[]>([]);
@@ -12,10 +12,7 @@ export default function OrdersReportPage() {
   const fetchReport = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const headers = { 'Authorization': `Bearer ${token}` };
-      const res = await fetch(`${getApiBaseUrl()}/reports/orders`, { headers });
-      
+      const res = await fetchApi('/reports/orders');
       if (res.ok) {
         const json = await res.json();
         if (Array.isArray(json)) {
@@ -26,14 +23,9 @@ export default function OrdersReportPage() {
           setData([]);
         }
       } else {
-        // Fallback or mock data if backend report endpoint returns empty/not ready
-        const posRes = await fetch(`${getApiBaseUrl()}/customer-pos`, { headers });
-        if (posRes.ok) {
-          const posJson = await posRes.json();
-          setData(Array.isArray(posJson) ? posJson : []);
-        } else {
-          setData([]);
-        }
+        const posRes = await fetchApi('/customer-pos');
+        const posJson = posRes.ok ? await posRes.json() : [];
+        setData(Array.isArray(posJson) ? posJson : []);
       }
     } catch (error) {
       console.error('Error fetching order report:', error);

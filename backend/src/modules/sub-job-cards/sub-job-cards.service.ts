@@ -44,7 +44,12 @@ export class SubJobCardsService {
       throw new NotFoundException('QR Code value parameter is empty');
     }
 
-    const cleanQuery = qrValue.trim();
+    let cleanQuery = qrValue.trim();
+    // Support scanning direct Traveler Tag / PDF URLs seamlessly
+    const urlMatch = cleanQuery.match(/\/(?:job-cards|job-cards-pdf|stage-update)\/([A-Za-z0-9\-_]+)/i);
+    if (urlMatch && urlMatch[1]) {
+      cleanQuery = urlMatch[1].trim();
+    }
 
     // 1. Exact or partial match on SubJobCard
     const subCards = await this.prisma.subJobCard.findMany({
@@ -307,7 +312,20 @@ export class SubJobCardsService {
     const steps = subCard.jobCard?.processFlowMaster?.steps || [];
     const currentStep = steps.find((s: any) => s.stageId === subCard.currentStageId);
     const nextStep = currentStep ? steps.find((s: any) => s.stepOrder > currentStep.stepOrder) : null;
-    const userId = user?.id || user?.sub || user?.userId || subCard.createdById;
+    let effectiveUser = user;
+    if (!effectiveUser?.id && ((dto as any)?.userId || (dto as any)?.userEmail)) {
+      effectiveUser = await this.prisma.user.findFirst({
+        where: {
+          OR: [
+            ...((dto as any)?.userId ? [{ id: (dto as any).userId }] : []),
+            ...((dto as any)?.userEmail ? [{ email: (dto as any).userEmail }] : []),
+          ],
+        },
+        include: { role: true, department: true },
+      });
+    }
+
+    const userId = effectiveUser?.id || user?.id || user?.sub || user?.userId || subCard.createdById;
 
     return this.prisma.$transaction(async (tx) => {
       const movementLog = await tx.stageMovementLog.create({
@@ -452,6 +470,15 @@ export class SubJobCardsService {
               status: SubJobCardStatus.IN_STAGE,
               qrCodeValue: `RFE-JC-${newSubJobCardNo}-${nextStep.stageId.slice(0, 4)}-${Date.now().toString().slice(-4)}`,
               createdById: userId,
+            },
+          });
+
+          const splitDetail = `Partial movement: Created Split Lot ${newSubJobCard.subJobCardNo} (${netForwardedQty} forwarded, ${remainingQtyAtCurrentStage} remained)`;
+          await tx.stageMovementLog.update({
+            where: { id: movementLog.id },
+            data: {
+              remarkType: 'SPLIT_MOVEMENT',
+              remarks: dto.remarks ? `${dto.remarks} • ${splitDetail}` : splitDetail,
             },
           });
         }

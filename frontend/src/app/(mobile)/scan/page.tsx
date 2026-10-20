@@ -26,7 +26,13 @@ export default function MobileScanPage() {
       const headers: any = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`${API}/sub-job-cards/qr-lookup/${encodeURIComponent(value.trim())}`, { headers });
+      let cleanVal = value.trim();
+      const urlMatch = cleanVal.match(/\/(?:job-cards|job-cards-pdf|stage-update)\/([A-Za-z0-9\-_]+)/i);
+      if (urlMatch && urlMatch[1]) {
+        cleanVal = urlMatch[1].trim();
+      }
+
+      const res = await fetch(`${API}/sub-job-cards/qr-lookup/${encodeURIComponent(cleanVal)}`, { headers });
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));

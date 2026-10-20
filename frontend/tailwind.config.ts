@@ -10,7 +10,8 @@ const config: Config = {
     extend: {
       fontFamily: {
         sans: ['Satoshi', 'Quicksand', 'var(--font-quicksand)', 'sans-serif'],
-        quicksand: ['Quicksand', 'Satoshi', 'sans-serif'],
+        satoshi: ['Satoshi', 'sans-serif'],
+        quicksand: ['Quicksand', 'Satoshi', 'var(--font-quicksand)', 'sans-serif'],
         display: ['Satoshi', 'Quicksand', 'sans-serif'],
         mono: ['var(--font-plex-mono)', 'monospace'],
       },

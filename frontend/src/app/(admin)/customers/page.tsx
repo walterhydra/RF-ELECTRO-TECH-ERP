@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getApiBaseUrl } from '@/lib/utils';
+import { getApiBaseUrl, fetchApi } from '@/lib/utils';
 import { 
   Building2, 
   Plus, 
@@ -30,44 +30,9 @@ interface Customer {
   isActive: boolean;
 }
 
-const INITIAL_CUSTOMERS: Customer[] = [
-  {
-    id: '1',
-    companyName: 'Apex Electronics Ltd',
-    code: 'CUST-APEX',
-    contactPerson: 'Rajesh Mehta',
-    email: 'rajesh@apexelectronics.com',
-    phone: '+91 98765 43210',
-    address: 'Plot 42, MIDC Industrial Area, Pune, MH',
-    gstNo: '27AABCU9603R1ZM',
-    isActive: true,
-  },
-  {
-    id: '2',
-    companyName: 'Zenith Aerospace Systems',
-    code: 'CUST-ZEN',
-    contactPerson: 'Vikram Sharma',
-    email: 'vsharma@zenithaerospace.in',
-    phone: '+91 98111 22334',
-    address: 'Tech Park Phase 2, Bangalore, KA',
-    gstNo: '29AACCF8822K1Z5',
-    isActive: true,
-  },
-  {
-    id: '3',
-    companyName: 'Orbit Medical Devices',
-    code: 'CUST-ORB',
-    contactPerson: 'Ananya Iyer',
-    email: 'ananya@orbitmed.com',
-    phone: '+91 94455 66778',
-    address: 'Sector 18, Gurgaon, Haryana',
-    gstNo: '06AAXCO1234F1Z9',
-    isActive: true,
-  },
-];
-
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>(INITIAL_CUSTOMERS);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
@@ -83,14 +48,16 @@ export default function CustomersPage() {
   });
   const [error, setError] = useState('');
 
-  // Fetch from backend API if available
+  // Fetch live authenticated customers from database
   useEffect(() => {
-    fetch(`${getApiBaseUrl()}/customers`)
-      .then((res) => res.json())
+    setLoading(true);
+    fetchApi('/customers')
+      .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) setCustomers(data);
+        if (Array.isArray(data)) setCustomers(data);
       })
-      .catch(() => {});
+      .catch((err) => console.warn('Customers fetch failed:', err))
+      .finally(() => setLoading(false));
   }, []);
 
   const handleOpenAdd = () => {
@@ -134,13 +101,12 @@ export default function CustomersPage() {
 
     try {
       const method = editingCustomer ? 'PATCH' : 'POST';
-      const url = editingCustomer
-        ? `${getApiBaseUrl()}/customers/${editingCustomer.id}`
-        : `${getApiBaseUrl()}/customers`;
+      const endpoint = editingCustomer
+        ? `/customers/${editingCustomer.id}`
+        : `/customers`;
 
-      const res = await fetch(url, {
+      const res = await fetchApi(endpoint, {
         method,
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
 
@@ -153,42 +119,17 @@ export default function CustomersPage() {
         }
         setIsModalOpen(false);
       } else {
-        if (editingCustomer) {
-          setCustomers(
-            customers.map((c) =>
-              c.id === editingCustomer.id ? { ...c, ...formData, id: c.id } : c
-            )
-          );
-        } else {
-          const newCust: Customer = {
-            id: String(Date.now()),
-            ...formData,
-          };
-          setCustomers([newCust, ...customers]);
-        }
-        setIsModalOpen(false);
+        const errData = await res.json().catch(() => ({}));
+        setError(errData.message || 'Failed to save customer to database');
       }
     } catch {
-      if (editingCustomer) {
-        setCustomers(
-          customers.map((c) =>
-            c.id === editingCustomer.id ? { ...c, ...formData, id: c.id } : c
-          )
-        );
-      } else {
-        const newCust: Customer = {
-          id: String(Date.now()),
-          ...formData,
-        };
-        setCustomers([newCust, ...customers]);
-      }
-      setIsModalOpen(false);
+      setError('Server communication error. Please check your connection.');
     }
   };
 
   const toggleStatus = async (id: string) => {
     try {
-      await fetch(`${getApiBaseUrl()}/customers/${id}/status`, {
+      await fetchApi(`/customers/${id}/status`, {
         method: 'PATCH',
       });
     } catch {}

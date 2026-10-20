@@ -20,18 +20,21 @@ import {
   Save,
   X
 } from 'lucide-react';
+import { getApiBaseUrl, fetchApi } from '@/lib/utils';
 
 export default function ProfilePage() {
   const [userRole, setUserRole] = useState('Super Admin');
-  const [userEmail, setUserEmail] = useState('admin@rfelectro.com');
+  const [userEmail, setUserEmail] = useState('');
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [resetMsg, setResetMsg] = useState('');
 
   const [profileData, setProfileData] = useState({
-    firstName: 'Admin',
-    lastName: 'Technocrat',
-    dob: '1990-10-12',
-    email: 'admin@rfelectro.com',
+    firstName: '',
+    lastName: '',
+    dob: '1992-05-15',
+    email: '',
     phone: '+91 98765 43210',
     role: 'Super Admin',
     plantLocation: 'Plant-01 (Noida Sector 62)',
@@ -44,8 +47,41 @@ export default function ProfilePage() {
   useEffect(() => {
     const role = localStorage.getItem('userRole');
     const email = localStorage.getItem('userEmail');
+    const name = localStorage.getItem('userName');
     if (role) setUserRole(role);
-    if (email) setUserEmail(email);
+    if (email) {
+      setUserEmail(email);
+      setProfileData(prev => ({ ...prev, email }));
+    }
+    if (name) {
+      const parts = name.trim().split(' ');
+      setProfileData(prev => ({
+        ...prev,
+        firstName: parts[0] || 'User',
+        lastName: parts.slice(1).join(' ') || ''
+      }));
+    }
+
+    fetchApi('/auth/me')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((user) => {
+        if (user && user.email) {
+          setCurrentUser(user);
+          setUserRole(user.role || role || 'Super Admin');
+          setUserEmail(user.email);
+          const parts = (user.name || '').trim().split(' ');
+          setProfileData((prev) => ({
+            ...prev,
+            firstName: parts[0] || 'User',
+            lastName: parts.slice(1).join(' ') || '',
+            email: user.email,
+            phone: user.phone || prev.phone,
+            role: user.role || prev.role,
+            department: user.department?.name || prev.department,
+          }));
+        }
+      })
+      .catch((err) => console.error('Failed to fetch auth profile:', err));
   }, []);
 
   const initials = profileData.firstName.substring(0, 1) + (profileData.lastName ? profileData.lastName.substring(0, 1) : '');
@@ -364,17 +400,27 @@ export default function ProfilePage() {
             <div className="space-y-3 text-xs">
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
                 <span className="text-[10px] font-mono text-slate-400 uppercase">Single Sign-On (SSO) ID</span>
-                <p className="font-mono font-bold text-slate-900">RF-SSO-ADMIN-990</p>
+                <p className="font-mono font-bold text-slate-900">
+                  {currentUser?.id ? `RFE-SSO-${currentUser.id.slice(0, 8).toUpperCase()}` : 'RFE-SSO-ACTIVE'}
+                </p>
               </div>
 
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
-                <span className="text-[10px] font-mono text-slate-400 uppercase">Password Last Changed</span>
-                <p className="font-mono font-bold text-slate-900">14 Days Ago (01-08-2026)</p>
+                <span className="text-[10px] font-mono text-slate-400 uppercase">Authentication Security</span>
+                <p className="font-mono font-bold text-emerald-700 flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5" /> 2FA OTP Verified Session Active
+                </p>
               </div>
 
+              {resetMsg && (
+                <div className="p-2.5 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl text-[11px] font-medium animate-in fade-in">
+                  {resetMsg}
+                </div>
+              )}
+
               <button 
-                onClick={() => alert('Password Reset email link dispatched!')}
-                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs border border-slate-200 transition-all flex items-center justify-center gap-2"
+                onClick={() => setResetMsg('A secure password reset verification link has been dispatched to ' + (currentUser?.email || userEmail || 'your email') + '.')}
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs border border-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Key className="w-3.5 h-3.5 text-amber-600" />
                 <span>Reset User Password</span>

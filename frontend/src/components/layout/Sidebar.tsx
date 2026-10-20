@@ -18,7 +18,8 @@ import {
   Settings2,
   Truck,
   Lock,
-  ArrowRight
+  ArrowRight,
+  X
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -87,9 +88,7 @@ export const Sidebar: React.FC = () => {
     return item.roles.some(r => r === userRole || r.toUpperCase().replace(/\s+/g, '_') === normalizedRole);
   });
 
-  const displayedNavItems = isMobileScreen 
-    ? navItems.filter(item => item.href === '/job-cards')
-    : navItems;
+  const displayedNavItems = navItems;
 
   const initials = userRole.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 
@@ -112,8 +111,15 @@ export const Sidebar: React.FC = () => {
         }`}
         data-purpose="main-sidebar"
       >
-        <div className="p-6 flex items-center justify-between">
-          <Image src="/Assets/logo-1.png" alt="RF Electrotech Logo" width={180} height={45} className="object-contain opacity-90" />
+        <div className="p-5 flex items-center justify-between border-b border-slate-800/80">
+          <Image src="/Assets/logo-1.png" alt="RF Electrotech Logo" width={160} height={40} className="object-contain opacity-90" />
+          <button
+            onClick={() => setIsMobileOpen(false)}
+            className="md:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            aria-label="Close sidebar"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">

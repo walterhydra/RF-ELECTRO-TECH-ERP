@@ -182,6 +182,11 @@ export default function JobCardDetailPage() {
       const res = await fetch(`${getApi()}/job-cards/${id}/launch`, {
         method: 'POST',
         headers: getAuthHeaders(),
+        body: JSON.stringify({
+          userId: typeof window !== 'undefined' ? localStorage.getItem('userId') : undefined,
+          userEmail: typeof window !== 'undefined' ? localStorage.getItem('userEmail') : undefined,
+          userName: typeof window !== 'undefined' ? localStorage.getItem('userName') : undefined,
+        }),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));

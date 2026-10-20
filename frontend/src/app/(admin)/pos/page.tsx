@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getApiBaseUrl } from '@/lib/utils';
+import { getApiBaseUrl, fetchApi } from '@/lib/utils';
 import { 
   ShoppingCart, 
   Plus, 
@@ -73,66 +73,6 @@ interface CustomerPO {
   }[];
 }
 
-const INITIAL_POS: CustomerPO[] = [
-  {
-    id: '1',
-    poNo: 'PO-2026-001',
-    customerId: '1',
-    productId: '1',
-    orderQty: 2500,
-    poDate: '2026-07-01',
-    expectedDeliveryDate: '2026-07-15',
-    status: 'IN_PRODUCTION',
-    attachmentUrl: 'https://storage.rfelectro.com/pos/PO-2026-001.pdf',
-    notes: 'Urgent delivery required for Q3 production run. Standard ENIG finish.',
-    customer: { companyName: 'Apex Electronics Ltd', code: 'CUST-APEX' },
-    product: { name: 'Main Motherboard V2', code: 'PCB-MB-V2', specCardNo: 'D001', pcbSize: '150x100mm', layers: 4 },
-    jobCards: [{ id: 'jc-1', jobCardNo: 'JC-2026-001', status: 'IN_PROGRESS', totalQty: 2500 }]
-  },
-  {
-    id: '2',
-    poNo: 'PO-2026-002',
-    customerId: '2',
-    productId: '2',
-    orderQty: 1000,
-    poDate: '2026-07-02',
-    expectedDeliveryDate: '2026-07-20',
-    status: 'OPEN',
-    attachmentUrl: null,
-    notes: 'Include test certificates with shipment.',
-    customer: { companyName: 'Zenith Aerospace Systems', code: 'CUST-ZEN' },
-    product: { name: 'RF Transceiver Board', code: 'PCB-RF-01', specCardNo: 'D002', pcbSize: '80x60mm', layers: 6 },
-    jobCards: []
-  },
-  {
-    id: '3',
-    poNo: 'PO-2026-003',
-    customerId: '3',
-    productId: '3',
-    orderQty: 5000,
-    poDate: '2026-06-28',
-    expectedDeliveryDate: '2026-07-10',
-    status: 'READY',
-    attachmentUrl: 'https://storage.rfelectro.com/pos/PO-2026-003.pdf',
-    notes: 'Packed in vacuum sealed bags of 50.',
-    customer: { companyName: 'Orbit Medical Devices', code: 'CUST-ORB' },
-    product: { name: 'Power Supply PCB', code: 'PCB-PSU-10', specCardNo: 'D003', pcbSize: '120x120mm', layers: 2 },
-    jobCards: [{ id: 'jc-2', jobCardNo: 'JC-2026-002', status: 'COMPLETED', totalQty: 5000 }]
-  }
-];
-
-const INITIAL_CUSTOMERS: Customer[] = [
-  { id: '1', companyName: 'Apex Electronics Ltd', code: 'CUST-APEX' },
-  { id: '2', companyName: 'Zenith Aerospace Systems', code: 'CUST-ZEN' },
-  { id: '3', companyName: 'Orbit Medical Devices', code: 'CUST-ORB' },
-];
-
-const INITIAL_PRODUCTS: Product[] = [
-  { id: '1', name: 'Main Motherboard V2', code: 'PCB-MB-V2', specCardNo: 'D001', pcbSize: '150x100mm', layers: 4, customerId: '1' },
-  { id: '2', name: 'RF Transceiver Board', code: 'PCB-RF-01', specCardNo: 'D002', pcbSize: '80x60mm', layers: 6, customerId: '2' },
-  { id: '3', name: 'Power Supply PCB', code: 'PCB-PSU-10', specCardNo: 'D003', pcbSize: '120x120mm', layers: 2, customerId: '3' },
-];
-
 const STATUS_OPTIONS = [
   { id: 'ALL', label: 'All Orders' },
   { id: 'OPEN', label: '🔵 Open / Unlaunched' },
@@ -143,9 +83,10 @@ const STATUS_OPTIONS = [
 ];
 
 export default function POsPage() {
-  const [pos, setPos] = useState<CustomerPO[]>(INITIAL_POS);
-  const [customers, setCustomers] = useState<Customer[]>(INITIAL_CUSTOMERS);
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [pos, setPos] = useState<CustomerPO[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -170,28 +111,20 @@ export default function POsPage() {
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Fetch API
+  // Fetch live authenticated POs, customers & products from database
   useEffect(() => {
-    fetch(`${getApiBaseUrl()}/customer-pos`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) setPos(data);
-      })
-      .catch(() => {});
-
-    fetch(`${getApiBaseUrl()}/customers`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) setCustomers(data);
-      })
-      .catch(() => {});
-
-    fetch(`${getApiBaseUrl()}/products`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) setProducts(data);
-      })
-      .catch(() => {});
+    setLoading(true);
+    Promise.all([
+      fetchApi('/customer-pos').then(res => res.ok ? res.json() : []).catch(() => []),
+      fetchApi('/customers').then(res => res.ok ? res.json() : []).catch(() => []),
+      fetchApi('/products').then(res => res.ok ? res.json() : []).catch(() => []),
+    ])
+    .then(([posData, custData, prodData]) => {
+      if (Array.isArray(posData)) setPos(posData);
+      if (Array.isArray(custData)) setCustomers(custData);
+      if (Array.isArray(prodData)) setProducts(prodData);
+    })
+    .finally(() => setLoading(false));
   }, []);
 
   const handleOpenAdd = () => {
@@ -237,13 +170,12 @@ export default function POsPage() {
 
     try {
       const method = editingPo ? 'PATCH' : 'POST';
-      const url = editingPo
-        ? `${getApiBaseUrl()}/customer-pos/${editingPo.id}`
-        : `${getApiBaseUrl()}/customer-pos`;
+      const endpoint = editingPo
+        ? `/customer-pos/${editingPo.id}`
+        : `/customer-pos`;
 
-      const res = await fetch(url, {
+      const res = await fetchApi(endpoint, {
         method,
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
           orderQty: Number(formData.orderQty),
@@ -269,79 +201,30 @@ export default function POsPage() {
         }
         setIsAddModalOpen(false);
       } else {
-        if (editingPo) {
-          setPos(
-            pos.map((p) =>
-              p.id === editingPo.id
-                ? {
-                    ...p,
-                    ...formData,
-                    orderQty: Number(formData.orderQty),
-                    customer: selectedCust ? { companyName: selectedCust.companyName, code: selectedCust.code } : p.customer,
-                    product: selectedProd ? { name: selectedProd.name, code: selectedProd.code, specCardNo: selectedProd.specCardNo, pcbSize: selectedProd.pcbSize, layers: selectedProd.layers } : p.product,
-                  }
-                : p
-            )
-          );
-        } else {
-          const newPo: CustomerPO = {
-            id: String(Date.now()),
-            ...formData,
-            orderQty: Number(formData.orderQty),
-            customer: selectedCust ? { companyName: selectedCust.companyName, code: selectedCust.code } : { companyName: 'Customer', code: 'CUST' },
-            product: selectedProd ? { name: selectedProd.name, code: selectedProd.code, specCardNo: selectedProd.specCardNo, pcbSize: selectedProd.pcbSize, layers: selectedProd.layers } : { name: 'Product', code: 'PROD', specCardNo: 'D000', pcbSize: '100x100mm', layers: 2 },
-            jobCards: [],
-          };
-          setPos([newPo, ...pos]);
-        }
-        setIsAddModalOpen(false);
-        setSuccessMsg(`PO "${formData.poNo}" saved`);
+        const errData = await res.json().catch(() => ({}));
+        setErrorMsg(errData.message || 'Failed to save Customer PO to database');
       }
     } catch {
-      const selectedCust = customers.find((c) => c.id === formData.customerId);
-      const selectedProd = products.find((p) => p.id === formData.productId);
-
-      if (editingPo) {
-        setPos(
-          pos.map((p) =>
-            p.id === editingPo.id
-              ? {
-                  ...p,
-                  ...formData,
-                  orderQty: Number(formData.orderQty),
-                  customer: selectedCust ? { companyName: selectedCust.companyName, code: selectedCust.code } : p.customer,
-                  product: selectedProd ? { name: selectedProd.name, code: selectedProd.code, specCardNo: selectedProd.specCardNo, pcbSize: selectedProd.pcbSize, layers: selectedProd.layers } : p.product,
-                }
-              : p
-          )
-        );
-      } else {
-        const newPo: CustomerPO = {
-          id: String(Date.now()),
-          ...formData,
-          orderQty: Number(formData.orderQty),
-          customer: selectedCust ? { companyName: selectedCust.companyName, code: selectedCust.code } : { companyName: 'Customer', code: 'CUST' },
-          product: selectedProd ? { name: selectedProd.name, code: selectedProd.code, specCardNo: selectedProd.specCardNo, pcbSize: selectedProd.pcbSize, layers: selectedProd.layers } : { name: 'Product', code: 'PROD', specCardNo: 'D000', pcbSize: '100x100mm', layers: 2 },
-          jobCards: [],
-        };
-        setPos([newPo, ...pos]);
-      }
-      setIsAddModalOpen(false);
-      setSuccessMsg(`PO "${formData.poNo}" saved`);
+      setErrorMsg('Server communication error. Please verify database connection.');
     }
   };
 
   const handleStatusChange = async (poId: string, newStatus: string) => {
     try {
-      await fetch(`${getApiBaseUrl()}/customer-pos/${poId}/status`, {
+      const res = await fetchApi(`/customer-pos/${poId}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
-    } catch (e) {}
-
-    setPos(pos.map((p) => (p.id === poId ? { ...p, status: newStatus as any } : p)));
-    setSuccessMsg(`Order status updated to ${newStatus}`);
+      if (res.ok) {
+        setPos(pos.map((p) => (p.id === poId ? { ...p, status: newStatus as any } : p)));
+        setSuccessMsg(`Order status updated to ${newStatus}`);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setErrorMsg(errData.message || 'Failed to update order status');
+      }
+    } catch (e) {
+      setErrorMsg('Could not update status on server');
+    }
   };
 
   // Filtered list

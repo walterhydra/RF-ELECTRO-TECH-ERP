@@ -3,60 +3,7 @@
 import React from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Bell, Wifi, Search, ChevronDown, LogOut, User, Loader2, Menu } from 'lucide-react';
-import { getApiBaseUrl } from '@/lib/utils';
-
-const MOCK_SEARCH_DB = [
-  { type: 'Job Card', id: 'JC-4021', title: 'Mainboard Assembly', status: 'WIP', url: '/job-cards/4021' },
-  { type: 'Job Card', id: 'JC-4022', title: 'LED Panel Testing', status: 'DONE', url: '/job-cards/4022' },
-  { type: 'Job Card', id: 'JC-4050', title: 'Power Supply Unit', status: 'PENDING', url: '/job-cards/4050' },
-  { type: 'Purchase Order', id: 'PO-9921', title: 'Global Tech Pvt Ltd', status: 'APPROVED', url: '/purchase-orders/9921' },
-  { type: 'Purchase Order', id: 'PO-9922', title: 'Electro Components Inc', status: 'DRAFT', url: '/purchase-orders/9922' },
-  { type: 'Spec Card', id: 'SC-101', title: 'Standard PCB Specs', status: 'ACTIVE', url: '/spec-cards/101' },
-  { type: 'Spec Card', id: 'SC-105', title: 'High Voltage Board', status: 'REVIEW', url: '/spec-cards/105' },
-  { type: 'User', id: 'USR-01', title: 'Rajesh Kumar (Production)', status: 'ACTIVE', url: '/profile' },
-];
-
-function levenshteinDistance(s: string, t: string) {
-  if (!s.length) return t.length;
-  if (!t.length) return s.length;
-  const arr = [];
-  for (let i = 0; i <= t.length; i++) {
-    arr[i] = [i];
-    for (let j = 1; j <= s.length; j++) {
-      arr[i][j] = i === 0 ? j : Math.min(
-        arr[i - 1][j] + 1,
-        arr[i][j - 1] + 1,
-        arr[i - 1][j - 1] + (s[j - 1] === t[i - 1] ? 0 : 1)
-      );
-    }
-  }
-  return arr[t.length][s.length];
-}
-
-function getSearchResults(query: string) {
-  if (!query || query.trim() === '') return [];
-  const lowerQuery = query.toLowerCase().trim();
-
-  // First try direct includes (substring match)
-  let results = MOCK_SEARCH_DB.filter(item =>
-    item.id.toLowerCase().includes(lowerQuery) ||
-    item.title.toLowerCase().includes(lowerQuery) ||
-    item.type.toLowerCase().includes(lowerQuery)
-  );
-
-  // If no direct match, try fuzzy match (spelling mistakes)
-  if (results.length === 0) {
-    const fuzzyResults = MOCK_SEARCH_DB.map(item => {
-      const distId = levenshteinDistance(lowerQuery, item.id.toLowerCase());
-      const distTitle = levenshteinDistance(lowerQuery, item.title.toLowerCase());
-      const distType = levenshteinDistance(lowerQuery, item.type.toLowerCase());
-      return { ...item, dist: Math.min(distId, distTitle, distType) };
-    });
-    // Threshold for typo: up to 4 mistakes
-    results = fuzzyResults.filter(item => item.dist <= 4).sort((a, b) => a.dist - b.dist);
-  }
-  return results.slice(0, 5); // Return top 5
-}
+import { getApiBaseUrl, fetchApi } from '@/lib/utils';
 
 export const Header: React.FC = () => {
   const pathname = usePathname();
@@ -89,11 +36,60 @@ export const Header: React.FC = () => {
       clearTimeout(searchTimeoutRef.current);
     }
 
-    // Simulate network delay of 800ms
-    searchTimeoutRef.current = setTimeout(() => {
-      setSearchResults(getSearchResults(val));
-      setIsLoading(false);
-    }, 800);
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const queryTerm = encodeURIComponent(val.trim());
+        const [jobRes, poRes, prodRes] = await Promise.all([
+          fetchApi(`/job-cards?search=${queryTerm}`).then(r => r.ok ? r.json() : []).catch(() => []),
+          fetchApi(`/customer-pos?search=${queryTerm}`).then(r => r.ok ? r.json() : []).catch(() => []),
+          fetchApi(`/products?search=${queryTerm}`).then(r => r.ok ? r.json() : []).catch(() => []),
+        ]);
+
+        const combined: any[] = [];
+
+        if (Array.isArray(jobRes)) {
+          jobRes.slice(0, 3).forEach((jc: any) => {
+            combined.push({
+              type: 'Job Card',
+              id: jc.jobCardNo,
+              title: jc.product?.name || jc.product?.code || 'Job Card',
+              status: jc.status,
+              url: `/job-cards/${jc.id}`,
+            });
+          });
+        }
+
+        if (Array.isArray(poRes)) {
+          poRes.slice(0, 3).forEach((po: any) => {
+            combined.push({
+              type: 'Customer PO',
+              id: po.poNo,
+              title: po.customer?.companyName || po.product?.name || 'Customer PO',
+              status: po.status,
+              url: `/pos`,
+            });
+          });
+        }
+
+        if (Array.isArray(prodRes)) {
+          prodRes.slice(0, 3).forEach((p: any) => {
+            combined.push({
+              type: 'Spec Card',
+              id: p.specCardNo || p.code,
+              title: p.name,
+              status: p.isActive ? 'ACTIVE' : 'INACTIVE',
+              url: `/products`,
+            });
+          });
+        }
+
+        setSearchResults(combined);
+      } catch (err) {
+        console.error('Header search error:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    }, 250);
   };
 
   React.useEffect(() => {
@@ -130,6 +126,8 @@ export const Header: React.FC = () => {
     localStorage.removeItem('isAuthenticated');
     localStorage.removeItem('userRole');
     localStorage.removeItem('userEmail');
+    localStorage.removeItem('userId');
+    localStorage.removeItem('userName');
     localStorage.removeItem('token');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('assignedStage');

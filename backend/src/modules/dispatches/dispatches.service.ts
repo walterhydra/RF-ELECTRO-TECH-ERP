@@ -82,14 +82,14 @@ export class DispatchesService {
     const updated = await this.prisma.dispatch.update({
       where: { id },
       data: {
-        deliveryStatus: data.deliveryStatus,
-        deliveryPhotoUrl: data.deliveryPhotoUrl,
-        deliveredByName: data.deliveredByName,
-        deliveredAt: data.deliveryStatus === 'DELIVERED' ? new Date() : null,
-        receiverName: data.receiverName,
-        receiverMobile: data.receiverMobile,
-        deliveryRemarks: data.deliveryRemarks,
-        failureReason: data.failureReason,
+        deliveryStatus: data.deliveryStatus || 'DELIVERED',
+        deliveryPhotoUrl: data.deliveryPhotoUrl !== undefined ? data.deliveryPhotoUrl : dispatch.deliveryPhotoUrl,
+        deliveredByName: data.deliveredByName || dispatch.deliveredByName,
+        deliveredAt: (data.deliveryStatus === 'DELIVERED' || !data.deliveryStatus) ? (dispatch.deliveredAt || new Date()) : null,
+        receiverName: data.receiverName !== undefined ? data.receiverName : dispatch.receiverName,
+        receiverMobile: data.receiverMobile !== undefined ? data.receiverMobile : dispatch.receiverMobile,
+        deliveryRemarks: data.deliveryRemarks !== undefined ? data.deliveryRemarks : dispatch.deliveryRemarks,
+        failureReason: data.failureReason !== undefined ? data.failureReason : dispatch.failureReason,
       }
     });
 
@@ -126,11 +126,47 @@ export class DispatchesService {
   async getAllDispatches() {
     return this.prisma.dispatch.findMany({
       include: {
+        createdBy: {
+          select: { name: true, email: true }
+        },
         jobCard: {
-          select: { jobCardNo: true, product: { select: { name: true } }, customerPO: { select: { customer: { select: { companyName: true } } } } }
+          include: {
+            product: true,
+            customerPO: {
+              include: { customer: true }
+            }
+          }
         }
       },
       orderBy: { createdAt: 'desc' }
     });
+  }
+
+  async getDispatchById(id: string) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const dispatch = await this.prisma.dispatch.findFirst({
+      where: isUuid ? { id } : { dispatchNo: id },
+      include: {
+        createdBy: {
+          select: { name: true, email: true }
+        },
+        jobCard: {
+          include: {
+            product: true,
+            customerPO: {
+              include: { customer: true }
+            },
+            subJobCards: true,
+            processFlowMaster: true
+          }
+        }
+      }
+    });
+
+    if (!dispatch) {
+      throw new NotFoundException(`Dispatch record '${id}' not found`);
+    }
+
+    return dispatch;
   }
 }

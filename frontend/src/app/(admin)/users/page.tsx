@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getApiBaseUrl } from '@/lib/utils';
+import { getApiBaseUrl, fetchApi } from '@/lib/utils';
 import { 
   Users, 
   ShieldCheck, 
@@ -20,7 +20,8 @@ import {
   Cpu,
   HardHat,
   UserCheck,
-  Building2
+  Building2,
+  RefreshCw
 } from 'lucide-react';
 
 interface User {
@@ -34,64 +35,6 @@ interface User {
   assignedStages?: string[];
   isActive: boolean;
 }
-
-const INITIAL_USERS: User[] = [
-  {
-    id: '1',
-    email: 'admin@rfelectro.com',
-    firstName: 'System',
-    lastName: 'Administrator',
-    role: 'SUPER_ADMIN',
-    department: 'Management',
-    phone: '+91 98000 00001',
-    assignedStages: ['All Stages (System Wide)'],
-    isActive: true,
-  },
-  {
-    id: '2',
-    email: 'ramesh@rfelectro.com',
-    firstName: 'Ramesh',
-    lastName: 'Kulkarni',
-    role: 'CAM_ENGINEER',
-    department: 'Engineering',
-    phone: '+91 98000 00002',
-    assignedStages: ['CAM & Gerber Verification'],
-    isActive: true,
-  },
-  {
-    id: '3',
-    email: 'suresh@rfelectro.com',
-    firstName: 'Suresh',
-    lastName: 'Patel',
-    role: 'PROCESS_OPERATOR',
-    department: 'Wet Processing',
-    phone: '+91 98000 00003',
-    assignedStages: ['Electroless Copper / Plating', 'Dry Film Imaging & Etching'],
-    isActive: true,
-  },
-  {
-    id: '4',
-    email: 'amit@rfelectro.com',
-    firstName: 'Amit',
-    lastName: 'Verma',
-    role: 'PROCESS_OPERATOR',
-    department: 'Mechanical',
-    phone: '+91 98000 00004',
-    assignedStages: ['CNC Material Cutting', 'CNC Drilling & Routing', 'Final CNC Routing & V-Scored Profiling'],
-    isActive: true,
-  },
-  {
-    id: '5',
-    email: 'deepa@rfelectro.com',
-    firstName: 'Deepa',
-    lastName: 'Nair',
-    role: 'QA_QC_ENGINEER',
-    department: 'Quality Assurance',
-    phone: '+91 98000 00005',
-    assignedStages: ['AOI (Automated Optical Inspection)', 'Electrical Testing (E-Test)', 'Final QC & Vacuum Packaging'],
-    isActive: true,
-  },
-];
 
 const AVAILABLE_STAGES = [
   'CAM & Gerber Verification',
@@ -147,7 +90,8 @@ const getStageBadgeStyle = (stage: string) => {
 };
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -166,10 +110,11 @@ export default function UsersPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetch(`${getApiBaseUrl()}/users`)
-      .then((res) => res.json())
+    setLoading(true);
+    fetchApi('/users')
+      .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           setUsers(
             data.map((u: any) => ({
               ...u,
@@ -178,7 +123,8 @@ export default function UsersPage() {
           );
         }
       })
-      .catch(() => {});
+      .catch((err) => console.warn('Users fetch error:', err))
+      .finally(() => setLoading(false));
   }, []);
 
   // Filtered list
@@ -264,13 +210,12 @@ export default function UsersPage() {
 
     try {
       const method = editingUser ? 'PATCH' : 'POST';
-      const url = editingUser
-        ? `${getApiBaseUrl()}/users/${editingUser.id}`
-        : `${getApiBaseUrl()}/users`;
+      const endpoint = editingUser
+        ? `/users/${editingUser.id}`
+        : `/users`;
 
-      const res = await fetch(url, {
+      const res = await fetchApi(endpoint, {
         method,
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
 
@@ -284,28 +229,17 @@ export default function UsersPage() {
         }
         setIsModalOpen(false);
       } else {
-        if (editingUser) {
-          setUsers(users.map((u) => (u.id === editingUser.id ? { ...u, ...formData } : u)));
-        } else {
-          const newUser: User = { id: String(Date.now()), ...formData };
-          setUsers([newUser, ...users]);
-        }
-        setIsModalOpen(false);
+        const errData = await res.json().catch(() => ({}));
+        setError(errData.message || 'Failed to save staff user to database');
       }
     } catch {
-      if (editingUser) {
-        setUsers(users.map((u) => (u.id === editingUser.id ? { ...u, ...formData } : u)));
-      } else {
-        const newUser: User = { id: String(Date.now()), ...formData };
-        setUsers([newUser, ...users]);
-      }
-      setIsModalOpen(false);
+      setError('Communication error with server. Please verify connection.');
     }
   };
 
   const toggleStatus = async (id: string) => {
     try {
-      await fetch(`${getApiBaseUrl()}/users/${id}/status`, { method: 'PATCH' });
+      await fetchApi(`/users/${id}/status`, { method: 'PATCH' });
     } catch {}
     setUsers(users.map((u) => (u.id === id ? { ...u, isActive: !u.isActive } : u)));
   };

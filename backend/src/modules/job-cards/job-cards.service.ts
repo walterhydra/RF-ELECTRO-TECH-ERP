@@ -186,7 +186,7 @@ export class JobCardsService {
     // Auto-correct sub-job card PCB quantities & calculate rejection logs in memory
     for (const jc of jobCards) {
       if (jc.subJobCards && jc.subJobCards.length > 0) {
-        const masterPcbQty = jc.totalPcbQty || (jc.custPnlQty && jc.custPnlQty > 50 ? jc.custPnlQty : (jc.prodPnlQty ? jc.prodPnlQty * 4 : 160));
+        const masterPcbQty = Number(jc.totalPcbQty || jc.custPnlQty || (jc.prodPnlQty ? jc.prodPnlQty * 4 : 0));
 
         jc.subJobCards.forEach((sub, subIdx) => {
           const subPcbQty = (sub.totalPcbQty && sub.totalPcbQty > 0) ? sub.totalPcbQty : (sub.qty && sub.qty > 0 ? sub.qty : masterPcbQty);
@@ -996,6 +996,16 @@ export class JobCardsService {
     if (createdById) {
       validUser = await this.prisma.user.findUnique({ where: { id: createdById } }).catch(() => null);
     }
+    if (!validUser && (data?.userId || data?.userEmail)) {
+      validUser = await this.prisma.user.findFirst({
+        where: {
+          OR: [
+            ...(data?.userId ? [{ id: data.userId }] : []),
+            ...(data?.userEmail ? [{ email: data.userEmail }] : []),
+          ],
+        },
+      }).catch(() => null);
+    }
     const finalUserId = validUser ? validUser.id : deps.defaultUser.id;
 
     // Generate sequential jobCardNo if not provided
@@ -1128,7 +1138,30 @@ export class JobCardsService {
     }
 
     if (!product) {
-      product = deps.product || (await this.prisma.product.findFirst());
+      const partName = data.customerPartNo?.trim() || `JC-${jobCardNo}`;
+      const specNo = data.rfePartCode?.trim() || `SPEC-${jobCardNo}`;
+      try {
+        product = await this.prisma.product.create({
+          data: {
+            specCardNo: specNo,
+            revisionNo: 'Rev-00',
+            name: partName,
+            code: data.customerPartNo?.trim() || partName,
+            layers: Number(data.layers) || 2,
+            thicknessMm: data.thicknessMm ? Number(data.thicknessMm) : null,
+            copperWeight: data.copperWeight ? String(data.copperWeight) : null,
+            surfaceFinish: data.surfaceFinish ? String(data.surfaceFinish) : null,
+            solderMask: data.solderMask ? String(data.solderMask) : null,
+            legend: data.legend ? String(data.legend) : null,
+            materialType: data.materialType ? String(data.materialType) : null,
+            pcbSize: data.pcbSize ? String(data.pcbSize) : null,
+            processFlowId: processFlow?.id || deps.processFlow?.id,
+            createdById: finalUserId,
+          },
+        });
+      } catch {
+        product = deps.product || (await this.prisma.product.findFirst());
+      }
     }
 
     let customerPO: any = null;
@@ -1154,7 +1187,7 @@ export class JobCardsService {
             poNo: generatedPoNo,
             customerId: customer.id,
             productId: product ? product.id : deps.product.id,
-            orderQty: Number(data.totalPcbQty) || 100,
+            orderQty: Number(data.totalPcbQty) || 0,
             poDate: new Date(),
             expectedDeliveryDate: safeDeliveryDate,
             createdById: finalUserId,
@@ -1189,18 +1222,18 @@ export class JobCardsService {
           customerPoId: fallbackPo.id,
           productId: fallbackProduct.id,
           processFlowMasterId: fallbackFlow.id,
-          totalQty: Number(data.prodPnlQty) || 40,
+          totalQty: Number(data.prodPnlQty) || Number(data.totalPcbQty) || 0,
           photoUrl: data.photoUrl || null,
           customerPartNo: data.customerPartNo || '',
           rfePartCode: data.rfePartCode || '',
           customerCode: data.customerCode || '',
           targetDate: safeTargetDate,
           priority: data.priority || 'NORMAL',
-          prodPnlQty: Number(data.prodPnlQty) || 40,
-          custPnlQty: Number(data.custPnlQty) || 80,
-          totalPcbQty: Number(data.totalPcbQty) || 160,
-          prodPnlAreaSqm: Number(data.prodPnlAreaSqm) || 50,
-          custPnlAreaSqm: Number(data.custPnlAreaSqm) || 45,
+          prodPnlQty: Number(data.prodPnlQty) || 0,
+          custPnlQty: Number(data.custPnlQty) || 0,
+          totalPcbQty: Number(data.totalPcbQty) || 0,
+          prodPnlAreaSqm: Number(data.prodPnlAreaSqm) || 0,
+          custPnlAreaSqm: Number(data.custPnlAreaSqm) || 0,
           status: data.autoLaunch ? JobCardStatus.IN_PROGRESS : JobCardStatus.CREATED,
           launchedAt: safeLaunchedAt,
           qrCodeValue,
@@ -1229,7 +1262,7 @@ export class JobCardsService {
         }
       }
 
-      const totalMasterPcb = Number(data.totalPcbQty) || 160;
+      const totalMasterPcb = Number(data.totalPcbQty) || 0;
       const rawSplits = Array.isArray(data.splits) ? data.splits : [];
       if (rawSplits.length > 0) {
         for (let i = 0; i < rawSplits.length; i++) {
@@ -1246,7 +1279,7 @@ export class JobCardsService {
                 qty: subQty,
                 totalPcbQty: subQty,
                 custPnlQty: subQty,
-                prodPnlQty: Math.ceil(subQty / 4),
+                prodPnlQty: subQty > 0 ? Math.ceil(subQty / 4) : 0,
                 prodPnlAreaSqm: data.prodPnlAreaSqm ? Number((Number(data.prodPnlAreaSqm) * ratio).toFixed(2)) : null,
                 custPnlAreaSqm: data.custPnlAreaSqm ? Number((Number(data.custPnlAreaSqm) * ratio).toFixed(2)) : null,
                 status: data.autoLaunch ? SubJobCardStatus.IN_STAGE : SubJobCardStatus.PENDING_LAUNCH,
@@ -1269,9 +1302,9 @@ export class JobCardsService {
               qty: totalMasterPcb,
               totalPcbQty: totalMasterPcb,
               custPnlQty: totalMasterPcb,
-              prodPnlQty: Number(data.prodPnlQty) || Math.ceil(totalMasterPcb / 4),
-              prodPnlAreaSqm: Number(data.prodPnlAreaSqm) || 50,
-              custPnlAreaSqm: Number(data.custPnlAreaSqm) || 45,
+              prodPnlQty: Number(data.prodPnlQty) || (totalMasterPcb > 0 ? Math.ceil(totalMasterPcb / 4) : 0),
+              prodPnlAreaSqm: Number(data.prodPnlAreaSqm) || Number(data.custPnlAreaSqm) || 0,
+              custPnlAreaSqm: Number(data.custPnlAreaSqm) || 0,
               status: data.autoLaunch ? SubJobCardStatus.IN_STAGE : SubJobCardStatus.PENDING_LAUNCH,
               currentStageId: initialStageId,
               qrCodeValue: `RFE-SJC-${subJobCardNo}-${Date.now().toString().slice(-4)}`,
@@ -1317,7 +1350,7 @@ export class JobCardsService {
     return this.findOne(existing.id);
   }
 
-  async launchJobCard(id: string) {
+  async launchJobCard(id: string, user?: any, body?: any) {
     let jobCard: any = null;
     try {
       jobCard = await this.findOne(id);
@@ -1383,13 +1416,15 @@ export class JobCardsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      let launchSubCardId: string | null = null;
+      const fullPcbQty = Number(jobCard.totalPcbQty || jobCard.totalQty || 0);
+
       if (!jobCard.subJobCards || jobCard.subJobCards.length === 0) {
         // Auto-create 1 single sub-job card for the full quantity
         const subJobCardNo = `${jobCard.jobCardNo}-1`;
         const qrCodeValue = `RFE-SJC-${subJobCardNo}-${Date.now().toString().slice(-4)}`;
-        const fullPcbQty = jobCard.totalPcbQty || jobCard.totalQty || 160;
 
-        await tx.subJobCard.create({
+        const createdSub = await tx.subJobCard.create({
           data: {
             subJobCardNo,
             jobCardId: realJobCardId,
@@ -1403,6 +1438,7 @@ export class JobCardsService {
             createdById: jobCard.createdById,
           },
         });
+        launchSubCardId = createdSub.id;
       } else {
         // Move all pending sub job cards to IN_STAGE at stage 1
         await tx.subJobCard.updateMany({
@@ -1410,6 +1446,52 @@ export class JobCardsService {
           data: {
             status: SubJobCardStatus.IN_STAGE,
             currentStageId: firstStageId,
+          },
+        });
+        launchSubCardId = jobCard.subJobCards[0]?.id || null;
+      }
+
+      let effectiveUser = user;
+      const targetUserId = user?.id || user?.sub || user?.userId || body?.userId;
+      const targetEmail = user?.email || body?.userEmail;
+
+      if (targetUserId || targetEmail) {
+        const dbUser = await tx.user.findFirst({
+          where: {
+            OR: [
+              ...(targetUserId ? [{ id: targetUserId }] : []),
+              ...(targetEmail ? [{ email: targetEmail }] : []),
+            ],
+          },
+          include: { role: true, department: true },
+        });
+        if (dbUser) {
+          effectiveUser = {
+            ...dbUser,
+            sub: dbUser.id,
+            roleName: dbUser.role?.name,
+            departmentName: dbUser.department?.name,
+          };
+        }
+      }
+
+      const launchUserId = effectiveUser?.id || targetUserId || jobCard.createdById;
+      const operatorName = effectiveUser?.name || user?.name || 'Production Planner / Admin';
+      const roleName = effectiveUser?.role?.name || effectiveUser?.role || user?.role?.name || user?.role || 'Admin';
+
+      if (launchSubCardId && launchUserId) {
+        await tx.stageMovementLog.create({
+          data: {
+            subJobCardId: launchSubCardId,
+            stageId: firstStageId,
+            qtyReceived: fullPcbQty,
+            qtyProcessed: fullPcbQty,
+            qtyForwarded: fullPcbQty,
+            qtyRejected: 0,
+            qtyHold: 0,
+            remarkType: 'INITIAL_LAUNCH',
+            remarks: `Job Card released to shop floor by ${operatorName} (${roleName})`,
+            createdById: launchUserId,
           },
         });
       }
@@ -1506,11 +1588,24 @@ export class JobCardsService {
     const cleanNo = rawId.replace(/^jc-/, '');
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId);
 
+    const userInclude = {
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: { select: { name: true } },
+        department: { select: { name: true } },
+      },
+    };
+
     let jobCard: any = null;
     if (isUuid) {
       jobCard = await this.prisma.jobCard.findUnique({
         where: { id: rawId },
-        include: { subJobCards: { include: { currentStage: true } } },
+        include: {
+          subJobCards: { include: { currentStage: true } },
+          createdBy: userInclude,
+        },
       }).catch(() => null);
     }
     if (!jobCard) {
@@ -1523,7 +1618,10 @@ export class JobCardsService {
             ...(isUuid ? [{ id: rawId }] : []),
           ],
         },
-        include: { subJobCards: { include: { currentStage: true } } },
+        include: {
+          subJobCards: { include: { currentStage: true } },
+          createdBy: userInclude,
+        },
       }).catch(() => null);
     }
 
@@ -1536,7 +1634,14 @@ export class JobCardsService {
             ...(isUuid ? [{ id: rawId }] : []),
           ],
         },
-        include: { jobCard: { include: { subJobCards: { include: { currentStage: true } } } } },
+        include: {
+          jobCard: {
+            include: {
+              subJobCards: { include: { currentStage: true } },
+              createdBy: userInclude,
+            },
+          },
+        },
       }).catch(() => null);
       if (subCard && subCard.jobCard) {
         jobCard = subCard.jobCard;
@@ -1559,15 +1664,7 @@ export class JobCardsService {
       },
       include: {
         stage: true,
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: { select: { name: true } },
-            department: { select: { name: true } },
-          },
-        },
+        createdBy: userInclude,
         subJobCard: {
           select: { id: true, subJobCardNo: true, currentStageId: true },
         },
@@ -1591,14 +1688,14 @@ export class JobCardsService {
         subJobCard: { subJobCardNo: jobCard.jobCardNo },
         stage: { name: '20. PACKING (COMPLETED)' },
         stageName: '20. PACKING (COMPLETED)',
-        qtyReceived: jobCard.totalPcbQty || jobCard.totalQty || 160,
-        qtyForwarded: jobCard.totalPcbQty || jobCard.totalQty || 160,
-        qtyProcessed: jobCard.totalPcbQty || jobCard.totalQty || 160,
+        qtyReceived: Number(jobCard.totalPcbQty || jobCard.totalQty || 0),
+        qtyForwarded: Number(jobCard.totalPcbQty || jobCard.totalQty || 0),
+        qtyProcessed: Number(jobCard.totalPcbQty || jobCard.totalQty || 0),
         qtyRejected: 0,
         qtyHold: 0,
         remarkType: 'JOB_COMPLETED',
-        remarks: `Job Card Completed: Manufacturing workflow finished successfully and released for dispatch (${jobCard.totalPcbQty || 160} PCBs)`,
-        createdBy: {
+        remarks: `Job Card Completed: Manufacturing workflow finished successfully and released for dispatch (${Number(jobCard.totalPcbQty || 0)} PCBs)`,
+        createdBy: jobCard.createdBy || {
           id: 'system',
           name: 'Production Floor / Admin',
           email: 'admin@rfelectrotech.com',
@@ -1608,21 +1705,24 @@ export class JobCardsService {
       });
     }
 
-    // 2. If no logs exist yet, provide Initial Launch Log entry
-    if (formattedLogs.length === 0) {
+    // 2. Ensure initial launch entry exists as the foundational record of the Job Card lifecycle
+    const hasLaunchEvent = formattedLogs.some((l) => l.remarkType === 'INITIAL_LAUNCH');
+    if (!hasLaunchEvent && (jobCard.launchedAt || jobCard.createdAt)) {
+      const totalQty = jobCard.totalPcbQty || jobCard.totalQty || 0;
       formattedLogs.push({
         id: `initial-launch-${jobCard.id}`,
-        createdAt: jobCard.launchedAt || jobCard.createdAt || new Date(),
+        createdAt: jobCard.launchedAt || jobCard.createdAt,
         subJobCard: { subJobCardNo: jobCard.jobCardNo },
         stage: { name: '1. SHEARING (INITIAL LAUNCH)' },
-        qtyReceived: jobCard.totalPcbQty || jobCard.totalQty || 160,
-        qtyForwarded: jobCard.totalPcbQty || jobCard.totalQty || 160,
-        qtyProcessed: jobCard.totalPcbQty || jobCard.totalQty || 160,
+        stageName: '1. SHEARING (INITIAL LAUNCH)',
+        qtyReceived: totalQty,
+        qtyForwarded: totalQty,
+        qtyProcessed: totalQty,
         qtyRejected: 0,
         qtyHold: 0,
         remarkType: 'INITIAL_LAUNCH',
         remarks: 'Job Card released to shop floor for production launch',
-        createdBy: {
+        createdBy: jobCard.createdBy || {
           id: jobCard.createdById || 'planner',
           name: 'Production Planner',
           email: 'planner@rfelectrotech.com',
@@ -2058,8 +2158,33 @@ export class JobCardsService {
       return this.updateStatus(jobCardId, JobCardStatus.COMPLETED);
     }
 
+    let effectiveUser = user;
+    const targetUserId = user?.id || user?.sub || user?.userId || body?.userId;
+    const targetEmail = user?.email || body?.userEmail;
+
+    if (targetUserId || targetEmail) {
+      const dbUser = await this.prisma.user.findFirst({
+        where: {
+          OR: [
+            ...(targetUserId ? [{ id: targetUserId }] : []),
+            ...(targetEmail ? [{ email: targetEmail }] : []),
+          ],
+        },
+        include: { role: true, department: true, assignedStage: true },
+      });
+      if (dbUser) {
+        effectiveUser = {
+          ...dbUser,
+          sub: dbUser.id,
+          roleName: dbUser.role?.name,
+          departmentName: dbUser.department?.name,
+          assignedStageName: dbUser.assignedStage?.name,
+        };
+      }
+    }
+
     // ENFORCE STAGE-WISE USER ACCESS RIGHT AT BACKEND / API LEVEL
-    this.validateUserStagePermission(user, subCard.currentStage);
+    this.validateUserStagePermission(effectiveUser, subCard.currentStage);
 
     let currentStage = subCard.currentStage;
     if (!currentStage && subCard.currentStageId) {
@@ -2070,9 +2195,9 @@ export class JobCardsService {
     const flowSteps = subCard.jobCard?.processFlowMaster?.steps || [];
     const { targetNextStageId, isLastStage } = await this.getNextProcessStage(currentStage, flowSteps);
 
-    const userId = user?.id || user?.sub || user?.userId || subCard.createdById;
+    const userId = effectiveUser?.id || targetUserId || subCard.createdById;
     const rejectPcb = Math.max(0, Number(body.rejectPcbQty || body.rejectQty) || 0);
-    const currentPcb = subCard.totalPcbQty || subCard.qty || 160;
+    const currentPcb = Number(subCard.totalPcbQty || subCard.qty || 0);
     const currentArea = subCard.custPnlAreaSqm || subCard.prodPnlAreaSqm || 0;
 
     if (rejectPcb > currentPcb) {
@@ -2376,7 +2501,7 @@ export class JobCardsService {
       }
 
       if (!subCard) {
-        const fullQty = jc.totalPcbQty || jc.custPnlQty || 160;
+        const fullQty = Number(jc.totalPcbQty || jc.custPnlQty || 0);
         const firstStage = await this.prisma.processStage.findFirst({ orderBy: { defaultOrder: 'asc' } });
         subCard = (await this.prisma.subJobCard.create({
           data: {
@@ -2385,9 +2510,9 @@ export class JobCardsService {
             qty: fullQty,
             totalPcbQty: fullQty,
             custPnlQty: fullQty,
-            prodPnlQty: Math.ceil(fullQty / 4),
-            custPnlAreaSqm: jc.custPnlAreaSqm || 45,
-            prodPnlAreaSqm: jc.prodPnlAreaSqm || 50,
+            prodPnlQty: fullQty > 0 ? Math.ceil(fullQty / 4) : 0,
+            custPnlAreaSqm: jc.custPnlAreaSqm || 0,
+            prodPnlAreaSqm: jc.prodPnlAreaSqm || jc.custPnlAreaSqm || 0,
             status: SubJobCardStatus.IN_STAGE,
             currentStageId: firstStage?.id || null,
             qrCodeValue: `RFE-SJC-${jc.jobCardNo}-1-${Date.now().toString().slice(-4)}`,
@@ -2400,11 +2525,36 @@ export class JobCardsService {
       jobCardId = subCard.jobCardId;
     }
 
+    let effectiveUser = user;
+    const targetUserId = user?.id || user?.sub || user?.userId || body?.userId;
+    const targetEmail = user?.email || body?.userEmail;
+
+    if (targetUserId || targetEmail) {
+      const dbUser = await this.prisma.user.findFirst({
+        where: {
+          OR: [
+            ...(targetUserId ? [{ id: targetUserId }] : []),
+            ...(targetEmail ? [{ email: targetEmail }] : []),
+          ],
+        },
+        include: { role: true, department: true, assignedStage: true },
+      });
+      if (dbUser) {
+        effectiveUser = {
+          ...dbUser,
+          sub: dbUser.id,
+          roleName: dbUser.role?.name,
+          departmentName: dbUser.department?.name,
+          assignedStageName: dbUser.assignedStage?.name,
+        };
+      }
+    }
+
     // ENFORCE STAGE-WISE USER ACCESS RIGHT AT BACKEND / API LEVEL
-    this.validateUserStagePermission(user, subCard.currentStage);
+    this.validateUserStagePermission(effectiveUser, subCard.currentStage);
 
     const qtyToMove = Number(body.qtyToMove);
-    const masterPcbQty = subCard.totalPcbQty || subCard.qty || 160;
+    const masterPcbQty = Number(subCard.totalPcbQty || subCard.qty || 0);
 
     if (isNaN(qtyToMove) || qtyToMove <= 0 || qtyToMove >= masterPcbQty) {
       throw new BadRequestException(
@@ -2433,7 +2583,7 @@ export class JobCardsService {
         : 0;
     const remainingQty = masterPcbQty - qtyToMove;
 
-    const userId = user?.id || user?.sub || user?.userId || subCard.createdById;
+    const userId = effectiveUser?.id || targetUserId || subCard.createdById;
 
     return this.prisma.$transaction(async (tx) => {
       // 1. Log partial movement

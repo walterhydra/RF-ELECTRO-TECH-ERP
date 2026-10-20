@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { getApiBaseUrl } from "@/lib/utils";
+import { getApiBaseUrl, fetchApi } from "@/lib/utils";
 import {
   Cpu,
   Plus,
@@ -61,187 +61,10 @@ interface ProductSpec {
   createdAt?: string;
 }
 
-const INITIAL_FLOWS: ProcessFlowMaster[] = [
-  {
-    id: "flow-1",
-    name: "Standard 10-Stage Multilayer Flow",
-    totalSteps: 10,
-    steps: [
-      {
-        stepOrder: 1,
-        stage: { name: "CAM & Gerber Verification", code: "CAM" },
-      },
-      { stepOrder: 2, stage: { name: "CNC Material Cutting", code: "CUT" } },
-      { stepOrder: 3, stage: { name: "CNC Drilling & Routing", code: "DRL" } },
-      {
-        stepOrder: 4,
-        stage: { name: "Electroless Copper / Plating", code: "PLT" },
-      },
-      {
-        stepOrder: 5,
-        stage: { name: "Dry Film Imaging & Etching", code: "ETCH" },
-      },
-      {
-        stepOrder: 6,
-        stage: { name: "AOI (Automated Optical Inspection)", code: "AOI" },
-      },
-      { stepOrder: 7, stage: { name: "LPI Solder Mask & Curing", code: "SM" } },
-      {
-        stepOrder: 8,
-        stage: { name: "Legend / Component Silkscreen", code: "LEG" },
-      },
-      {
-        stepOrder: 9,
-        stage: { name: "Surface Finish (ENIG / HASL)", code: "FIN" },
-      },
-      {
-        stepOrder: 10,
-        stage: { name: "Final QC & Vacuum Packaging", code: "FQC" },
-      },
-    ],
-  },
-  {
-    id: "flow-2",
-    name: "4-Layer Quick-Turn Routing Flow",
-    totalSteps: 8,
-    steps: [
-      {
-        stepOrder: 1,
-        stage: { name: "CAM & Gerber Verification", code: "CAM" },
-      },
-      { stepOrder: 2, stage: { name: "CNC Material Cutting", code: "CUT" } },
-      { stepOrder: 3, stage: { name: "CNC Drilling & Routing", code: "DRL" } },
-      {
-        stepOrder: 4,
-        stage: { name: "Electroless Copper / Plating", code: "PLT" },
-      },
-      {
-        stepOrder: 5,
-        stage: { name: "Dry Film Imaging & Etching", code: "ETCH" },
-      },
-      {
-        stepOrder: 6,
-        stage: { name: "AOI (Automated Optical Inspection)", code: "AOI" },
-      },
-      { stepOrder: 7, stage: { name: "LPI Solder Mask & Curing", code: "SM" } },
-      {
-        stepOrder: 8,
-        stage: { name: "Final QC & Vacuum Packaging", code: "FQC" },
-      },
-    ],
-  },
-];
-
-const INITIAL_PRODUCTS: ProductSpec[] = [
-  {
-    id: "1",
-    specCardNo: "D001",
-    revisionNo: "Rev-01",
-    isCurrentRevision: true,
-    revisionReason:
-      "Updated impedance control tolerance on internal layer pairs.",
-    name: "Main Motherboard V2 - Industrial Controller",
-    code: "PCB-IND-MB02",
-    customerName: "Apex Electronics Ltd",
-    pcbSize: "180x120 mm",
-    layers: 4,
-    thicknessMm: 1.6,
-    copperWeight: "1oz",
-    solderMask: "Matte Green",
-    legend: "White",
-    surfaceFinish: "ENIG (Immersion Gold)",
-    materialType: "FR4 High-TG (TG 170+)",
-    panelSize: "360x240 mm",
-    qtyPerPanel: 4,
-    specialInstructions:
-      "Impedance controlled traces on Layer 2 & 3. 50 ohm differential pairs.",
-    processFlowId: "flow-1",
-    processFlow: INITIAL_FLOWS[0],
-    isActive: true,
-    createdAt: "2026-06-15T10:00:00Z",
-  },
-  {
-    id: "1-old",
-    specCardNo: "D001",
-    revisionNo: "Rev-00",
-    isCurrentRevision: false,
-    revisionReason: "Initial specification baseline release.",
-    name: "Main Motherboard V1 - Industrial Controller",
-    code: "PCB-IND-MB01",
-    customerName: "Apex Electronics Ltd",
-    pcbSize: "180x120 mm",
-    layers: 4,
-    thicknessMm: 1.6,
-    copperWeight: "1oz",
-    solderMask: "Green",
-    legend: "White",
-    surfaceFinish: "HASL - Lead Free",
-    materialType: "FR4 Standard (TG 130-140)",
-    panelSize: "360x240 mm",
-    qtyPerPanel: 4,
-    specialInstructions: "Standard routing.",
-    processFlowId: "flow-1",
-    processFlow: INITIAL_FLOWS[0],
-    isActive: true,
-    createdAt: "2026-05-10T08:30:00Z",
-  },
-  {
-    id: "2",
-    specCardNo: "D002",
-    revisionNo: "Rev-00",
-    isCurrentRevision: true,
-    revisionReason: "Initial specification creation.",
-    name: "High Power LED Driver Module",
-    code: "PCB-LED-DRV01",
-    customerName: "Zenith Aerospace Systems",
-    pcbSize: "90x45 mm",
-    layers: 2,
-    thicknessMm: 1.2,
-    copperWeight: "2oz",
-    solderMask: "Matte Black",
-    legend: "White",
-    surfaceFinish: "HASL - Lead Free",
-    materialType: "Aluminum Core",
-    panelSize: "270x180 mm",
-    qtyPerPanel: 12,
-    specialInstructions:
-      "High thermal dissipation requirement. Hipot test 1.5kV.",
-    processFlowId: "flow-2",
-    processFlow: INITIAL_FLOWS[1],
-    isActive: true,
-    createdAt: "2026-06-20T14:15:00Z",
-  },
-  {
-    id: "3",
-    specCardNo: "D003",
-    revisionNo: "Rev-00",
-    isCurrentRevision: true,
-    revisionReason: "Initial RF specification.",
-    name: "RF Transceiver Board 5G V1.4",
-    code: "PCB-RF-5G04",
-    customerName: "Orbit Medical Devices",
-    pcbSize: "110x85 mm",
-    layers: 6,
-    thicknessMm: 1.0,
-    copperWeight: "0.5oz",
-    solderMask: "Blue",
-    legend: "Yellow",
-    surfaceFinish: "Immersion Silver",
-    materialType: "Rogers 4350B / High Frequency",
-    panelSize: "220x170 mm",
-    qtyPerPanel: 4,
-    specialInstructions:
-      "Strict dielectric thickness control. No solder mask over RF test points.",
-    processFlowId: "flow-1",
-    processFlow: INITIAL_FLOWS[0],
-    isActive: true,
-    createdAt: "2026-06-25T11:45:00Z",
-  },
-];
-
 export default function ProductsPage() {
-  const [products, setProducts] = useState<ProductSpec[]>(INITIAL_PRODUCTS);
-  const [flows, setFlows] = useState<ProcessFlowMaster[]>(INITIAL_FLOWS);
+  const [products, setProducts] = useState<ProductSpec[]>([]);
+  const [flows, setFlows] = useState<ProcessFlowMaster[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [showArchivedRevs, setShowArchivedRevs] = useState(false);
 
@@ -268,7 +91,7 @@ export default function ProductsPage() {
   const [formData, setFormData] = useState({
     name: "",
     code: "",
-    customerName: "Apex Electronics Ltd",
+    customerName: "",
     pcbSize: "100x100 mm",
     layers: 2,
     thicknessMm: 1.6,
@@ -280,41 +103,37 @@ export default function ProductsPage() {
     panelSize: "200x200 mm",
     qtyPerPanel: 4,
     specialInstructions: "",
-    processFlowId: "flow-1",
+    processFlowId: "",
     isActive: true,
   });
   const [error, setError] = useState("");
 
   useEffect(() => {
-    // Fetch Products
-    fetch(`${getApiBaseUrl()}/products`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
+    setLoading(true);
+    Promise.all([
+      fetchApi('/products').then((res) => (res.ok ? res.json() : [])).catch(() => []),
+      fetchApi('/process-stages/flows').then((res) => (res.ok ? res.json() : [])).catch(() => []),
+    ])
+      .then(([productsData, flowsData]) => {
+        if (Array.isArray(productsData)) {
           setProducts(
-            data.map((item: any) => ({
+            productsData.map((item: any) => ({
               ...item,
               customerName:
                 item.customer?.companyName ||
                 item.customerName ||
-                "Apex Electronics Ltd",
+                "—",
               revisionNo: item.revisionNo || "Rev-00",
               isCurrentRevision: item.isCurrentRevision !== false,
             })),
           );
         }
-      })
-      .catch(() => {});
-
-    // Fetch Process Flows
-    fetch(`${getApiBaseUrl()}/processes/flows`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          setFlows(data);
+        if (Array.isArray(flowsData)) {
+          setFlows(flowsData);
         }
       })
-      .catch(() => {});
+      .catch((err) => console.warn('Products fetch error:', err))
+      .finally(() => setLoading(false));
   }, []);
 
   const handleOpenAdd = () => {
@@ -434,14 +253,13 @@ export default function ProductsPage() {
 
     try {
       const method = editingProduct ? "PATCH" : "POST";
-      const url = editingProduct
-        ? `${getApiBaseUrl()}/products/${editingProduct.id}`
-        : `${getApiBaseUrl()}/products`;
+      const endpoint = editingProduct
+        ? `/products/${editingProduct.id}`
+        : `/products`;
 
-      const res = await fetch(url, {
+      const res = await fetchApi(endpoint, {
         method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...formData, createdById: "user-1" }),
+        body: JSON.stringify(formData),
       });
 
       if (res.ok) {
@@ -460,58 +278,9 @@ export default function ProductsPage() {
           setProducts([formatted, ...products]);
         }
         setIsModalOpen(false);
-      } else {
-        // Fallback state update
-        const foundFlow = flows.find((f) => f.id === formData.processFlowId);
-        if (editingProduct) {
-          setProducts(
-            products.map((p) =>
-              p.id === editingProduct.id
-                ? { ...p, ...formData, processFlow: foundFlow }
-                : p,
-            ),
-          );
-        } else {
-          const nextCard = `D${String(new Set(products.map((p) => p.specCardNo)).size + 1).padStart(3, "0")}`;
-          const newProd: ProductSpec = {
-            id: String(Date.now()),
-            specCardNo: nextCard,
-            revisionNo: "Rev-00",
-            isCurrentRevision: true,
-            revisionReason: "Initial specification creation.",
-            createdAt: new Date().toISOString(),
-            ...formData,
-            processFlow: foundFlow,
-          };
-          setProducts([newProd, ...products]);
-        }
-        setIsModalOpen(false);
       }
-    } catch {
-      const foundFlow = flows.find((f) => f.id === formData.processFlowId);
-      if (editingProduct) {
-        setProducts(
-          products.map((p) =>
-            p.id === editingProduct.id
-              ? { ...p, ...formData, processFlow: foundFlow }
-              : p,
-          ),
-        );
-      } else {
-        const nextCard = `D${String(new Set(products.map((p) => p.specCardNo)).size + 1).padStart(3, "0")}`;
-        const newProd: ProductSpec = {
-          id: String(Date.now()),
-          specCardNo: nextCard,
-          revisionNo: "Rev-00",
-          isCurrentRevision: true,
-          revisionReason: "Initial specification creation.",
-          createdAt: new Date().toISOString(),
-          ...formData,
-          processFlow: foundFlow,
-        };
-        setProducts([newProd, ...products]);
-      }
-      setIsModalOpen(false);
+    } catch (err: any) {
+      setError(err?.message || "Failed to save product specification");
     }
   };
 
@@ -524,18 +293,13 @@ export default function ProductsPage() {
     }
 
     try {
-      const res = await fetch(
-        `${getApiBaseUrl()}/products/${editingProduct.id}/revisions`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...formData,
-            revisionReason: newRevReason,
-            createdById: "user-1",
-          }),
-        },
-      );
+      const res = await fetchApi(`/products/${editingProduct.id}/revisions`, {
+        method: "POST",
+        body: JSON.stringify({
+          ...formData,
+          revisionReason: newRevReason,
+        }),
+      });
 
       if (res.ok) {
         const newRev = await res.json();
@@ -545,7 +309,6 @@ export default function ProductsPage() {
           customerName: formData.customerName,
           processFlow: foundFlow || newRev.processFlow,
         };
-        // Mark previous revisions of same spec card as not current
         const updated = products.map((p) =>
           p.specCardNo === editingProduct.specCardNo
             ? { ...p, isCurrentRevision: false }
@@ -553,70 +316,23 @@ export default function ProductsPage() {
         );
         setProducts([formatted, ...updated]);
         setIsNewRevModalOpen(false);
-      } else {
-        // Fallback local state revision creation
-        const currentRevStr = editingProduct.revisionNo || "Rev-00";
-        const revMatch = currentRevStr.match(/Rev-(\d+)/i);
-        const nextRevNum = revMatch ? parseInt(revMatch[1], 10) + 1 : 1;
-        const nextRevisionNo = `Rev-${String(nextRevNum).padStart(2, "0")}`;
-        const foundFlow = flows.find((f) => f.id === formData.processFlowId);
-
-        const newRevProd: ProductSpec = {
-          ...editingProduct,
-          id: String(Date.now()),
-          revisionNo: nextRevisionNo,
-          isCurrentRevision: true,
-          revisionReason: newRevReason,
-          createdAt: new Date().toISOString(),
-          ...formData,
-          processFlow: foundFlow,
-        };
-
-        const updated = products.map((p) =>
-          p.specCardNo === editingProduct.specCardNo
-            ? { ...p, isCurrentRevision: false }
-            : p,
-        );
-        setProducts([newRevProd, ...updated]);
-        setIsNewRevModalOpen(false);
       }
-    } catch {
-      const currentRevStr = editingProduct.revisionNo || "Rev-00";
-      const revMatch = currentRevStr.match(/Rev-(\d+)/i);
-      const nextRevNum = revMatch ? parseInt(revMatch[1], 10) + 1 : 1;
-      const nextRevisionNo = `Rev-${String(nextRevNum).padStart(2, "0")}`;
-      const foundFlow = flows.find((f) => f.id === formData.processFlowId);
-
-      const newRevProd: ProductSpec = {
-        ...editingProduct,
-        id: String(Date.now()),
-        revisionNo: nextRevisionNo,
-        isCurrentRevision: true,
-        revisionReason: newRevReason,
-        createdAt: new Date().toISOString(),
-        ...formData,
-        processFlow: foundFlow,
-      };
-
-      const updated = products.map((p) =>
-        p.specCardNo === editingProduct.specCardNo
-          ? { ...p, isCurrentRevision: false }
-          : p,
-      );
-      setProducts([newRevProd, ...updated]);
-      setIsNewRevModalOpen(false);
+    } catch (err: any) {
+      setError(err?.message || "Failed to create revision");
     }
   };
 
   const toggleStatus = async (id: string) => {
     try {
-      await fetch(`${getApiBaseUrl()}/products/${id}/status`, {
+      await fetchApi(`/products/${id}/status`, {
         method: "PATCH",
       });
-    } catch {}
-    setProducts(
-      products.map((p) => (p.id === id ? { ...p, isActive: !p.isActive } : p)),
-    );
+      setProducts(
+        products.map((p) => (p.id === id ? { ...p, isActive: !p.isActive } : p)),
+      );
+    } catch (err) {
+      console.error("Failed to toggle product status:", err);
+    }
   };
 
   const filtered = products.filter((p) => {
@@ -1945,17 +1661,16 @@ export default function ProductsPage() {
                         flows.find(
                           (f) => f.id === selectedProductForView.processFlowId,
                         )?.name ||
-                        "Standard 10-Stage Multilayer Flow"}
+                        "—"}
                     </span>
                     <span className="text-xs font-mono text-slate-500 print:text-black">
                       TOTAL ROUTING STAGES:{" "}
-                      {selectedProductForView.processFlow?.steps?.length || 10}
+                      {selectedProductForView.processFlow?.steps?.length || 0}
                     </span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
                     {(
                       selectedProductForView.processFlow?.steps ||
-                      INITIAL_FLOWS[0].steps ||
                       []
                     ).map((step: any, idx: number) => (
                       <div

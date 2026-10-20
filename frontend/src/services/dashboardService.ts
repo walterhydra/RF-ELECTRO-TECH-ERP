@@ -1,4 +1,4 @@
-import { getApiBaseUrl } from '@/lib/utils';
+import { getApiBaseUrl, fetchApi } from '@/lib/utils';
 
 export interface KpiMetrics {
   monthRejectionPercent: number;
@@ -186,18 +186,13 @@ export const fallbackDashboardData: LiveDashboardData = {
 
 export async function fetchLiveProductionDashboard(shift?: string): Promise<LiveDashboardData> {
   try {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     const query = shift ? `?shift=${encodeURIComponent(shift)}` : '';
-    const res = await fetch(`${getApiBaseUrl()}/reports/live-production-dashboard${query}`, {
-      headers: {
-        'Authorization': `Bearer ${token || ''}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
+    const res = await fetchApi(`/reports/live-production-dashboard${query}`);
     if (res.ok) {
       const data = await res.json();
-      return data;
+      if (data && data.kpis) {
+        return data;
+      }
     }
   } catch (err) {
     console.warn('Live production dashboard API call failed, falling back to local dataset:', err);

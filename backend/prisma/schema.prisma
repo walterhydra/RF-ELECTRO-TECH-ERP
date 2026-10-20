@@ -347,7 +347,7 @@ model Dispatch {
   trackingLrNo     String?        @map("tracking_lr_no") @db.VarChar(100)
   dispatchRemarks  String?        @map("dispatch_remarks")
   deliveryStatus   DeliveryStatus @default(DISPATCHED) @map("delivery_status")
-  deliveryPhotoUrl String?        @map("delivery_photo_url") @db.VarChar(500)
+  deliveryPhotoUrl String?        @map("delivery_photo_url")
   failureReason    String?        @map("failure_reason") @db.VarChar(255)
   deliveredByName  String?        @map("delivered_by_name") @db.VarChar(100)
   deliveredAt      DateTime?      @map("delivered_at") @db.Timestamptz(6)

@@ -14,23 +14,55 @@ import { JobCardStatus } from '@prisma/client';
 export class JobCardsController {
   constructor(private readonly jobCardsService: JobCardsService) {}
 
-  @Get()
-  @Public()
-  @ApiOperation({ summary: 'List all Job Cards with optional status and search filters' })
-  async findAll(@Query() query: any, @Req() req: any) {
-    let user = req.user;
-    if (!user && req.headers?.authorization?.startsWith('Bearer ')) {
+  private resolveUser(req: any, body?: any): any {
+    let user = req?.user;
+    if (!user && req?.headers?.authorization?.startsWith('Bearer ')) {
       try {
         const token = req.headers.authorization.split(' ')[1];
-        const payloadBase64 = token.split('.')[1];
-        if (payloadBase64) {
-          const decoded = JSON.parse(Buffer.from(payloadBase64, 'base64').toString());
-          user = decoded;
+        if (token && token.includes('.')) {
+          const payloadBase64 = token.split('.')[1];
+          if (payloadBase64) {
+            const decoded = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf8'));
+            if (decoded && (decoded.sub || decoded.id || decoded.email)) {
+              user = {
+                id: decoded.sub || decoded.id,
+                sub: decoded.sub || decoded.id,
+                email: decoded.email,
+                name: decoded.name || decoded.email?.split('@')[0],
+                role: decoded.role,
+                roleName: decoded.role,
+                roleId: decoded.roleId,
+                departmentId: decoded.departmentId,
+                departmentName: decoded.departmentName,
+                assignedStageId: decoded.assignedStageId,
+                assignedStageName: decoded.assignedStageName,
+                permissions: decoded.permissions || [],
+              };
+              req.user = user;
+            }
+          }
         }
       } catch (e) {
         // Ignore token parse error
       }
     }
+    if (!user && (body?.userId || body?.userEmail)) {
+      user = {
+        id: body.userId,
+        sub: body.userId,
+        email: body.userEmail,
+        name: body.userName,
+      };
+      req.user = user;
+    }
+    return user;
+  }
+
+  @Get()
+  @Public()
+  @ApiOperation({ summary: 'List all Job Cards with optional status and search filters' })
+  async findAll(@Query() query: any, @Req() req: any) {
+    const user = this.resolveUser(req);
     return this.jobCardsService.findAll(query, user);
   }
 
@@ -48,7 +80,8 @@ export class JobCardsController {
   async createJobCard(@Body() body: any, @Req() req: any) {
     console.log('--- ROUTE HIT: POST /job-cards/create ---', body?.jobCardNo, 'Body keys:', Object.keys(body || {}));
     try {
-      const createdById = req.user?.sub || req.user?.id || req.user?.userId;
+      const user = this.resolveUser(req, body);
+      const createdById = user?.sub || user?.id || user?.userId;
       const res = await this.jobCardsService.createJobCard(body, createdById);
       console.log('--- SUCCESS IN CONTROLLER createJobCard ---', res?.jobCardNo || res?.id);
       return res;
@@ -64,7 +97,8 @@ export class JobCardsController {
   @ApiResponse({ status: 201, description: 'Job Card generated successfully' })
   async generateFromPo(@Body() body: { customerPoId: string }, @Req() req: any) {
     console.log('--- ROUTE HIT: POST /job-cards/generate ---');
-    const createdById = req.user?.sub || req.user?.id || req.user?.userId;
+    const user = this.resolveUser(req, body);
+    const createdById = user?.sub || user?.id || user?.userId;
     return this.jobCardsService.generateFromPo(body.customerPoId, createdById);
   }
 
@@ -104,7 +138,8 @@ export class JobCardsController {
   @ApiOperation({ summary: 'Split a Job Card into multiple Sub-Job Cards before launch' })
   @ApiResponse({ status: 201, description: 'Job Card split successfully' })
   async splitJobCard(@Param('id') id: string, @Body() body: any, @Req() req: any) {
-    const createdById = req.user?.sub || req.user?.id || req.user?.userId;
+    const user = this.resolveUser(req, body);
+    const createdById = user?.sub || user?.id || user?.userId;
     return this.jobCardsService.splitJobCard(id, body, createdById);
   }
 
@@ -112,8 +147,9 @@ export class JobCardsController {
   @Public()
   @ApiOperation({ summary: 'Launch Job Card and assign initial Sub-Job Cards to Stage 1' })
   @ApiResponse({ status: 201, description: 'Job Card launched successfully' })
-  async launchJobCard(@Param('id') id: string) {
-    return this.jobCardsService.launchJobCard(id);
+  async launchJobCard(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    const user = this.resolveUser(req, body);
+    return this.jobCardsService.launchJobCard(id, user, body);
   }
 
   @Patch(':id/status')
@@ -134,7 +170,8 @@ export class JobCardsController {
   @Public()
   @ApiOperation({ summary: 'Get full chronological traceability timeline for Job Card and all its Sub Job Cards' })
   async getTraceabilityHistory(@Param('id') id: string, @Req() req: any) {
-    return this.jobCardsService.getTraceabilityHistory(id, req.user);
+    const user = this.resolveUser(req);
+    return this.jobCardsService.getTraceabilityHistory(id, user);
   }
 
   @Post('move-stage')
@@ -166,8 +203,9 @@ export class JobCardsController {
     @Body() body: { id?: string; cardId?: string; jobId?: string; jobCardNo?: string; rejectPcbQty?: number; rejectQty?: number; remark?: string; remarkType?: string; status?: string },
     @Req() req: any,
   ) {
+    const user = this.resolveUser(req, body);
     const targetId = pathId || body?.id || body?.cardId || body?.jobId || body?.jobCardNo || '';
-    return this.jobCardsService.moveFull(targetId, body, req.user);
+    return this.jobCardsService.moveFull(targetId, body, user);
   }
 
   @Post(':id/move-partial')
@@ -178,16 +216,18 @@ export class JobCardsController {
     @Body() body: any,
     @Req() req: any,
   ) {
+    const user = this.resolveUser(req, body);
     const targetId = pathId || body?.id || body?.cardId || body?.subJobCardId || body?.subJobCardNo || body?.jobCardNo || '';
-    return this.jobCardsService.movePartial(targetId, body, req.user);
+    return this.jobCardsService.movePartial(targetId, body, user);
   }
 
   @Post('move-partial')
   @Public()
   @ApiOperation({ summary: 'Execute Uncompleted / Partial Job Movement to next process stage (root)' })
   async movePartialRoot(@Body() body: any, @Req() req: any) {
+    const user = this.resolveUser(req, body);
     const targetId = body?.id || body?.cardId || body?.subJobCardId || body?.subJobCardNo || body?.jobCardNo || '';
-    return this.jobCardsService.movePartial(targetId, body, req.user);
+    return this.jobCardsService.movePartial(targetId, body, user);
   }
 
   @Delete('clear-all/all')
@@ -201,6 +241,7 @@ export class JobCardsController {
   @Public()
   @ApiOperation({ summary: 'Delete Job Card (Master role restricted)' })
   async deleteJobCard(@Param('id') id: string, @Req() req: any) {
-    return this.jobCardsService.deleteJobCard(id, req.user);
+    const user = this.resolveUser(req);
+    return this.jobCardsService.deleteJobCard(id, user);
   }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { getApiBaseUrl } from "@/lib/utils";
+import { getApiBaseUrl, fetchApi } from "@/lib/utils";
 import {
   Activity,
   Search,
@@ -53,52 +53,9 @@ interface PendingRejection {
   createdAt: string;
 }
 
-const INITIAL_REJECTIONS: PendingRejection[] = [
-  {
-    id: "mov-1",
-    subJobCard: {
-      subJobCardNo: "JC-2026-001-A",
-      jobCard: {
-        jobCardNo: "JC-2026-001",
-        product: { code: "PCB-MB-V2", name: "Main Motherboard V2" },
-      },
-    },
-    stage: { name: "CNC Drilling & Routing", code: "CNC-02" },
-    qtyRejected: 15,
-    rejectionReason: "OVERSIZED_HOLE",
-    remarks: "Drill bit worn out during panel pass #4",
-    createdBy: { name: "Rajesh Kumar (Operator)" },
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: "mov-2",
-    subJobCard: {
-      subJobCardNo: "JC-2026-003-A",
-      jobCard: {
-        jobCardNo: "JC-2026-003",
-        product: { code: "PCB-RF-01", name: "RF Transceiver Board" },
-      },
-    },
-    stage: { name: "PTH Copper Plating", code: "WET-01" },
-    qtyRejected: 20,
-    rejectionReason: "COPPER_VOIDS",
-    remarks: "Chemical bath bath density low on panel margin",
-    createdBy: { name: "Amit Sharma (QA Inspector)" },
-    createdAt: new Date(Date.now() - 3600000 * 3).toISOString(),
-  },
-];
-
-const INITIAL_STAGES: Stage[] = [
-  { id: "stg-1", name: "CAM & Gerber Verification", code: "ENG-01" },
-  { id: "stg-2", name: "CNC Material Cutting", code: "CNC-01" },
-  { id: "stg-3", name: "CNC Drilling & Routing", code: "CNC-02" },
-  { id: "stg-4", name: "PTH Copper Plating", code: "WET-01" },
-  { id: "stg-5", name: "AOI Optical Inspection", code: "QC-01" },
-];
-
 export default function RejectionsPage() {
-  const [rejections, setRejections] = useState<PendingRejection[]>(INITIAL_REJECTIONS);
-  const [stages, setStages] = useState<Stage[]>(INITIAL_STAGES);
+  const [rejections, setRejections] = useState<PendingRejection[]>([]);
+  const [stages, setStages] = useState<Stage[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -116,22 +73,26 @@ export default function RejectionsPage() {
 
   const fetchRejections = async () => {
     try {
-      const res = await fetch(`${getApiBaseUrl()}/rejections/pending`);
+      const res = await fetchApi('/rejections/pending');
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) setRejections(data);
+        if (Array.isArray(data)) setRejections(data);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error("Failed to fetch pending rejections:", e);
+    }
   };
 
   const fetchStages = async () => {
     try {
-      const res = await fetch(`${getApiBaseUrl()}/process-stages`);
+      const res = await fetchApi('/process-stages');
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) setStages(data);
+        if (Array.isArray(data)) setStages(data);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error("Failed to fetch process stages:", e);
+    }
   };
 
   const handleOpenDisposition = (movement: PendingRejection) => {
@@ -153,32 +114,20 @@ export default function RejectionsPage() {
     if (!selectedMovement) return;
 
     try {
-      const res = await fetch(
-        `${getApiBaseUrl()}/rejections/${selectedMovement.id}/disposition`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: disposition,
-            reworkStageId: disposition === "REWORK" ? reworkStageId : undefined,
-            qcRemarks,
-          }),
-        },
-      );
+      await fetchApi(`/rejections/${selectedMovement.id}/disposition`, {
+        method: "POST",
+        body: JSON.stringify({
+          action: disposition,
+          reworkStageId: disposition === "REWORK" ? reworkStageId : undefined,
+          qcRemarks,
+        }),
+      });
 
-      if (res.ok) {
-        setRejections(rejections.filter((r) => r.id !== selectedMovement.id));
-        setIsModalOpen(false);
-        setSuccessMsg(`QC Disposition saved: ${selectedMovement.subJobCard?.subJobCardNo} marked as ${disposition}`);
-      } else {
-        setRejections(rejections.filter((r) => r.id !== selectedMovement.id));
-        setIsModalOpen(false);
-        setSuccessMsg(`QC Disposition saved: ${selectedMovement.subJobCard?.subJobCardNo} marked as ${disposition}`);
-      }
-    } catch (err) {
       setRejections(rejections.filter((r) => r.id !== selectedMovement.id));
       setIsModalOpen(false);
       setSuccessMsg(`QC Disposition saved: ${selectedMovement.subJobCard?.subJobCardNo} marked as ${disposition}`);
+    } catch (err: any) {
+      setError(err?.message || "Failed to save QC disposition");
     }
   };
 

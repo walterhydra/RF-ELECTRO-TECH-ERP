@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (payload.otp !== otp.trim()) {
-      return NextResponse.json({ message: 'Incorrect OTP code. Please enter the code sent to milanpandavadra84@gmail.com' }, { status: 400 });
+      return NextResponse.json({ message: 'Incorrect OTP code. Please enter the code sent to ocbpl.qms@gmail.com' }, { status: 400 });
     }
 
     // OTP verified! Login to live production backend to obtain fresh JWT tokens

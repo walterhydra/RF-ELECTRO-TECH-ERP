@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Truck, Download, RefreshCw, ArrowLeft } from 'lucide-react';
-import { getApiBaseUrl } from '@/lib/utils';
+import { getApiBaseUrl, fetchApi } from '@/lib/utils';
 
 export default function DispatchReportPage() {
   const [data, setData] = useState<any[]>([]);
@@ -11,9 +11,7 @@ export default function DispatchReportPage() {
   const fetchReport = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const headers = { 'Authorization': `Bearer ${token}` };
-      const res = await fetch(`${getApiBaseUrl()}/reports/dispatch`, { headers });
+      const res = await fetchApi('/reports/dispatch');
       if (res.ok) {
         const json = await res.json();
         if (Array.isArray(json)) setData(json);

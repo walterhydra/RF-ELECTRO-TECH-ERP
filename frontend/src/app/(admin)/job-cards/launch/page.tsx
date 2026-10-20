@@ -22,7 +22,7 @@ import {
   X
 } from 'lucide-react';
 
-import { getApiBaseUrl, compressImageFile } from '@/lib/utils';
+import { getApiBaseUrl, fetchApi, compressImageFile } from '@/lib/utils';
 
 export default function JobCardLaunchPage() {
   const router = useRouter();
@@ -87,13 +87,8 @@ export default function JobCardLaunchPage() {
         subJobCards: [],
       };
 
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      const res = await fetch(`${getApiBaseUrl()}/job-cards/create`, {
+      const res = await fetchApi('/job-cards/create', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
         body: JSON.stringify(payload),
       });
 

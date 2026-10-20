@@ -29,7 +29,7 @@ import {
   Barcode
 } from 'lucide-react';
 import { Portal } from '@/components/ui/Portal';
-import { getApiBaseUrl } from '@/lib/utils';
+import { getApiBaseUrl, fetchApi } from '@/lib/utils';
 import { LiveCameraScannerModal, parseScannedJobCode } from '@/components/scanner/LiveCameraScannerModal';
 
 // Process Flow PF-01 19 Predefined Stages (Matching Database ProcessStage Master)
@@ -170,8 +170,8 @@ export default function JobMovementUpdatePage() {
   const inFlightMovements = React.useRef<Map<string, { stageIdx: number; stageName: string; timestamp: number }>>(new Map());
 
   const fetchMovementJobs = React.useCallback(() => {
-    fetch(`${getApiBaseUrl()}/job-cards`)
-      .then((res) => res.json())
+    fetchApi('/job-cards')
+      .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         if (Array.isArray(data)) {
           const mapped: JobCard[] = data.flatMap((j: any) => {
@@ -456,16 +456,14 @@ export default function JobMovementUpdatePage() {
     (async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        const storedUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
+        const storedUserEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
+        const storedUserName = typeof window !== 'undefined' ? localStorage.getItem('userName') : null;
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 8000);
         const targetEndpoint = encodeURIComponent(jobId && !jobId.startsWith('jc-part-') ? jobId : jobCardNo);
-
-        let res = await fetch(`${getApiBaseUrl()}/job-cards/${targetEndpoint}/move-stage`, {
+        let res = await fetchApi(`/job-cards/${targetEndpoint}/move-stage`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
           body: JSON.stringify({
             cardId: jobId && !jobId.startsWith('jc-part-') ? jobId : undefined,
             jobCardNo: jobCardNo,
@@ -476,6 +474,9 @@ export default function JobMovementUpdatePage() {
               ? `Rejection: ${actualRejected} PCBs rejected. Reason: ${effectiveReason}`
               : `${remarkCategory}: ${remarksText || 'Clear Movement'}`,
             remarkType: actualRejected > 0 ? 'REJECTION' : 'FULL_MOVEMENT',
+            userId: storedUserId,
+            userEmail: storedUserEmail,
+            userName: storedUserName,
           }),
           signal: controller.signal,
         });
@@ -518,19 +519,21 @@ export default function JobMovementUpdatePage() {
     (async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        const storedUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
+        const storedUserEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
+        const storedUserName = typeof window !== 'undefined' ? localStorage.getItem('userName') : null;
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 3500);
 
-        await fetch(`${getApiBaseUrl()}/job-cards/${jobId}/move-stage`, {
+        await fetchApi(`/job-cards/${jobId}/move-stage`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
           body: JSON.stringify({
             jobCardNo: targetJob.jobCardNo,
             status: 'COMPLETED',
             remark: 'Direct Job Dispatch from Packing stage',
+            userId: storedUserId,
+            userEmail: storedUserEmail,
+            userName: storedUserName,
           }),
           signal: controller.signal,
         });
@@ -624,6 +627,9 @@ export default function JobMovementUpdatePage() {
     (async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        const storedUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
+        const storedUserEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
+        const storedUserName = typeof window !== 'undefined' ? localStorage.getItem('userName') : null;
         const targetEndpoint = encodeURIComponent(
           targetJobId && !targetJobId.startsWith('jc-part-')
             ? targetJobId
@@ -632,12 +638,8 @@ export default function JobMovementUpdatePage() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-        await fetch(`${getApiBaseUrl()}/job-cards/${targetEndpoint}/move-partial`, {
+        await fetchApi(`/job-cards/${targetEndpoint}/move-partial`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
           body: JSON.stringify({
             cardId: targetJobId,
             jobCardNo: targetJobCardNo,
@@ -648,6 +650,9 @@ export default function JobMovementUpdatePage() {
             pendingWorkReason: effectiveReason,
             remark: remarkToSend,
             remarkType: 'INCOMPLETE_MOVEMENT',
+            userId: storedUserId,
+            userEmail: storedUserEmail,
+            userName: storedUserName,
           }),
           signal: controller.signal,
         });

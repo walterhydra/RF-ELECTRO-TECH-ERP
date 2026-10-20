@@ -2,11 +2,15 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
-import { json, urlencoded } from 'express';
+import { json, urlencoded, static as expressStatic } from 'express';
+import * as path from 'path';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
+
+  // Serve static uploaded files (deliveries, proof of delivery, etc.)
+  app.use('/uploads', expressStatic(path.join(process.cwd(), 'uploads')));
 
   // Increase payload limit to 50MB to support Base64 high-resolution photo uploads
   app.use(json({ limit: '50mb' }));

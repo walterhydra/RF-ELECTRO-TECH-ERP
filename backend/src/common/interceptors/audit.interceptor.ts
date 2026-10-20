@@ -13,7 +13,17 @@ export class AuditInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest();
     const { method, url, ip, headers, user, body } = request;
     const userAgent = headers['user-agent'] || '';
-    const now = Date.now();
+
+    let effectiveUserId = user?.id || user?.sub || request.user?.id || request.user?.sub || body?.userId;
+    if (!effectiveUserId && headers?.authorization && typeof headers.authorization === 'string' && headers.authorization.startsWith('Bearer ')) {
+      try {
+        const token = headers.authorization.split(' ')[1];
+        if (token && token.includes('.')) {
+          const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
+          effectiveUserId = payload?.sub || payload?.id || null;
+        }
+      } catch (_) {}
+    }
 
     return next.handle().pipe(
       tap({
@@ -23,7 +33,7 @@ export class AuditInterceptor implements NestInterceptor {
             try {
               await this.prisma.auditLog.create({
                 data: {
-                  userId: user?.id || null,
+                  userId: effectiveUserId || null,
                   action: `${method}_${url.split('/')[3]?.toUpperCase() || 'UNKNOWN'}`,
                   entityType: url.split('/')[3] || 'GENERAL',
                   entityId: body?.id || data?.id || null,

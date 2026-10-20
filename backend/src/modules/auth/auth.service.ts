@@ -16,7 +16,7 @@ interface PendingOtpSession {
   userProfile: any;
 }
 
-const TARGET_OTP_EMAIL = process.env.OTP_TARGET_EMAIL || 'milanpandavadra84@gmail.com';
+const TARGET_OTP_EMAIL = process.env.OTP_TARGET_EMAIL || 'ocbpl.qms@gmail.com';
 
 @Injectable()
 export class AuthService {
@@ -42,8 +42,8 @@ export class AuthService {
         port: Number(process.env.SMTP_PORT || 465),
         secure: Number(process.env.SMTP_PORT || 465) === 465,
         auth: {
-          user: process.env.SMTP_USER || 'milanpandavadra84@gmail.com',
-          pass: process.env.SMTP_PASS || 'quldwsmtakixaqmv',
+          user: process.env.SMTP_USER || 'ocbpl.qms@gmail.com',
+          pass: process.env.SMTP_PASS || 'dehnhzzfsjvttbow',
         },
         tls: {
           rejectUnauthorized: false,
@@ -70,7 +70,7 @@ export class AuthService {
       `;
 
       await transporter.sendMail({
-        from: process.env.SMTP_FROM || '"RF Electro ERP" <milanpandavadra84@gmail.com>',
+        from: process.env.SMTP_FROM || '"RF Electro ERP" <ocbpl.qms@gmail.com>',
         to: TARGET_OTP_EMAIL,
         subject: `RF Electro ERP - Login OTP Verification Code: ${otp}`,
         text: `Your RF Electro ERP login OTP code is: ${otp}. Requested for ${userEmail} (${userName}). Valid for 10 minutes.`,

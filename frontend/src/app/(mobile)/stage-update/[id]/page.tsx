@@ -166,6 +166,9 @@ export default function StageUpdatePage() {
           remarks: remarks.trim() || undefined,
           remarkType: isIncomplete ? 'INCOMPLETE_MOVEMENT' : 'NONE',
           clientRequestId,
+          userId: typeof window !== 'undefined' ? localStorage.getItem('userId') : undefined,
+          userEmail: typeof window !== 'undefined' ? localStorage.getItem('userEmail') : undefined,
+          userName: typeof window !== 'undefined' ? localStorage.getItem('userName') : undefined,
         }),
       });
 

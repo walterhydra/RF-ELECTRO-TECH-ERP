@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Layers, Download, RefreshCw, ArrowLeft } from 'lucide-react';
-import { getApiBaseUrl } from '@/lib/utils';
+import { getApiBaseUrl, fetchApi } from '@/lib/utils';
 
 export default function WipReportPage() {
   const [data, setData] = useState<any[]>([]);
@@ -11,9 +11,7 @@ export default function WipReportPage() {
   const fetchReport = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const headers = { 'Authorization': `Bearer ${token}` };
-      const res = await fetch(`${getApiBaseUrl()}/reports/wip`, { headers });
+      const res = await fetchApi('/reports/wip');
       if (res.ok) {
         const json = await res.json();
         if (Array.isArray(json)) setData(json);

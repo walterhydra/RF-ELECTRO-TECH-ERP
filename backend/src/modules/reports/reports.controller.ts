@@ -22,8 +22,18 @@ export class ReportsController {
     return this.reportsService.getRejectionSummary();
   }
 
+  @Get('rejections')
+  getRejectionsAlias() {
+    return this.reportsService.getRejectionSummary();
+  }
+
   @Get('rework-status')
   getReworkStatus() {
+    return this.reportsService.getReworkStatus();
+  }
+
+  @Get('rework')
+  getReworkAlias() {
     return this.reportsService.getReworkStatus();
   }
 

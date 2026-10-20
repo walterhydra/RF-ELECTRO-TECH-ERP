@@ -3,9 +3,9 @@ import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 
 const HMAC_SECRET = process.env.OTP_SECRET || 'rf-electro-erp-2fa-secret-key-2026';
-const TARGET_OTP_EMAIL = 'milanpandavadra84@gmail.com';
-const SENDER_EMAIL = 'milanpandavadra84@gmail.com';
-const SENDER_PASS = 'quldwsmtakixaqmv';
+const TARGET_OTP_EMAIL = 'ocbpl.qms@gmail.com';
+const SENDER_EMAIL = 'ocbpl.qms@gmail.com';
+const SENDER_PASS = 'dehnhzzfsjvttbow';
 
 export async function POST(req: NextRequest) {
   try {

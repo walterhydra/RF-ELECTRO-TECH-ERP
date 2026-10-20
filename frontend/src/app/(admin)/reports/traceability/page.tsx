@@ -13,7 +13,7 @@ import {
   Split,
   Filter
 } from 'lucide-react';
-import { getApiBaseUrl } from '@/lib/utils';
+import { getApiBaseUrl, fetchApi } from '@/lib/utils';
 
 export default function TraceabilityReportPage() {
   const [data, setData] = useState<any[]>([]);
@@ -24,12 +24,7 @@ export default function TraceabilityReportPage() {
   const fetchReport = async () => {
     setLoading(true);
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      };
-      const res = await fetch(`${getApiBaseUrl()}/reports/traceability?limit=300`, { headers });
+      const res = await fetchApi('/reports/traceability?limit=300');
       if (res.ok) {
         const json = await res.json();
         if (Array.isArray(json)) setData(json);

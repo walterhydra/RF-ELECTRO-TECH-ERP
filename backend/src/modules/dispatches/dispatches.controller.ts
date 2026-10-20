@@ -6,6 +6,7 @@ import { RbacGuard } from '../../common/guards/rbac.guard';
 import { RequirePermissions } from '../../common/decorators/require-permissions.decorator';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import { Public } from '../../common/decorators/public.decorator';
 
 @Controller('dispatches')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -19,7 +20,7 @@ export class DispatchesController {
     return this.dispatchesService.createDispatch(data, createdById);
   }
 
-  @Patch(':id/confirm-delivery')
+  @Patch([':id/confirm-delivery', ':id/delivery'])
   @RequirePermissions('production.manage', 'sales.po.manage')
   @UseInterceptors(FileInterceptor('deliveryPhoto', {
     storage: diskStorage({
@@ -42,8 +43,16 @@ export class DispatchesController {
   }
 
   @Get()
+  @Public()
   @RequirePermissions('production.view', 'sales.po.view')
   getAllDispatches() {
     return this.dispatchesService.getAllDispatches();
+  }
+
+  @Get(':id')
+  @Public()
+  @RequirePermissions('production.view', 'sales.po.view')
+  getDispatchById(@Param('id') id: string) {
+    return this.dispatchesService.getDispatchById(id);
   }
 }

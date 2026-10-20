@@ -20,7 +20,7 @@ export default function LoginPage() {
   // OTP State
   const [tempToken, setTempToken] = useState('');
   const [otp, setOtp] = useState('');
-  const [targetEmail, setTargetEmail] = useState('milanpandavadra84@gmail.com');
+  const [targetEmail, setTargetEmail] = useState('ocbpl.qms@gmail.com');
   const [otpCooldown, setOtpCooldown] = useState(0);
   const [resending, setResending] = useState(false);
   
@@ -90,10 +90,10 @@ export default function LoginPage() {
 
       if (data.otpRequired) {
         setTempToken(data.tempToken);
-        setTargetEmail(data.targetEmail || 'milanpandavadra84@gmail.com');
+        setTargetEmail(data.targetEmail || 'ocbpl.qms@gmail.com');
         setStep('OTP');
         setOtpCooldown(30);
-        setInfoMessage(`Security OTP code has been dispatched to ${data.targetEmail || 'milanpandavadra84@gmail.com'}`);
+        setInfoMessage(`Security OTP code has been dispatched to ${data.targetEmail || 'ocbpl.qms@gmail.com'}`);
       } else if (data.accessToken) {
         finalizeSuccessfulLogin(data);
         return;
@@ -135,7 +135,7 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setErrorMessage(data.message || `Invalid OTP code. Please enter the code sent to ${targetEmail || 'milanpandavadra84@gmail.com'}`);
+        setErrorMessage(data.message || `Invalid OTP code. Please enter the code sent to ${targetEmail || 'ocbpl.qms@gmail.com'}`);
         setLoading(false);
         return;
       }
@@ -197,6 +197,23 @@ export default function LoginPage() {
 
     localStorage.setItem('isAuthenticated', 'true');
 
+    let userId = data.user?.id;
+    let userEmail = data.user?.email || email || 'admin@rfelectro.com';
+    let userName = data.user?.name;
+    let assignedStage = data.user?.assignedStage?.name;
+    let assignedStageId = data.user?.assignedStage?.id;
+
+    if (data.accessToken && typeof data.accessToken === 'string' && data.accessToken.includes('.')) {
+      try {
+        const payload = JSON.parse(Buffer.from(data.accessToken.split('.')[1], 'base64').toString('utf8'));
+        if (!userId && (payload.sub || payload.id)) userId = payload.sub || payload.id;
+        if ((!userEmail || userEmail === 'admin@rfelectro.com') && payload.email) userEmail = payload.email;
+        if (!userName && (payload.name || payload.email)) userName = payload.name || payload.email.split('@')[0];
+        if (!assignedStage && payload.assignedStageName) assignedStage = payload.assignedStageName;
+        if (!assignedStageId && payload.assignedStageId) assignedStageId = payload.assignedStageId;
+      } catch (_) {}
+    }
+
     const rawRole = data.user?.role?.name || data.user?.role || 'Super Admin';
     const roleMap: Record<string, string> = {
       SUPER_ADMIN: 'Super Admin',
@@ -207,16 +224,22 @@ export default function LoginPage() {
     };
     const roleName = roleMap[rawRole] || rawRole;
     localStorage.setItem('userRole', roleName);
-    localStorage.setItem('userEmail', data.user?.email || email || 'admin@rfelectro.com');
+    localStorage.setItem('userEmail', userEmail);
+    if (userId) {
+      localStorage.setItem('userId', userId);
+    }
+    if (userName) {
+      localStorage.setItem('userName', userName);
+    }
     document.cookie = `rf_user_role=${encodeURIComponent(roleName)}; path=/; max-age=7776000; SameSite=Lax`;
 
-    if (data.user?.assignedStage?.name) {
-      localStorage.setItem('assignedStage', data.user.assignedStage.name);
+    if (assignedStage) {
+      localStorage.setItem('assignedStage', assignedStage);
     } else {
       localStorage.removeItem('assignedStage');
     }
-    if (data.user?.assignedStage?.id) {
-      localStorage.setItem('assignedStageId', data.user.assignedStage.id);
+    if (assignedStageId) {
+      localStorage.setItem('assignedStageId', assignedStageId);
     }
 
     const isMobileScreen = typeof window !== 'undefined' && window.innerWidth < 768;
@@ -404,7 +427,7 @@ export default function LoginPage() {
                 </div>
                 <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Two-Factor Authentication</h2>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
-                  Enter the 6-digit security code sent to <strong className="text-slate-800 font-mono font-bold">{targetEmail || 'milanpandavadra84@gmail.com'}</strong> for account <span className="text-slate-700 font-mono">{email}</span>.
+                  Enter the 6-digit security code sent to <strong className="text-slate-800 font-mono font-bold">{targetEmail || 'ocbpl.qms@gmail.com'}</strong> for account <span className="text-slate-700 font-mono">{email}</span>.
                 </p>
               </div>
 
