@@ -52,6 +52,18 @@ export default function FloatingCalculator() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
+  // Global event listeners to open/toggle from modals or buttons
+  useEffect(() => {
+    const handleToggle = () => setIsOpen((prev) => !prev);
+    const handleOpen = () => setIsOpen(true);
+    window.addEventListener('toggle-calculator', handleToggle);
+    window.addEventListener('open-calculator', handleOpen);
+    return () => {
+      window.removeEventListener('toggle-calculator', handleToggle);
+      window.removeEventListener('open-calculator', handleOpen);
+    };
+  }, []);
+
   // Digits input
   const inputDigit = (digit: string) => {
     playClickSound();
@@ -239,10 +251,10 @@ export default function FloatingCalculator() {
   };
 
   return (
-    <div ref={calcRef} className="fixed bottom-5 right-5 z-[9999] select-none font-sans">
+    <div ref={calcRef} className="fixed bottom-5 right-5 z-[9999999] select-none font-sans">
       {/* ── MECHANICAL CALCULATOR POPUP ── */}
       {isOpen && (
-        <div className="absolute bottom-16 right-0 w-[295px] sm:w-[315px] bg-[#eef2f6] border-2 border-[#cbd5e1] rounded-3xl p-4 shadow-[0_20px_50px_rgba(0,0,0,0.22),inset_0_2px_0_rgba(255,255,255,0.9)] text-slate-800 animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute bottom-16 right-0 w-[295px] sm:w-[315px] bg-[#eef2f6] border-2 border-[#cbd5e1] rounded-3xl p-4 shadow-[0_20px_50px_rgba(0,0,0,0.4),inset_0_2px_0_rgba(255,255,255,0.9)] text-slate-800 animate-in fade-in zoom-in-95 duration-150 z-[9999999]">
           
           {/* Mechanical Top Bezel & Solar Cell */}
           <div className="flex items-center justify-between pb-3 border-b border-[#cbd5e1]">

@@ -53,7 +53,8 @@ import {
   User,
   CheckCheck,
   Send,
-  Factory
+  Factory,
+  Calculator
 } from 'lucide-react';
 import { Portal } from '@/components/ui/Portal';
 import { getApiBaseUrl, compressImageFile } from '@/lib/utils';
@@ -4969,15 +4970,31 @@ export default function JobCardsPage() {
                   </div>
                 </div>
                 
-                <button 
-                  type="button"
-                  disabled={isSubmittingLaunch}
-                  onClick={() => setShowGenerateModal(false)} 
-                  className="w-10 h-10 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer text-xl font-bold disabled:opacity-40 shrink-0"
-                  title="Close modal"
-                >
-                  ✕
-                </button>
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('toggle-calculator'));
+                      }
+                    }}
+                    className="h-10 px-3.5 rounded-lg text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 flex items-center gap-2 transition-all cursor-pointer text-xs font-bold border border-slate-700 shadow-sm"
+                    title="Open Calculator"
+                  >
+                    <Calculator className="w-4 h-4 text-amber-400" />
+                    <span className="hidden sm:inline font-quicksand">Calculator</span>
+                  </button>
+
+                  <button 
+                    type="button"
+                    disabled={isSubmittingLaunch}
+                    onClick={() => setShowGenerateModal(false)} 
+                    className="w-10 h-10 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer text-xl font-bold disabled:opacity-40 shrink-0"
+                    title="Close modal"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
 
               {/* Form Body */}
@@ -5805,6 +5822,20 @@ export default function JobCardsPage() {
                       <span className="hidden sm:inline">Delete Job Card</span>
                     </button>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new CustomEvent('toggle-calculator'));
+                      }
+                    }}
+                    className="text-slate-300 hover:text-white text-xs font-bold px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 cursor-pointer transition-all shrink-0 border border-slate-700 flex items-center gap-1.5 shadow-sm"
+                    title="Open Calculator"
+                  >
+                    <Calculator className="w-4 h-4 text-amber-400" />
+                    <span className="hidden sm:inline">Calc</span>
+                  </button>
 
                   <button
                     onClick={() => setSelectedMovementJob(null)}
