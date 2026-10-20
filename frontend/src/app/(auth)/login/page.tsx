@@ -107,9 +107,10 @@ export default function LoginPage() {
   };
 
   // ── Step 2: Verify OTP Code ──
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!otp || otp.trim().length < 4) {
+  const handleVerifyOtp = async (e?: React.FormEvent, directOtp?: string) => {
+    if (e) e.preventDefault();
+    const otpCode = (directOtp || otp || '').trim();
+    if (!otpCode || otpCode.length < 4) {
       setErrorMessage('Please enter the full 6-digit OTP code.');
       return;
     }
@@ -121,14 +122,14 @@ export default function LoginPage() {
       let res = await fetch('/api/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tempToken, otp: otp.trim() }),
+        body: JSON.stringify({ tempToken, otp: otpCode }),
       });
 
       if (!res.ok && res.status === 404) {
         res = await fetch(`${getApiBaseUrl()}/auth/verify-otp`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tempToken, otp: otp.trim() }),
+          body: JSON.stringify({ tempToken, otp: otpCode }),
         });
       }
 
@@ -459,6 +460,9 @@ export default function LoginPage() {
                     onChange={(e) => {
                       const val = e.target.value.replace(/\D/g, '');
                       setOtp(val);
+                      if (val.length === 6) {
+                        handleVerifyOtp(undefined, val);
+                      }
                     }}
                     placeholder="••••••"
                     className="w-full text-center text-3xl font-extrabold font-mono tracking-[0.5em] py-3.5 bg-slate-50/70 border-2 border-slate-200 focus:border-blue-600 focus:bg-white rounded-2xl text-slate-900 placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-blue-600/10 transition-all"
