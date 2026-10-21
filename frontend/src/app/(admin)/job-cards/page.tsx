@@ -3370,7 +3370,7 @@ export default function JobCardsPage() {
 
       {activeSectionTab === 'PRODUCTION' && (
         <>
-          {/* 2. SECOND ROW SUMMARY CARDS & BARCODE SCANNER */}
+          {/* 2. SECOND ROW SUMMARY CARDS & BARCODE SCANNER (Stage Filter Banner Removed) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-stretch">
         
         {/* Card 1: Barcode & Mobile Camera Scanner / Fast Stage Movement */}
