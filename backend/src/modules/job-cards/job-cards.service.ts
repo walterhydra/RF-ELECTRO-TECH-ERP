@@ -1614,9 +1614,19 @@ export class JobCardsService {
           OR: [
             { jobCardNo: rawId },
             { jobCardNo: cleanNo },
-            { jobCardNo: { contains: cleanNo } },
             ...(isUuid ? [{ id: rawId }] : []),
           ],
+        },
+        include: {
+          subJobCards: { include: { currentStage: true } },
+          createdBy: userInclude,
+        },
+      }).catch(() => null);
+    }
+    if (!jobCard && cleanNo.length >= 4) {
+      jobCard = await this.prisma.jobCard.findFirst({
+        where: {
+          jobCardNo: { contains: cleanNo },
         },
         include: {
           subJobCards: { include: { currentStage: true } },

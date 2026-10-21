@@ -9,28 +9,47 @@ export class SubJobCardsService {
   constructor(private prisma: PrismaService) {}
 
   async findOne(id: string) {
-    const subCard = await this.prisma.subJobCard.findUnique({
-      where: { id },
-      include: {
-        currentStage: true,
-        jobCard: {
-          include: {
-            product: true,
-            customerPO: {
-              include: { customer: true },
-            },
-            processFlowMaster: {
-              include: {
-                steps: {
-                  include: { stage: true },
-                  orderBy: { stepOrder: 'asc' },
-                },
+    const rawId = (id || '').trim();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId);
+
+    const includeOptions = {
+      currentStage: true,
+      jobCard: {
+        include: {
+          product: true,
+          customerPO: {
+            include: { customer: true },
+          },
+          processFlowMaster: {
+            include: {
+              steps: {
+                include: { stage: true },
+                orderBy: { stepOrder: 'asc' as const },
               },
             },
           },
         },
       },
-    });
+    };
+
+    let subCard = isUuid
+      ? await this.prisma.subJobCard.findUnique({
+          where: { id: rawId },
+          include: includeOptions,
+        })
+      : null;
+
+    if (!subCard) {
+      subCard = await this.prisma.subJobCard.findFirst({
+        where: {
+          OR: [
+            { subJobCardNo: rawId },
+            { subJobCardNo: rawId.replace(/^sjc-/i, '') },
+          ],
+        },
+        include: includeOptions,
+      });
+    }
 
     if (!subCard) {
       throw new NotFoundException(`Sub Job Card with ID "${id}" not found`);
@@ -203,13 +222,30 @@ export class SubJobCardsService {
   }
 
   async getTraceabilityHistory(id: string, user: any) {
-    const subCard = await this.prisma.subJobCard.findUnique({ where: { id } });
+    const rawId = (id || '').trim();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId);
+
+    let subCard = isUuid
+      ? await this.prisma.subJobCard.findUnique({ where: { id: rawId } })
+      : null;
+
+    if (!subCard) {
+      subCard = await this.prisma.subJobCard.findFirst({
+        where: {
+          OR: [
+            { subJobCardNo: rawId },
+            { subJobCardNo: rawId.replace(/^sjc-/i, '') },
+          ],
+        },
+      });
+    }
+
     if (!subCard) {
       throw new NotFoundException(`Sub Job Card with ID "${id}" not found`);
     }
 
     const logs = await this.prisma.stageMovementLog.findMany({
-      where: { subJobCardId: id },
+      where: { subJobCardId: subCard.id },
       include: {
         stage: true,
         createdBy: {

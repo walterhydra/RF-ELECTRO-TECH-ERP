@@ -3370,28 +3370,6 @@ export default function JobCardsPage() {
 
       {activeSectionTab === 'PRODUCTION' && (
         <>
-          {/* Stage Scope Active Indicator Banner */}
-          {assignedStage && assignedStage !== 'ALL' && (
-            <div className="bg-amber-50 border border-amber-300 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping shrink-0" />
-                <span className="text-xs font-bold text-amber-950">
-                  Currently filtered to Stage: <span className="font-black underline">{assignedStage}</span> ({scopedCards.length} job card(s) at this stage out of {jobCards.length} total).
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setAssignedStage('ALL');
-                  setUserRole('MASTER');
-                }}
-                className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-black text-xs rounded-xl cursor-pointer shadow-xs active:scale-95 transition-all"
-              >
-                ★ Switch to ALL STAGES (View All {jobCards.length} Jobs)
-              </button>
-            </div>
-          )}
-
           {/* 2. SECOND ROW SUMMARY CARDS & BARCODE SCANNER */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-stretch">
         
@@ -6884,87 +6862,98 @@ export default function JobCardsPage() {
       {/* MODAL 7: JOB CARD TRACEABILITY & STAGE MOVEMENT HISTORY */}
       {historyModalJob && (
         <Portal>
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-[10000] flex items-center justify-center p-2 sm:p-4 overflow-hidden font-sans text-slate-900">
-            <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-5xl h-[92vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
+          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-2 sm:p-4 overflow-hidden font-quicksand text-slate-900">
+            <div className="bg-white border border-slate-300 rounded-lg sm:rounded-xl w-full max-w-6xl xl:max-w-7xl h-[92vh] max-h-[94vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-150 overflow-hidden font-quicksand">
 
-              {/* ── Modal Top Header ── */}
-              <div className="flex items-center justify-between px-6 py-4 bg-slate-900 text-white shrink-0 border-b border-slate-800">
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center shrink-0">
-                    <History className="w-5 h-5 text-blue-400" />
+              {/* ── Modal Top Header (Exact Match with New Job Card Enterprise Theme) ── */}
+              <div className="flex items-center justify-between px-7 py-5 sm:py-5.5 bg-slate-900 text-white shrink-0 border-b border-slate-800 font-quicksand">
+                <div className="flex items-center gap-4 sm:gap-5 min-w-0">
+                  <div className="h-11 sm:h-12 flex items-center shrink-0">
+                    <img
+                      src="/Assets/logo-1.png"
+                      alt="RF Electro Tech"
+                      className="h-10 sm:h-11 max-h-12 w-auto object-contain"
+                    />
                   </div>
+                  <div className="h-9 sm:h-10 w-px bg-slate-700 hidden sm:block shrink-0" />
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      <h3 className="font-bold text-white text-base tracking-tight">Stage Movement & Live History</h3>
-                      <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-blue-900/60 text-blue-200 border border-blue-700/60 font-mono">
-                        {historyModalJob.jobCardNo}
+                    <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+                      <h3 className="font-bold text-white text-xl sm:text-2xl tracking-tight font-quicksand">
+                        Stage Movement & Live History
+                      </h3>
+                      <span className="font-mono text-xs sm:text-sm px-3 py-0.5 rounded-md bg-slate-800 text-slate-100 border border-slate-700 font-bold shadow-xs">
+                        #{historyModalJob.jobCardNo}
                       </span>
                       {historyModalJob.customerCode && (
-                        <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700">
+                        <span className="font-mono text-xs px-2.5 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700 font-semibold">
                           {historyModalJob.customerCode}
                         </span>
                       )}
                       {historyModalJob.customerPartNo && (
-                        <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700 font-mono">
+                        <span className="font-mono text-xs px-2.5 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700 font-semibold">
                           Part: {historyModalJob.customerPartNo}
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
-                      Live shop floor movement ledger • 100% Real-time database record
+                    <p className="text-xs sm:text-sm text-slate-400 mt-1 font-medium font-quicksand">
+                      RF Electro Tech (India) Pvt. Ltd. • Live Shopfloor Movement & Traceability Audit Ledger
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
                   {/* View Mode Toggle: Timeline vs Table */}
-                  <div className="bg-slate-800 p-0.5 rounded-lg border border-slate-700 flex items-center gap-0.5">
+                  <div className="bg-slate-800 p-1 rounded-lg border border-slate-700 flex items-center gap-1">
                     <button
+                      type="button"
                       onClick={() => setHistoryViewMode('timeline')}
-                      className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+                      className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                         historyViewMode === 'timeline'
-                          ? 'bg-blue-600 text-white shadow-xs font-bold'
+                          ? 'bg-slate-700 text-white shadow-sm'
                           : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
-                      <Clock className="w-3.5 h-3.5" />
+                      <Clock className="w-4 h-4 text-amber-400" />
                       <span>Timeline</span>
                     </button>
                     <button
+                      type="button"
                       onClick={() => setHistoryViewMode('table')}
-                      className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 ${
+                      className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                         historyViewMode === 'table'
-                          ? 'bg-blue-600 text-white shadow-xs font-bold'
+                          ? 'bg-slate-700 text-white shadow-sm'
                           : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
-                      <Layers className="w-3.5 h-3.5" />
+                      <Layers className="w-4 h-4 text-blue-400" />
                       <span>Table</span>
                     </button>
                   </div>
 
                   <button
+                    type="button"
                     onClick={() => fetchJobCardHistory(historyModalJob)}
                     disabled={isHistoryLoading}
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-medium rounded-lg border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                    className="h-10 px-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs sm:text-sm font-bold rounded-lg border border-slate-700 flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50 shadow-sm"
                     title="Reload live movement data from server"
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isHistoryLoading ? 'animate-spin text-blue-400' : 'text-slate-300'}`} />
+                    <RefreshCw className={`w-4 h-4 ${isHistoryLoading ? 'animate-spin text-blue-400' : 'text-slate-300'}`} />
                     <span className="hidden sm:inline">{isHistoryLoading ? 'Syncing...' : 'Refresh'}</span>
                   </button>
 
                   <button
+                    type="button"
                     onClick={() => { setHistoryModalJob(null); setHistoryLogs([]); setHistorySearchQuery(''); }}
-                    className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+                    className="w-10 h-10 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer text-xl font-bold shrink-0"
                     title="Close modal"
                   >
-                    <X className="w-5 h-5" />
+                    ✕
                   </button>
                 </div>
               </div>
 
               {/* ── Summary & Metrics Bar (Clean, Unified 4-Card Strip) ── */}
-              <div className="px-6 py-3.5 bg-slate-50 border-b border-slate-200 shrink-0">
+              <div className="px-7 py-4 bg-slate-50 border-b border-slate-200 shrink-0 font-quicksand">
                 {(() => {
                   const defectLogs = historyLogs.filter((l: any) => (Number(l.qtyRejected) || 0) > 0 || String(l.remarkType || '').toUpperCase().includes('REJECT'));
                   const totalScrapQty = defectLogs.reduce((acc: number, l: any) => acc + (Number(l.qtyRejected) || 0), 0) || (historyModalJob.rejectedPcbQty || 0);
@@ -6976,24 +6965,24 @@ export default function JobCardsPage() {
                   const isUnlaunched = historyModalJob.status === 'UNLAUNCHED';
 
                   return (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 text-xs sm:text-sm">
                       {/* 1. Active Stage Card */}
-                      <div className="bg-white border border-blue-200/80 rounded-xl p-3 shadow-2xs">
-                        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider block font-mono">Current Stage</span>
-                        <div className="font-bold text-slate-900 text-sm truncate mt-0.5" title={activeStage}>
+                      <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 sm:p-4 shadow-2xs hover:shadow-xs transition-shadow">
+                        <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider block font-mono">Current Stage</span>
+                        <div className="font-bold text-slate-900 text-sm sm:text-base truncate mt-0.5" title={activeStage}>
                           {activeStage}
                         </div>
-                        <div className="flex items-center gap-1.5 mt-1">
+                        <div className="flex items-center gap-1.5 mt-1.5">
                           {isCompleted ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60">
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Finished
                             </span>
                           ) : isUnlaunched ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700">
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60">
                               <Clock className="w-3.5 h-3.5 text-amber-500" /> Pending Launch
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-blue-700">
+                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200/60">
                               <span className="relative flex h-2 w-2">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
@@ -7005,36 +6994,36 @@ export default function JobCardsPage() {
                       </div>
 
                       {/* 2. Total Volume Card */}
-                      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Lot Quantity</span>
+                      <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 sm:p-4 shadow-2xs hover:shadow-xs transition-shadow">
+                        <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider block font-mono">Lot Quantity</span>
                         <div className="flex items-baseline gap-1 mt-0.5">
-                          <strong className="text-lg font-black text-slate-900 font-mono">{totalBatchQty}</strong>
-                          <span className="text-xs text-slate-500 font-medium">PCBs</span>
+                          <strong className="text-xl sm:text-2xl font-black text-slate-900 font-mono">{totalBatchQty}</strong>
+                          <span className="text-xs text-slate-500 font-semibold">PCBs</span>
                         </div>
-                        <span className="text-[11px] text-slate-500 block mt-1 font-mono">
+                        <span className="text-xs text-slate-500 block mt-1 font-mono font-medium">
                           Area: {Number(historyModalJob.custPnlAreaSqm || historyModalJob.prodPnlAreaSqm || 0).toFixed(2)} m²
                         </span>
                       </div>
 
                       {/* 3. Quality & Yield Card */}
-                      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Quality & Yield</span>
+                      <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 sm:p-4 shadow-2xs hover:shadow-xs transition-shadow">
+                        <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider block font-mono">Quality & Yield</span>
                         <div className="flex items-baseline gap-1 mt-0.5">
-                          <strong className="text-lg font-black text-emerald-700 font-mono">{goodQty}</strong>
-                          <span className="text-xs text-slate-500 font-medium">Good ({yieldPercent}%)</span>
+                          <strong className="text-xl sm:text-2xl font-black text-emerald-700 font-mono">{goodQty}</strong>
+                          <span className="text-xs text-slate-500 font-semibold">Good ({yieldPercent}%)</span>
                         </div>
-                        <span className={`text-[11px] block mt-1 font-semibold ${totalScrapQty > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
+                        <span className={`text-xs block mt-1 font-semibold ${totalScrapQty > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
                           {totalScrapQty > 0 ? `⚠️ ${totalScrapQty} Scrap Logged` : '✓ Zero Scrap Logged'}
                         </span>
                       </div>
 
                       {/* 4. Process Flow & Specs Card */}
-                      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-2xs">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-mono">Process Flow</span>
-                        <div className="font-bold text-slate-800 text-sm truncate mt-0.5">
-                          {historyModalJob.jobFlowSelection || 'PF-01 (Standard)'}
+                      <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 sm:p-4 shadow-2xs hover:shadow-xs transition-shadow">
+                        <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider block font-mono">Process Flow</span>
+                        <div className="font-bold text-slate-800 text-sm sm:text-base truncate mt-0.5">
+                          {(historyModalJob as any).processFlowMaster?.name || historyModalJob.jobFlowSelection || 'PF-01 (Standard)'}
                         </div>
-                        <span className="text-[11px] text-slate-500 block mt-1">
+                        <span className="text-xs text-slate-500 block mt-1 font-medium truncate">
                           {historyModalJob.product?.layers ? `${historyModalJob.product.layers} Layers` : '2 Layers'} • {historyModalJob.product?.surfaceFinish || 'HASL'}
                         </span>
                       </div>
@@ -7043,22 +7032,23 @@ export default function JobCardsPage() {
                 })()}
               </div>
 
-              {/* ── Toolbar: Search & Filters ── */}
-              <div className="px-6 py-2.5 bg-white border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0">
-                <div className="flex items-center gap-2 flex-1 max-w-md">
+              {/* ── Toolbar: Search & Filters (Clean Fixed Spacing, No Overlap) ── */}
+              <div className="px-7 py-3.5 bg-white border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 font-quicksand">
+                <div className="flex items-center gap-3 flex-1 max-w-lg">
                   <div className="relative flex-1">
-                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="text"
                       value={historySearchQuery}
                       onChange={(e) => setHistorySearchQuery(e.target.value)}
                       placeholder="Search stage, operator, remark..."
-                      className="w-full pl-8.5 pr-7 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs placeholder:text-slate-400 focus:outline-none focus:border-blue-400 focus:bg-white transition-all text-slate-800"
+                      className="w-full h-10 pl-11 pr-8 bg-slate-50 border border-slate-300 rounded-lg text-xs sm:text-sm placeholder:text-slate-400 text-slate-900 focus:outline-none focus:border-slate-900 focus:bg-white transition-all font-medium"
                     />
                     {historySearchQuery && (
                       <button
+                        type="button"
                         onClick={() => setHistorySearchQuery('')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs p-0.5"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm p-0.5 cursor-pointer"
                       >✕</button>
                     )}
                   </div>
@@ -7066,7 +7056,7 @@ export default function JobCardsPage() {
                   <select
                     value={historyFilterType}
                     onChange={(e) => setHistoryFilterType(e.target.value as any)}
-                    className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:border-blue-400 cursor-pointer shrink-0 font-medium"
+                    className="h-10 px-3.5 bg-slate-50 border border-slate-300 rounded-lg text-xs sm:text-sm text-slate-800 focus:outline-none focus:border-slate-900 cursor-pointer shrink-0 font-bold"
                   >
                     <option value="ALL">All Events</option>
                     <option value="FORWARD">Stage Movements Only</option>
@@ -7075,11 +7065,12 @@ export default function JobCardsPage() {
                   </select>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2.5 shrink-0">
                   {historyLogs.length > 0 && (
                     <button
+                      type="button"
                       onClick={() => {
-                        let csvContent = "data:text/csv;charset=utf-8,Step No,Date & Time,Job Card No,Sub Lot,Process Stage,Event Type,Qty Received,Qty Forwarded,Qty Rejected,Operator Name,Operator Role,Remarks\n";
+                        let csvContent = "Step No,Date & Time,Job Card No,Sub Lot,Process Stage,Event Type,Qty Received,Qty Forwarded,Qty Rejected,Operator Name,Operator Role,Remarks\n";
                         historyLogs.forEach((l: any, i: number) => {
                           const dateStr = l.createdAt ? new Date(l.createdAt).toLocaleString('en-GB') : '-';
                           const stageName = `"${(l.stage?.name || l.stageName || '-').replace(/"/g, '""')}"`;
@@ -7090,16 +7081,20 @@ export default function JobCardsPage() {
                           const remarkStr = `"${(l.remarks || l.rejectionReason || '').replace(/"/g, '""')}"`;
                           csvContent += `${historyLogs.length - i},${dateStr},${historyModalJob.jobCardNo},${subNo},${stageName},${eventType},${l.qtyReceived || 0},${l.qtyForwarded || 0},${l.qtyRejected || 0},${opName},${opRole},${remarkStr}\n`;
                         });
-                        const encodedUri = encodeURI(csvContent);
+                        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                        const blobUrl = URL.createObjectURL(blob);
                         const link = document.createElement("a");
-                        link.setAttribute("href", encodedUri);
+                        link.setAttribute("href", blobUrl);
                         link.setAttribute("download", `history_${historyModalJob.jobCardNo}_${new Date().toISOString().split('T')[0]}.csv`);
-                        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(blobUrl);
                       }}
-                      className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium rounded-lg text-xs flex items-center gap-1.5 border border-slate-200 cursor-pointer transition-colors shadow-2xs"
+                      className="h-10 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs sm:text-sm flex items-center gap-2 border border-slate-800 cursor-pointer transition-colors shadow-xs"
                       title="Export live history as CSV"
                     >
-                      <Download className="w-3.5 h-3.5 text-slate-500" />
+                      <Download className="w-4 h-4 text-slate-300" />
                       <span>Export CSV</span>
                     </button>
                   )}
@@ -7107,7 +7102,7 @@ export default function JobCardsPage() {
               </div>
 
               {/* ── Main Content Area (Timeline vs Table) ── */}
-              <div className="flex-1 overflow-y-auto bg-slate-50/50 p-4 sm:p-6">
+              <div className="flex-1 overflow-y-auto bg-slate-50/50 p-4 sm:p-6 lg:p-8 font-quicksand">
                 {(() => {
                   const filtered = historyLogs.filter((log: any) => {
                     const isRej = (Number(log.qtyRejected) || 0) > 0 || String(log.remarkType || '').toUpperCase().includes('REJECT');
@@ -7140,8 +7135,8 @@ export default function JobCardsPage() {
                   if (isHistoryLoading) {
                     return (
                       <div className="py-24 text-center flex flex-col items-center justify-center gap-3">
-                        <RefreshCw className="w-7 h-7 text-blue-600 animate-spin" />
-                        <span className="text-xs text-slate-600 font-medium">Fetching authentic live stage logs from database...</span>
+                        <RefreshCw className="w-8 h-8 text-slate-700 animate-spin" />
+                        <span className="text-sm text-slate-600 font-semibold font-quicksand">Fetching authentic live stage logs from database...</span>
                       </div>
                     );
                   }
@@ -7149,12 +7144,12 @@ export default function JobCardsPage() {
                   if (filtered.length === 0) {
                     const activeStage = historyModalJob.currentStageName || PF01_STAGES[historyModalJob.currentStageIndex || 0] || '1. SHEARING';
                     return (
-                      <div className="py-20 text-center space-y-3 max-w-md mx-auto">
-                        <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
-                          <Clock className="w-6 h-6" />
+                      <div className="py-24 text-center space-y-3 max-w-lg mx-auto font-quicksand">
+                        <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
+                          <Clock className="w-7 h-7" />
                         </div>
-                        <h4 className="font-bold text-slate-800 text-sm">No Movement History Recorded Yet</h4>
-                        <p className="text-xs text-slate-500 leading-relaxed">
+                        <h4 className="font-bold text-slate-900 text-base">No Movement History Recorded Yet</h4>
+                        <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
                           {historySearchQuery
                             ? 'No stage movement events match your search query.'
                             : `This Job Card was launched and is currently awaiting processing at "${activeStage}". Movements will automatically log here as operators advance the lot.`}
@@ -7166,38 +7161,38 @@ export default function JobCardsPage() {
                   const activeStage = historyModalJob.currentStageName || PF01_STAGES[historyModalJob.currentStageIndex || 0] || '1. SHEARING';
                   const isCompleted = historyModalJob.status === 'COMPLETED';
 
-                  // ── VIEW 1: TIMELINE VIEW ──
+                  // ── VIEW 1: TIMELINE VIEW (Wide & Spacious) ──
                   if (historyViewMode === 'timeline') {
                     return (
-                      <div className="max-w-3xl mx-auto space-y-4">
+                      <div className="w-full max-w-5xl mx-auto space-y-4 font-quicksand">
                         {/* Current Active Status Indicator at top of timeline (if card in production) */}
                         {!isCompleted && historyModalJob.status !== 'UNLAUNCHED' && (
-                          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3.5 shadow-2xs">
-                            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                              <span className="relative flex h-3 w-3">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+                          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-5 flex items-start gap-4 shadow-sm text-white font-quicksand">
+                            <div className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
+                              <span className="relative flex h-3.5 w-3.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-blue-500"></span>
                               </span>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded font-mono">
-                                  CURRENT ACTIVE STAGE
+                              <div className="flex items-center gap-2.5 flex-wrap">
+                                <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-blue-300 bg-blue-900/60 border border-blue-700/60 px-2.5 py-0.5 rounded-md font-mono">
+                                  CURRENT ACTIVE WORKSTATION
                                 </span>
-                                <span className="text-xs text-blue-600 font-medium">In Production on Shop Floor</span>
+                                <span className="text-xs text-slate-300 font-medium">In Production on Shop Floor</span>
                               </div>
-                              <h4 className="font-extrabold text-slate-900 text-base mt-1">
+                              <h4 className="font-extrabold text-white text-base sm:text-lg mt-1 tracking-tight">
                                 {activeStage}
                               </h4>
-                              <p className="text-xs text-slate-600 mt-0.5">
-                                Lot is currently at this workstation. Once the operator finishes and moves it, the next live record will appear below.
+                              <p className="text-xs text-slate-400 mt-1 font-medium">
+                                Lot is currently at this workstation. Once the operator finishes processing and forwards it, the next live step will be logged automatically.
                               </p>
                             </div>
                           </div>
                         )}
 
                         {/* Chronological Event Cards */}
-                        <div className="relative pl-6 space-y-4 before:content-[''] before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-200">
+                        <div className="relative pl-7 space-y-4 before:content-[''] before:absolute before:left-3 before:top-4 before:bottom-4 before:w-0.5 before:bg-slate-200">
                           {filtered.map((log: any, idx: number) => {
                             const dateObj = log.createdAt ? new Date(log.createdAt) : null;
                             const dateStr = dateObj ? dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
@@ -7219,64 +7214,64 @@ export default function JobCardsPage() {
                             return (
                               <div key={log.id || idx} className="relative group">
                                 {/* Dot on timeline */}
-                                <div className={`absolute -left-6 top-3.5 w-5 h-5 rounded-full border-2 border-white shadow-xs flex items-center justify-center ${
+                                <div className={`absolute -left-7 top-4 w-6 h-6 rounded-full border-2 border-white shadow-xs flex items-center justify-center ${
                                   isRej ? 'bg-rose-600 text-white' :
-                                  isComp ? 'bg-purple-600 text-white' :
-                                  isInit ? 'bg-blue-600 text-white' :
+                                  isComp ? 'bg-emerald-600 text-white' :
+                                  isInit ? 'bg-slate-900 text-white' :
                                   isSplit ? 'bg-amber-500 text-white' :
                                   isInc ? 'bg-amber-500 text-white' :
                                   'bg-emerald-600 text-white'
                                 }`}>
                                   {isRej ? (
-                                    <AlertTriangle className="w-2.5 h-2.5" />
+                                    <AlertTriangle className="w-3 h-3" />
                                   ) : isComp ? (
-                                    <CheckCircle2 className="w-2.5 h-2.5" />
+                                    <CheckCircle2 className="w-3 h-3" />
                                   ) : isInit ? (
-                                    <Zap className="w-2.5 h-2.5" />
+                                    <Zap className="w-3 h-3" />
                                   ) : (
-                                    <ArrowRight className="w-2.5 h-2.5" />
+                                    <ArrowRight className="w-3 h-3" />
                                   )}
                                 </div>
 
                                 {/* Event Card */}
-                                <div className="bg-white border border-slate-200/90 rounded-xl p-4 shadow-2xs hover:shadow-xs transition-shadow">
+                                <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-2xs hover:shadow-xs hover:border-slate-300 transition-all font-quicksand">
                                   {/* Card Header: Step #, Stage Name, Status Badge, Timestamp */}
                                   <div className="flex items-start justify-between gap-3 flex-wrap">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="text-xs font-mono font-bold text-slate-400">
+                                    <div className="flex items-center gap-2.5 flex-wrap">
+                                      <span className="text-xs sm:text-sm font-mono font-bold text-slate-400">
                                         #{stepNumber}
                                       </span>
-                                      <h5 className="font-bold text-slate-900 text-sm">
+                                      <h5 className="font-bold text-slate-900 text-sm sm:text-base">
                                         {stageName}
                                       </h5>
                                       {subNo && subNo !== historyModalJob.jobCardNo && (
-                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-100 text-slate-600 border border-slate-200">
+                                        <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
                                           Lot: {subNo}
                                         </span>
                                       )}
                                       {/* Status Badge */}
                                       {isRej ? (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
                                           Defect Logged ({log.qtyRejected} PCBs)
                                         </span>
                                       ) : isComp ? (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                           Production Completed
                                         </span>
                                       ) : isInit ? (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-300">
                                           Production Launched
                                         </span>
                                       ) : isSplit ? (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
                                           Lot Split & Forwarded
                                         </span>
                                       ) : isInc ? (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
                                           Partial Movement
                                         </span>
                                       ) : (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                           Stage Completed & Forwarded
                                         </span>
                                       )}
@@ -7284,43 +7279,47 @@ export default function JobCardsPage() {
 
                                     {/* Timestamp */}
                                     <div className="text-right shrink-0">
-                                      <div className="text-xs font-bold text-slate-800">{dateStr}</div>
-                                      <div className="text-[10px] text-slate-400 font-mono">{timeStr}</div>
+                                      <div className="text-xs sm:text-sm font-bold text-slate-900">{dateStr}</div>
+                                      <div className="text-[11px] text-slate-400 font-mono mt-0.5">{timeStr}</div>
                                     </div>
                                   </div>
 
                                   {/* Quantity Flow Badges */}
-                                  <div className="flex items-center gap-3 flex-wrap mt-2.5 pt-2 border-t border-slate-100 text-xs">
-                                    <div className="flex items-center gap-1 text-slate-600">
-                                      <span className="text-[10px] text-slate-400 uppercase font-mono font-medium">Qty:</span>
-                                      <span className="font-mono font-bold text-slate-800">{log.qtyForwarded || log.qtyReceived || 0} PCBs Passed</span>
+                                  <div className="flex items-center gap-3 flex-wrap mt-3 pt-3 border-t border-slate-100 text-xs sm:text-sm">
+                                    <div className="flex items-center gap-1.5 text-slate-700 font-medium">
+                                      <span className="text-[10px] sm:text-[11px] text-slate-400 uppercase font-mono font-bold">Qty:</span>
+                                      <span className="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                                        {log.qtyForwarded || log.qtyReceived || 0} PCBs Passed
+                                      </span>
                                     </div>
 
                                     {log.qtyReceived !== undefined && log.qtyReceived !== log.qtyForwarded && (
-                                      <div className="text-[11px] text-slate-400 font-mono">
+                                      <div className="text-xs text-slate-400 font-mono">
                                         (Recv: {log.qtyReceived})
                                       </div>
                                     )}
 
                                     {log.qtyRejected > 0 && (
-                                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-200 font-mono">
+                                      <span className="px-2 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200 font-mono">
                                         ⚠️ {log.qtyRejected} Rejected
                                       </span>
                                     )}
 
                                     {/* Operator Info */}
-                                    <div className="ml-auto flex items-center gap-1.5 text-xs text-slate-600">
-                                      <User className="w-3.5 h-3.5 text-slate-400" />
-                                      <span className="font-semibold text-slate-800">{opName}</span>
-                                      <span className="text-[11px] text-slate-400">({opRole}{opDept ? ` • ${opDept}` : ''})</span>
+                                    <div className="ml-auto flex items-center gap-2 text-xs sm:text-sm text-slate-700 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200">
+                                      <User className="w-4 h-4 text-slate-400" />
+                                      <span className="font-bold text-slate-900">{opName}</span>
+                                      <span className="text-xs text-slate-500 font-medium">({opRole}{opDept ? ` • ${opDept}` : ''})</span>
                                     </div>
                                   </div>
 
-                                  {/* Remarks Box (clean, if present) */}
+                                  {/* Remarks Box (clean note callout) */}
                                   {(log.remarks || log.rejectionReason) && (
-                                    <div className="mt-2.5 bg-slate-50 border border-slate-200/80 rounded-lg p-2 text-xs text-slate-700 font-sans">
-                                      <span className="font-medium text-slate-500 mr-1.5">Note:</span>
-                                      <span>{log.remarks || log.rejectionReason}</span>
+                                    <div className="mt-3 bg-slate-50 border border-slate-200/90 rounded-lg p-2.5 text-xs sm:text-sm text-slate-700 flex items-start gap-2">
+                                      <span className="font-bold text-slate-500 uppercase tracking-wide text-[10px] px-2 py-0.5 rounded bg-slate-200/70 border border-slate-300/60 shrink-0 mt-0.5">
+                                        Note
+                                      </span>
+                                      <span className="font-medium text-slate-800 leading-relaxed">{log.remarks || log.rejectionReason}</span>
                                     </div>
                                   )}
                                 </div>
@@ -7332,19 +7331,19 @@ export default function JobCardsPage() {
                     );
                   }
 
-                  // ── VIEW 2: CLEAN TABLE VIEW ──
+                  // ── VIEW 2: CLEAN TABLE VIEW (Full Width & Spacious) ──
                   return (
-                    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-                      <table className="w-full text-left border-collapse text-xs">
-                        <thead className="bg-slate-100 text-slate-600 border-b border-slate-200 font-mono text-[11px] uppercase tracking-wider font-bold">
+                    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs font-quicksand">
+                      <table className="w-full text-left border-collapse text-xs sm:text-sm">
+                        <thead className="bg-slate-100 text-slate-700 border-b border-slate-200 font-mono text-[11px] uppercase tracking-wider font-bold">
                           <tr>
-                            <th className="py-3 px-4 w-12 text-center">#</th>
-                            <th className="py-3 px-4 w-40">Date & Time</th>
-                            <th className="py-3 px-4">Stage</th>
-                            <th className="py-3 px-4 w-36">Status</th>
-                            <th className="py-3 px-4 text-right w-28">Quantity</th>
-                            <th className="py-3 px-4 w-44">Operator</th>
-                            <th className="py-3 px-4">Remarks</th>
+                            <th className="py-3.5 px-4 w-12 text-center">#</th>
+                            <th className="py-3.5 px-4 w-44">Date & Time</th>
+                            <th className="py-3.5 px-4">Stage</th>
+                            <th className="py-3.5 px-4 w-44">Status</th>
+                            <th className="py-3.5 px-4 text-right w-32">Quantity</th>
+                            <th className="py-3.5 px-4 w-52">Operator</th>
+                            <th className="py-3.5 px-4">Remarks</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-slate-800">
@@ -7364,55 +7363,55 @@ export default function JobCardsPage() {
 
                             return (
                               <tr key={log.id || idx} className={`hover:bg-slate-50/80 transition-colors ${isRej ? 'bg-rose-50/40' : ''}`}>
-                                <td className="py-3 px-4 text-center font-mono font-bold text-slate-400">
+                                <td className="py-3.5 px-4 text-center font-mono font-bold text-slate-400">
                                   #{stepNumber}
                                 </td>
-                                <td className="py-3 px-4 whitespace-nowrap font-mono text-[11px]">
+                                <td className="py-3.5 px-4 whitespace-nowrap font-mono text-xs">
                                   <div className="font-bold text-slate-900">{dateStr}</div>
-                                  <div className="text-[10px] text-slate-400">{timeStr}</div>
+                                  <div className="text-[11px] text-slate-400">{timeStr}</div>
                                 </td>
-                                <td className="py-3 px-4">
-                                  <div className="font-bold text-slate-900 text-xs">{stageName}</div>
+                                <td className="py-3.5 px-4">
+                                  <div className="font-bold text-slate-900 text-sm">{stageName}</div>
                                   {subNo && subNo !== historyModalJob.jobCardNo && (
-                                    <div className="text-[10px] font-mono text-slate-500 font-semibold mt-0.5">
+                                    <div className="text-xs font-mono text-slate-600 font-semibold mt-0.5">
                                       Lot: {subNo}
                                     </div>
                                   )}
                                 </td>
-                                <td className="py-3 px-4 whitespace-nowrap">
+                                <td className="py-3.5 px-4 whitespace-nowrap">
                                   {isRej ? (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
                                       Defect Logged
                                     </span>
                                   ) : isComp ? (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                       Completed
                                     </span>
                                   ) : isInit ? (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-800 border border-slate-300">
                                       Launched
                                     </span>
                                   ) : isSplit ? (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
                                       Lot Split
                                     </span>
                                   ) : (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                       Forwarded
                                     </span>
                                   )}
                                 </td>
-                                <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
+                                <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900 text-sm">
                                   {log.qtyForwarded || log.qtyReceived || 0} PCBs
                                   {log.qtyRejected > 0 && (
-                                    <div className="text-[10px] text-rose-600">({log.qtyRejected} scrap)</div>
+                                    <div className="text-xs text-rose-600">({log.qtyRejected} scrap)</div>
                                   )}
                                 </td>
-                                <td className="py-3 px-4 whitespace-nowrap">
-                                  <div className="font-bold text-slate-900 text-xs">{opName}</div>
-                                  <div className="text-[10px] text-slate-400">{opRole}</div>
+                                <td className="py-3.5 px-4 whitespace-nowrap">
+                                  <div className="font-bold text-slate-900 text-sm">{opName}</div>
+                                  <div className="text-xs text-slate-400 font-medium">{opRole}</div>
                                 </td>
-                                <td className="py-3 px-4 text-xs text-slate-600 max-w-xs truncate" title={log.remarks || log.rejectionReason || ''}>
+                                <td className="py-3.5 px-4 text-xs sm:text-sm text-slate-600 max-w-xs truncate font-medium" title={log.remarks || log.rejectionReason || ''}>
                                   {log.remarks || log.rejectionReason || '—'}
                                 </td>
                               </tr>
@@ -7426,14 +7425,15 @@ export default function JobCardsPage() {
               </div>
 
               {/* ── Modal Footer ── */}
-              <div className="flex items-center justify-between px-6 py-3.5 border-t border-slate-200 bg-white shrink-0">
-                <span className="text-slate-500 text-xs flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span>{historyLogs.length} live records loaded directly from database</span>
+              <div className="flex items-center justify-between px-7 py-4 border-t border-slate-200 bg-slate-50 shrink-0 font-quicksand">
+                <span className="text-slate-600 text-xs sm:text-sm font-medium flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span>Live shopfloor ledger • <strong>{historyLogs.length}</strong> verified database records</span>
                 </span>
                 <button
+                  type="button"
                   onClick={() => { setHistoryModalJob(null); setHistoryLogs([]); setHistorySearchQuery(''); }}
-                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs transition-colors cursor-pointer shadow-sm"
+                  className="h-10 px-6 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs sm:text-sm transition-colors cursor-pointer shadow-sm"
                 >
                   Close
                 </button>
