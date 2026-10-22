@@ -3261,25 +3261,25 @@ export default function JobCardsPage() {
                 <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight whitespace-nowrap">
                   Job Cards & Movement Flow
                 </h1>
-                <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 tracking-wide font-sans shrink-0">
+                <span className="hidden md:inline-block px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 tracking-wide font-sans shrink-0">
                   Standard Production Workflow
                 </span>
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wider inline-flex items-center gap-1 font-mono shrink-0">
+                <span className="hidden md:inline-flex px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase tracking-wider items-center gap-1 font-mono shrink-0">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                   LIVE
                 </span>
               </div>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
+              <p className="hidden md:block text-xs text-slate-500 font-medium mt-0.5">
                 Track PCB Job Cards, scan barcodes, execute full or split stage movement from Launch to Packing.
               </p>
             </div>
           </div>
 
-          {/* Right: Primary Quick Action Buttons */}
-          <div className="flex items-center gap-2 flex-wrap shrink-0">
+          {/* Right: Primary Quick Action Buttons (2-col grid on mobile, inline flex row on desktop) */}
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto shrink-0">
             <button
               onClick={() => setShowReportDrawer(true)}
-              className="h-9 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer whitespace-nowrap active:scale-95"
+              className="h-9 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer whitespace-nowrap active:scale-95 w-full sm:w-auto"
             >
               <BarChart3 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
               <span>WIP Excel Report</span>
@@ -3287,7 +3287,7 @@ export default function JobCardsPage() {
 
             <button
               onClick={handleForceCloudSync}
-              className="h-9 px-3 bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all border border-blue-200 whitespace-nowrap cursor-pointer active:scale-95"
+              className="h-9 px-3 bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all border border-blue-200 whitespace-nowrap cursor-pointer active:scale-95 w-full sm:w-auto"
               title="Purge local cache and force-sync live cards from cloud database"
             >
               <RefreshCw className="w-3.5 h-3.5 stroke-[2.5] text-blue-600" />
@@ -3296,7 +3296,7 @@ export default function JobCardsPage() {
 
             <Link
               href="/job-cards/launch"
-              className="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all border border-slate-300/80 whitespace-nowrap cursor-pointer active:scale-95"
+              className="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all border border-slate-300/80 whitespace-nowrap cursor-pointer active:scale-95 w-full sm:w-auto"
             >
               <Plus className="w-3.5 h-3.5 stroke-[2.5] text-slate-700" />
               <span>Launch Page ↗</span>
@@ -3304,7 +3304,7 @@ export default function JobCardsPage() {
 
             <Link
               href="/job-cards/movement"
-              className="h-9 px-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all border border-blue-700 whitespace-nowrap cursor-pointer active:scale-95"
+              className="h-9 px-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all border border-blue-700 whitespace-nowrap cursor-pointer active:scale-95 w-full sm:w-auto"
             >
               <RefreshCw className="w-3.5 h-3.5 stroke-[2.5] text-white" />
               <span>Job Movement ➔</span>
@@ -3312,7 +3312,7 @@ export default function JobCardsPage() {
 
             <button
               onClick={() => handleOpenCreateModal()}
-              className="h-9 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-emerald-700"
+              className="col-span-2 sm:col-auto h-9 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-emerald-700 w-full sm:w-auto"
             >
               <Plus className="w-4 h-4 stroke-[3] text-white" />
               <span>Add New Card</span>
@@ -3321,21 +3321,22 @@ export default function JobCardsPage() {
         </div>
       </div>
 
-      {/* ── SECTION SWITCHER TABS ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200/90 shadow-2xs">
-        <div className="flex items-center gap-2 flex-wrap">
+      {/* ── SECTION SWITCHER TABS (Clean 2-Col Segmented Control on Mobile, Inline Flex on Desktop) ── */}
+      <div className="bg-white p-2 sm:p-2.5 rounded-2xl border border-slate-200/90 shadow-2xs">
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 sm:gap-2">
           <button
             onClick={() => setActiveSectionTab('PRODUCTION')}
-            className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer ${
+            className={`w-full sm:w-auto px-2.5 sm:px-4 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 sm:gap-2 transition-all cursor-pointer ${
               activeSectionTab === 'PRODUCTION'
                 ? 'bg-blue-600 text-white shadow-xs ring-2 ring-blue-600/20'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200/70 border border-slate-200'
             }`}
           >
-            <Factory className="w-4 h-4" />
-            <span>Active Production WIP</span>
+            <Factory className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="sm:hidden">Active WIP</span>
+            <span className="hidden sm:inline">Active Production WIP</span>
             <span
-              className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-black ${
+              className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] font-mono font-black ${
                 activeSectionTab === 'PRODUCTION'
                   ? 'bg-blue-800/80 text-blue-100'
                   : 'bg-slate-200 text-slate-700'
@@ -3347,16 +3348,17 @@ export default function JobCardsPage() {
 
           <button
             onClick={() => setActiveSectionTab('COMPLETED_DISPATCH')}
-            className={`px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer ${
+            className={`w-full sm:w-auto px-2.5 sm:px-4 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 sm:gap-2 transition-all cursor-pointer ${
               activeSectionTab === 'COMPLETED_DISPATCH'
                 ? 'bg-emerald-600 text-white shadow-xs ring-2 ring-emerald-600/20'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200/70 border border-slate-200'
             }`}
           >
-            <Truck className="w-4 h-4" />
-            <span>Completed & Dispatch Hub</span>
+            <Truck className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="sm:hidden">Dispatch Hub</span>
+            <span className="hidden sm:inline">Completed & Dispatch Hub</span>
             <span
-              className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-black ${
+              className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] font-mono font-black ${
                 activeSectionTab === 'COMPLETED_DISPATCH'
                   ? 'bg-emerald-800/80 text-emerald-100'
                   : 'bg-slate-200 text-slate-700'
@@ -3371,10 +3373,10 @@ export default function JobCardsPage() {
       {activeSectionTab === 'PRODUCTION' && (
         <>
           {/* 2. SECOND ROW SUMMARY CARDS & BARCODE SCANNER (Stage Filter Banner Removed) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-stretch">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3.5 items-stretch">
         
         {/* Card 1: Barcode & Mobile Camera Scanner / Fast Stage Movement */}
-        <div className="bg-white border border-blue-100 rounded-2xl p-3.5 shadow-xs flex flex-col justify-between space-y-2 min-h-[96px] hover:border-blue-200 transition-colors">
+        <div className="col-span-2 lg:col-span-1 bg-white border border-blue-100 rounded-2xl p-3 sm:p-3.5 shadow-xs flex flex-col justify-between space-y-2 min-h-[96px] hover:border-blue-200 transition-colors">
           <div className="flex items-center justify-between gap-1">
             <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700 uppercase tracking-wider shrink-0">
               <Scan className="w-4 h-4 text-blue-600 shrink-0" />
@@ -3405,38 +3407,38 @@ export default function JobCardsPage() {
         </div>
 
         {/* Card 2: Active Job Cards */}
-        <div className="bg-white border border-blue-100 rounded-2xl p-4 shadow-xs flex items-center gap-3 min-h-[96px]">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
-            <Layers className="w-5 h-5" />
+        <div className="bg-white border border-blue-100 rounded-2xl p-3 sm:p-4 shadow-xs flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 justify-between min-h-0 sm:min-h-[96px]">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
+            <Layers className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">ACTIVE JOB CARDS</span>
+              <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">ACTIVE JOB CARDS</span>
               <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
             </div>
-            <div className="text-base sm:text-lg font-black text-slate-900 font-mono mt-0.5 truncate">
+            <div className="text-sm sm:text-base lg:text-lg font-black text-slate-900 font-mono mt-0.5 truncate">
               {totalMasterCards} Master Cards
             </div>
-            <div className="text-[11px] text-blue-700 font-semibold truncate">
+            <div className="text-[10px] sm:text-[11px] text-blue-700 font-semibold truncate">
               • {inProgressCount} Active in Prod ({totalSubLots} Lots)
             </div>
           </div>
         </div>
 
         {/* Card 3: Total Production PCB */}
-        <div className="bg-white border border-emerald-100 rounded-2xl p-4 shadow-xs flex items-center gap-3 min-h-[96px]">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
-            <Cpu className="w-5 h-5" />
+        <div className="bg-white border border-emerald-100 rounded-2xl p-3 sm:p-4 shadow-xs flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 justify-between min-h-0 sm:min-h-[96px]">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
+            <Cpu className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">TOTAL PRODUCTION PCB</span>
+              <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">TOTAL PRODUCTION PCB</span>
               <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
             </div>
-            <div className="text-base sm:text-lg font-black text-slate-900 font-mono mt-0.5 truncate">
+            <div className="text-sm sm:text-base lg:text-lg font-black text-slate-900 font-mono mt-0.5 truncate">
               {activePcbCount} PCBs
             </div>
-            <div className="text-[11px] text-emerald-700 font-semibold truncate">
+            <div className="text-[10px] sm:text-[11px] text-emerald-700 font-semibold truncate">
               • {activePcbCount} PCBs In-Progress
             </div>
           </div>
@@ -3445,7 +3447,7 @@ export default function JobCardsPage() {
         {/* Card 4: Overdue Job Cards (Interactive Metric) */}
         <div
           onClick={() => setStatusRadio(statusRadio === 'Overdue' ? 'All' : 'Overdue')}
-          className={`border rounded-2xl p-4 shadow-xs flex items-center gap-3 min-h-[96px] cursor-pointer transition-all ${
+          className={`border rounded-2xl p-3 sm:p-4 shadow-xs flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 justify-between min-h-0 sm:min-h-[96px] cursor-pointer transition-all ${
             statusRadio === 'Overdue'
               ? 'bg-rose-600 text-white border-rose-700 shadow-md ring-2 ring-rose-400'
               : overdueCount > 0
@@ -3454,18 +3456,18 @@ export default function JobCardsPage() {
           }`}
 
         >
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold shrink-0 ${
+          <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center font-bold shrink-0 ${
             statusRadio === 'Overdue'
               ? 'bg-white/20 text-white'
               : overdueCount > 0
               ? 'bg-rose-100 text-rose-700'
               : 'bg-slate-100 text-slate-500'
           }`}>
-            <AlertCircle className="w-5 h-5" />
+            <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between">
-              <span className={`text-[10px] font-bold uppercase tracking-wider ${
+              <span className={`text-[9.5px] sm:text-[10px] font-bold uppercase tracking-wider ${
                 statusRadio === 'Overdue' ? 'text-rose-100' : overdueCount > 0 ? 'text-rose-900' : 'text-slate-500'
               }`}>
                 OVERDUE JOB CARDS
@@ -3474,12 +3476,12 @@ export default function JobCardsPage() {
                 <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping shrink-0" />
               )}
             </div>
-            <div className={`text-base sm:text-lg font-black font-mono mt-0.5 truncate ${
+            <div className={`text-sm sm:text-base lg:text-lg font-black font-mono mt-0.5 truncate ${
               statusRadio === 'Overdue' ? 'text-white' : overdueCount > 0 ? 'text-rose-950' : 'text-slate-900'
             }`}>
               {overdueCount} Cards
             </div>
-            <div className={`text-[11px] font-semibold truncate ${
+            <div className={`text-[10px] sm:text-[11px] font-semibold truncate ${
               statusRadio === 'Overdue' ? 'text-rose-100' : overdueCount > 0 ? 'text-rose-700' : 'text-slate-500'
             }`}>
               • {overduePcbCount} PCBs Past Target
@@ -3488,19 +3490,19 @@ export default function JobCardsPage() {
         </div>
 
         {/* Card 5: Total WIP Area */}
-        <div className="bg-white border border-purple-100 rounded-2xl p-4 shadow-xs flex items-center gap-3 min-h-[96px]">
-          <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold shrink-0">
-            <Split className="w-5 h-5" />
+        <div className="bg-white border border-purple-100 rounded-2xl p-3 sm:p-4 shadow-xs flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 justify-between min-h-0 sm:min-h-[96px]">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold shrink-0">
+            <Split className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">TOTAL WIP AREA</span>
+              <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">TOTAL WIP AREA</span>
               <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0"></span>
             </div>
-            <div className="text-base sm:text-lg font-black text-slate-900 font-mono mt-0.5 truncate">
+            <div className="text-sm sm:text-base lg:text-lg font-black text-slate-900 font-mono mt-0.5 truncate">
               {activeSqmArea.toFixed(1)} Sqm
             </div>
-            <div className="text-[11px] text-purple-700 font-semibold truncate">
+            <div className="text-[10px] sm:text-[11px] text-purple-700 font-semibold truncate">
               • {activeSqmArea.toFixed(1)} Sqm Active Floor
             </div>
           </div>
@@ -3509,64 +3511,64 @@ export default function JobCardsPage() {
       </div>
 
       {/* 2.5 ANALYTICS & LIVE MOVEMENT WIDGETS SECTION */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 items-stretch font-quicksand">
         
         {/* LEFT: Top 3 WIP Stages by SQM Area */}
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3 flex flex-col justify-between">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 shadow-xs space-y-3 flex flex-col justify-between font-quicksand">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 gap-2 font-quicksand">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0 ring-1 ring-blue-500/20">
                 <BarChart3 className="w-4 h-4" />
               </div>
-              <div>
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+              <div className="min-w-0">
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide truncate font-quicksand">
                   Top 3 WIP Stages (By Area)
                 </h3>
-                <p className="text-[11px] text-slate-500">Highest active floor volume in production</p>
+                <p className="hidden sm:block text-[11px] text-slate-500 font-quicksand">Highest active floor volume in production</p>
               </div>
             </div>
-            <span className="text-xs font-bold font-mono text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+            <span className="text-[11px] sm:text-xs font-bold font-quicksand text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200 whitespace-nowrap shrink-0 shadow-2xs">
               {top3WipStages.reduce((acc, curr) => acc + curr.areaSqm, 0).toFixed(1)} Sqm Total
             </span>
           </div>
 
           {/* Stage Progress Items */}
-          <div className="space-y-2 flex-1 flex flex-col justify-center">
+          <div className="space-y-2 flex-1 flex flex-col justify-center font-quicksand">
             {top3WipStages.length > 0 ? (
               top3WipStages.map((stg, idx) => (
                 <div
                   key={stg.stageName}
-                  className="space-y-1.5 bg-slate-50/60 hover:bg-slate-50 p-2.5 rounded-lg border border-slate-200/80 transition-colors"
+                  className="bg-white hover:bg-slate-50/70 p-2.5 rounded-xl border border-slate-200/80 transition-all shadow-2xs space-y-2 font-quicksand"
                 >
-                  <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center justify-between text-xs gap-2 font-quicksand">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-[11px] font-bold font-mono text-slate-500 w-4 shrink-0">
+                      <span className="text-xs font-bold font-quicksand text-slate-400 w-4 text-center shrink-0">
                         #{idx + 1}
                       </span>
-                      <span className="font-bold text-slate-900 font-mono text-xs truncate">
+                      <span className="font-bold text-slate-900 font-quicksand text-xs truncate">
                         {stg.stageName}
                       </span>
-                      <span className="text-[11px] text-slate-500 font-mono shrink-0 hidden sm:inline-block">
+                      <span className="text-[10px] text-slate-400 font-quicksand shrink-0 hidden sm:inline-block">
                         ({stg.cardCount} Cards • {stg.pcbQty} PCBs)
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 font-mono text-xs shrink-0">
+                    <div className="flex items-center gap-2 font-quicksand text-xs shrink-0">
                       <span className="font-bold text-slate-900">{stg.areaSqm} Sqm</span>
-                      <span className="text-[11px] font-semibold text-slate-600 bg-slate-200/70 px-1.5 py-0.2 rounded">
+                      <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200/60 px-1.5 py-0.5 rounded-md font-quicksand">
                         {stg.percentage}%
                       </span>
                     </div>
                   </div>
-                  <div className="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden flex">
+                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex">
                     <div
-                      className="h-full bg-slate-800 transition-all duration-300 rounded-full"
+                      className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-300 rounded-full"
                       style={{ width: `${Math.max(5, stg.percentage)}%` }}
                     />
                   </div>
                 </div>
               ))
             ) : (
-              <div className="text-center py-5 text-xs text-slate-400 font-medium bg-slate-50 rounded-lg border border-dashed border-slate-200">
+              <div className="text-center py-5 text-xs text-slate-400 font-medium bg-slate-50 rounded-lg border border-dashed border-slate-200 font-quicksand">
                 No active WIP stages currently running
               </div>
             )}
@@ -3574,29 +3576,29 @@ export default function JobCardsPage() {
         </div>
 
         {/* RIGHT: Top 5 Rejection Job Cards (Live Movement Entries) */}
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3 flex flex-col justify-between">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 shadow-xs space-y-3 flex flex-col justify-between font-quicksand">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 gap-2 font-quicksand">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center font-bold shrink-0 ring-1 ring-rose-500/20">
                 <ShieldAlert className="w-4 h-4" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide truncate font-quicksand">
                     Top 5 Rejection Job Cards
                   </h3>
-                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0" />
                 </div>
-                <p className="text-[11px] text-slate-500">Live operator defect entries during stage movement</p>
+                <p className="hidden sm:block text-[11px] text-slate-500 font-quicksand">Live operator defect entries during stage movement</p>
               </div>
             </div>
-            <span className="text-xs font-bold font-mono text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+            <span className="text-[11px] sm:text-xs font-bold font-quicksand text-rose-700 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-200 whitespace-nowrap shrink-0 shadow-2xs">
               {top5RejectedCards.reduce((acc, curr) => acc + (curr.rejectedPcbQty || 0), 0)} Rejections
             </span>
           </div>
 
           {/* Rejection List */}
-          <div className="space-y-1.5 flex-1">
+          <div className="space-y-2 flex-1 font-quicksand">
             {top5RejectedCards.length > 0 ? (
               top5RejectedCards.map((jc, idx) => {
                 const lastLog = jc.rejectionLogs?.[jc.rejectionLogs.length - 1];
@@ -3610,46 +3612,62 @@ export default function JobCardsPage() {
                     key={jc.id}
                     onClick={() => fetchJobCardHistory(jc)}
                     title="Click to view job card history"
-                    className="group flex items-center justify-between gap-3 bg-slate-50/50 hover:bg-slate-100/80 border border-slate-200/80 p-2 rounded-lg transition-colors cursor-pointer"
+                    className="group relative flex items-center justify-between gap-3 bg-white hover:bg-rose-50/20 border border-slate-200/80 hover:border-rose-200 p-2.5 rounded-xl transition-all shadow-2xs hover:shadow-xs cursor-pointer font-quicksand"
                   >
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <span className="text-[11px] font-bold font-mono text-slate-400 w-4 text-center shrink-0">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1 font-quicksand">
+                      {/* Rank Indicator */}
+                      <span className="text-xs font-bold font-quicksand text-slate-400 w-4 text-center shrink-0">
                         #{idx + 1}
                       </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-xs text-slate-900 bg-white px-1.5 py-0.2 rounded border border-slate-200">
+
+                      <div className="min-w-0 flex-1 font-quicksand">
+                        {/* Job Card No & Customer Details - No boxes around words */}
+                        <div className="flex items-center gap-2 min-w-0 font-quicksand">
+                          <span className="font-quicksand font-bold text-xs text-slate-900 group-hover:text-rose-600 tracking-normal">
                             {jc.jobCardNo}
                           </span>
-                          <span className="text-xs font-semibold text-slate-700 truncate">{jc.customerCode}</span>
-                          <span className="text-[11px] text-slate-400 font-mono truncate hidden sm:inline-block">({jc.customerPartNo})</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500">
-                          {lastLog?.stageName && (
-                            <span className="font-mono font-medium text-slate-700 bg-slate-200/60 px-1.5 py-0.2 rounded">
-                              {lastLog.stageName}
+                          {jc.customerCode && (
+                            <span className="text-[11px] font-semibold font-quicksand text-slate-500 truncate">
+                              • {jc.customerCode}
                             </span>
                           )}
-                          <span className="truncate">
+                          {jc.customerPartNo && (
+                            <span className="text-[10px] text-slate-400 font-quicksand truncate hidden sm:inline-block">
+                              ({jc.customerPartNo})
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Defect Stage & Remark - Clean text without boxes */}
+                        <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500 font-quicksand">
+                          {lastLog?.stageName && (
+                            <span className="font-quicksand font-bold text-slate-700 shrink-0">
+                              {lastLog.stageName} •
+                            </span>
+                          )}
+                          <span className="truncate text-slate-500 text-[11px] font-medium font-quicksand">
                             {cleanRemark || 'Stage Movement Rejection'}
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="text-right shrink-0 font-mono">
-                      <div className="text-xs font-bold text-rose-600">
+                    {/* Defect Metrics */}
+                    <div className="text-right shrink-0 font-quicksand">
+                      <div className="text-xs font-bold font-quicksand text-rose-600">
                         {jc.rejectedPcbQty} PCBs
                       </div>
-                      <div className="text-[11px] text-slate-500 font-medium">
-                        {jc.rejectedAreaSqm || 0} Sqm
-                      </div>
+                      {Number(jc.rejectedAreaSqm || 0) > 0 ? (
+                        <div className="text-[10px] font-quicksand text-slate-400 font-medium">
+                          {jc.rejectedAreaSqm} Sqm
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 );
               })
             ) : (
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center text-xs text-slate-600 font-medium flex items-center justify-center gap-2">
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center text-xs text-slate-600 font-medium flex items-center justify-center gap-2 font-quicksand">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>No rejections logged yet across active job cards.</span>
               </div>
@@ -4245,9 +4263,9 @@ export default function JobCardsPage() {
         </div>
 
         {/* Mobile Vertical Cards View (Optimized for Mobile Screens) */}
-        <div className="block md:hidden divide-y divide-slate-200 bg-slate-50/50">
+        <div className="block md:hidden p-3 space-y-3 bg-slate-100/70 font-quicksand">
           {filteredCards.length === 0 ? (
-            <div className="p-8 text-center text-slate-500 text-xs font-medium">
+            <div className="p-8 text-center text-slate-500 text-xs font-medium bg-white rounded-2xl border border-slate-200">
               No job cards found for current selection.
             </div>
           ) : (
@@ -4258,210 +4276,214 @@ export default function JobCardsPage() {
               const progressPct = isUnlaunched ? 0 : isCompleted ? 100 : Math.round(((stageIndex + 1) / PF01_STAGES.length) * 100);
               const isNewTagVisible = isUnlaunched;
               const overdue = isCardOverdue(jc);
+              const displayArea = jc.custPnlAreaSqm ? jc.custPnlAreaSqm.toFixed(2) : (jc.prodPnlAreaSqm ? jc.prodPnlAreaSqm.toFixed(2) : '0.00');
+              const displayPendingQty = jc.totalPcbQty || (jc.custPnlQty && jc.custPnlQty > 50 ? jc.custPnlQty : (jc.prodPnlQty ? Math.round(jc.prodPnlQty * 4) : 160));
+              const hasRejections = Number(jc.rejectedPcbQty || 0) > 0;
 
               return (
                 <div 
                   key={`mobile-${jc.id}`}
-                  className={`p-3.5 transition-colors ${
-                    isNewTagVisible ? 'bg-emerald-50/70 border-l-4 border-l-emerald-500' : 'bg-white'
-                  }`}
+                  className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden transition-all font-quicksand"
                 >
-                  {/* Row 1: Header (WIP No, Print Icon, Tags, Priority) */}
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <button
-                        onClick={() => setShowQrModal(jc)}
-                        title="Print QR Sticker Tag"
-                        className="text-amber-800 hover:text-amber-950 p-1 bg-amber-50 border border-amber-200 rounded-md cursor-pointer shrink-0 shadow-2xs active:scale-95"
-                      >
-                        <Printer className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => setPdfPreviewJob(jc)}
-                        title="View Job Card Route Sheet PDF"
-                        className="text-slate-700 hover:text-slate-950 p-1 bg-slate-100 border border-slate-200 rounded-md cursor-pointer shrink-0 shadow-2xs active:scale-95"
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="font-mono font-extrabold text-sm text-slate-900 tracking-tight">
-                        {jc.subJobCardNo || jc.jobCardNo}
-                      </span>
-                      {isNewTagVisible && (
-                        <span className="px-1.5 py-0.5 bg-emerald-600 text-white font-black text-[9px] rounded uppercase tracking-wider animate-pulse shadow-2xs">
-                          NEW
-                        </span>
-                      )}
-                      {jc.subJobCards && jc.subJobCards.length > 1 && (
-                        <span className="text-[9px] font-mono px-1.5 py-0.5 bg-blue-50 text-blue-700 font-bold rounded border border-blue-200">
-                          Lot {(jc.subJobCards.findIndex((s) => s.id === jc.id) >= 0 ? jc.subJobCards.findIndex((s) => s.id === jc.id) + 1 : idx + 1)}/{jc.subJobCards.length}
-                        </span>
-                      )}
-                    </div>
+                  {/* Top Status Accent Bar */}
+                  <div className={`h-1 w-full ${
+                    overdue 
+                      ? 'bg-rose-500' 
+                      : isCompleted 
+                      ? 'bg-emerald-500' 
+                      : isUnlaunched 
+                      ? 'bg-amber-400' 
+                      : 'bg-blue-600'
+                  }`} />
 
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span
-                        className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase border ${
-                          jc.priority === 'MOST URGENT' || jc.priority === 'HIGH'
-                            ? 'bg-rose-50 text-rose-700 border-rose-200 font-black'
-                            : 'bg-slate-100 text-slate-700 border-slate-200'
-                        }`}
-                      >
-                        {jc.priority === 'MOST URGENT' ? 'Top Priority' : jc.priority || 'Normal'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Row 2: Product Name & Code */}
-                  <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-2.5 mb-2 space-y-1">
-                    <div className="flex items-center justify-between text-xs gap-2">
-                      <span className="font-bold text-slate-900 truncate" title={jc.customerPartNo}>
-                        {jc.customerPartNo || 'No Part Name'}
-                      </span>
-                      <span className="font-mono font-extrabold text-[11px] text-blue-700 px-1.5 py-0.5 bg-blue-50 border border-blue-200 rounded shrink-0">
-                        {jc.rfePartCode}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] text-slate-500">
-                      <span>Customer: <strong className="text-slate-800">{jc.customerCode || '—'}</strong></span>
-                      <span>Area: <strong className="text-emerald-700 font-mono font-bold">{jc.custPnlAreaSqm ? jc.custPnlAreaSqm.toFixed(2) : (jc.prodPnlAreaSqm ? jc.prodPnlAreaSqm.toFixed(2) : '45.00')} m²</strong></span>
-                    </div>
-                  </div>
-
-                  {/* Row 3: Key Stats Grid (Pending, Rejections, Launch, Target) */}
-                  <div className="grid grid-cols-2 gap-2 mb-2 text-xs">
-                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 flex items-center justify-between">
-                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Pending Qty</div>
-                      <div className="font-mono font-black text-slate-900 text-xs">
-                        {jc.totalPcbQty || (jc.custPnlQty && jc.custPnlQty > 50 ? jc.custPnlQty : (jc.prodPnlQty ? Math.round(jc.prodPnlQty * 4) : 160))} <span className="text-[9px] font-normal text-slate-500">PCBs</span>
-                      </div>
-                    </div>
-                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 flex items-center justify-between">
-                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Rejections</div>
-                      <div className={`font-mono font-black text-xs ${jc.rejectedPcbQty && jc.rejectedPcbQty > 0 ? 'text-rose-600' : 'text-slate-900'}`}>
-                        {jc.rejectedPcbQty || 0}
-                      </div>
-                    </div>
-                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 flex items-center justify-between">
-                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Launch</div>
-                      <div className="font-mono text-[10px] font-medium text-slate-700">
-                        {formatDateDisplay(jc.launchedAt || jc.createdAt)}
-                      </div>
-                    </div>
-                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 flex items-center justify-between">
-                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Target</div>
-                      <div className="flex items-center gap-1">
-                        <span className={`font-mono text-[10px] ${overdue ? 'text-rose-700 font-extrabold' : 'font-medium text-slate-700'}`}>
-                          {formatDateDisplay(jc.targetDate)}
+                  <div className="p-3.5 space-y-3">
+                    {/* Header: Card Number + Quick Actions & Priority */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="font-bold text-sm text-slate-900 tracking-tight truncate">
+                          {jc.subJobCardNo || jc.jobCardNo}
                         </span>
-                        {overdue && (
-                          <span className="px-1 py-0.2 bg-rose-100 text-rose-900 text-[8px] font-black rounded border border-rose-300 inline-flex items-center shadow-2xs">
-                            OVERDUE
+                        {isNewTagVisible && (
+                          <span className="px-1.5 py-0.5 bg-emerald-600 text-white font-bold text-[9px] rounded uppercase tracking-wider shrink-0">
+                            NEW
+                          </span>
+                        )}
+                        {jc.subJobCards && jc.subJobCards.length > 1 && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.2 bg-blue-50 text-blue-700 rounded border border-blue-200/70 shrink-0">
+                            Lot {(jc.subJobCards.findIndex((s) => s.id === jc.id) >= 0 ? jc.subJobCards.findIndex((s) => s.id === jc.id) + 1 : idx + 1)}/{jc.subJobCards.length}
                           </span>
                         )}
                       </div>
-                    </div>
-                  </div>
 
-                  {/* Row 4: Current Stage & Progress Bar */}
-                  <div className="space-y-1.5 mb-2.5 bg-white border border-slate-200/90 rounded-xl p-2.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-[11px] font-bold text-slate-600">Current Stage:</span>
-                      {isUnlaunched ? (
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-100 text-slate-600 border border-slate-200 font-mono inline-flex items-center gap-1 shadow-2xs">
-                          <Clock className="w-3 h-3 text-slate-400 shrink-0" /> UNLAUNCHED
+                      {/* Header Right: Priority & Print/PDF */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => setShowQrModal(jc)}
+                          title="Print QR Sticker Tag"
+                          className="p-1 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
+                        >
+                          <Printer className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setPdfPreviewJob(jc)}
+                          title="View Job Card Route Sheet PDF"
+                          className="p-1 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded-lg cursor-pointer transition-colors"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                        <span
+                          className={`px-2 py-0.5 rounded-full font-bold text-[10px] uppercase border ${
+                            jc.priority === 'MOST URGENT' || jc.priority === 'HIGH'
+                              ? 'bg-rose-50 text-rose-700 border-rose-200'
+                              : 'bg-slate-100 text-slate-600 border-slate-200/80'
+                          }`}
+                        >
+                          {jc.priority === 'MOST URGENT' ? 'Top Priority' : jc.priority || 'Normal'}
                         </span>
-                      ) : isCompleted ? (
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-emerald-100 text-emerald-900 border border-emerald-300 font-mono inline-flex items-center gap-1 shadow-2xs">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" /> 20. PACKING (DONE)
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-blue-100 text-blue-900 border border-blue-300 font-mono inline-flex items-center gap-1 shadow-2xs">
-                          <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse shrink-0" />
-                          {jc.currentStageName || PF01_STAGES[0]}
-                        </span>
-                      )}
-                    </div>
-                    
-                    <div className="w-full bg-slate-200 rounded-full h-3 relative overflow-hidden border border-slate-300/80">
-                      <div
-                        className={`h-full text-[8px] font-extrabold text-white flex items-center justify-center transition-all px-1 whitespace-nowrap ${
-                          progressPct >= 100
-                            ? 'bg-emerald-600'
-                            : progressPct >= 50
-                            ? 'bg-amber-500'
-                            : 'bg-rose-500'
-                        }`}
-                        style={{ width: `${Math.max(15, progressPct)}%` }}
-                      >
-                        {progressPct}%
                       </div>
                     </div>
-                  </div>
 
-                  {/* Row 5: Action Buttons */}
-                  <div className="flex items-center gap-1.5 pt-0.5">
-                    {isUnlaunched ? (
+                    {/* Part & Customer Information (Clean hierarchy, no boxed borders) */}
+                    <div className="pt-0.5 pb-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-bold text-xs text-slate-900 truncate" title={jc.customerPartNo}>
+                            {jc.customerPartNo || 'Standard Production Item'}
+                          </h4>
+                          <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                            Customer: <span className="font-semibold text-slate-800">{jc.customerCode || '—'}</span>
+                          </p>
+                        </div>
+                        {jc.rfePartCode ? (
+                          <span className="text-[10px] font-bold text-blue-700 px-2 py-0.5 bg-blue-50 border border-blue-200/70 rounded-md shrink-0">
+                            {jc.rfePartCode}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {/* Unified Production Metrics Strip (Sleek unified card instead of 4 separate boxes) */}
+                    <div className="bg-slate-50/90 rounded-xl p-2.5 border border-slate-200/70 grid grid-cols-4 gap-2 text-center">
+                      <div className="min-w-0">
+                        <span className="text-[9.5px] font-semibold text-slate-400 uppercase tracking-wider block">Qty</span>
+                        <span className="font-bold text-xs text-slate-900 block mt-0.5 truncate">
+                          {displayPendingQty} <span className="text-[9px] font-medium text-slate-500">PCBs</span>
+                        </span>
+                      </div>
+                      <div className="min-w-0 border-l border-slate-200/80 pl-1">
+                        <span className="text-[9.5px] font-semibold text-slate-400 uppercase tracking-wider block">Rejects</span>
+                        <span className={`font-bold text-xs block mt-0.5 truncate ${hasRejections ? 'text-rose-600' : 'text-slate-700'}`}>
+                          {jc.rejectedPcbQty || 0}
+                        </span>
+                      </div>
+                      <div className="min-w-0 border-l border-slate-200/80 pl-1">
+                        <span className="text-[9.5px] font-semibold text-slate-400 uppercase tracking-wider block">Area</span>
+                        <span className="font-bold text-xs text-slate-800 block mt-0.5 truncate">
+                          {displayArea} m²
+                        </span>
+                      </div>
+                      <div className="min-w-0 border-l border-slate-200/80 pl-1">
+                        <span className="text-[9.5px] font-semibold text-slate-400 uppercase tracking-wider block">Target</span>
+                        <span className={`font-bold text-[11px] block mt-0.5 truncate ${overdue ? 'text-rose-600' : 'text-slate-700'}`}>
+                          {formatDateDisplay(jc.targetDate)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Stage & Progress Bar (Seamless, Professional) */}
+                    <div className="space-y-1.5 pt-0.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-[11px] font-semibold text-slate-500 shrink-0">Stage:</span>
+                          <span className="font-bold text-xs text-slate-900 truncate">
+                            {isUnlaunched ? 'Unlaunched' : isCompleted ? '20. PACKING (COMPLETED)' : (jc.currentStageName || PF01_STAGES[0])}
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-bold text-blue-600 shrink-0">
+                          {progressPct}%
+                        </span>
+                      </div>
+                      
+                      {/* Modern Smooth Progress Bar */}
+                      <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-300 rounded-full ${
+                            progressPct >= 100
+                              ? 'bg-emerald-500'
+                              : progressPct >= 50
+                              ? 'bg-blue-600'
+                              : 'bg-gradient-to-r from-blue-500 to-indigo-600'
+                          }`}
+                          style={{ width: `${Math.max(4, progressPct)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Action Buttons: Clean & Cohesive Button Palette */}
+                    <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                      {isUnlaunched ? (
+                        <button
+                          onClick={() => handleLaunchExistingJobCard(jc.id)}
+                          className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 transition-all"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>Launch Job</span>
+                        </button>
+                      ) : isCompleted ? (
+                        <div className="flex-1 py-2 px-3 bg-emerald-50 text-emerald-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 border border-emerald-200">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Production Complete</span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setSelectedMovementJob(jc);
+                            setHasRejectionInMovement(false);
+                            setFullMoveRejectQty(0);
+                            setFullMoveRemarks('');
+                            setFullMoveRemarkType('Clear Movement');
+                            setPartialMoveQty(Math.max(1, Math.floor((jc.totalPcbQty || 160) / 2)));
+                            setMovementTab('FULL');
+                          }}
+                          className="flex-1 py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 transition-all"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5 stroke-[2.5]" />
+                          <span>Move Stage ➔</span>
+                        </button>
+                      )}
+
                       <button
-                        onClick={() => handleLaunchExistingJobCard(jc.id)}
-                        className="flex-1 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-lg text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                        onClick={() => fetchJobCardHistory(jc)}
+                        title="View Full Stage Movement & Traceability History"
+                        className="py-2 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-slate-200/80 active:scale-95 transition-all"
                       >
-                        <Play className="w-3 h-3 fill-current" />
-                        <span>LAUNCH</span>
+                        <History className="w-3.5 h-3.5 text-slate-600" />
+                        <span>History</span>
                       </button>
-                    ) : isCompleted ? (
-                      <span className="flex-1 py-1.5 px-3 bg-emerald-100 border border-emerald-300 text-emerald-900 font-extrabold rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-2xs font-mono">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>DONE</span>
-                      </span>
-                    ) : (
+
                       <button
-                        onClick={() => {
-                          setSelectedMovementJob(jc);
-                          setHasRejectionInMovement(false);
-                          setFullMoveRejectQty(0);
-                          setFullMoveRemarks('');
-                          setFullMoveRemarkType('Clear Movement');
-                          setPartialMoveQty(Math.max(1, Math.floor((jc.totalPcbQty || 160) / 2)));
-                          setMovementTab('FULL');
-                        }}
-                        className="flex-1 py-1.5 px-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black rounded-lg border border-amber-600/90 text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                        onClick={() => handleOpenEditModal(jc)}
+                        title="Edit Job Card Parameters"
+                        className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/80 rounded-xl inline-flex items-center justify-center cursor-pointer transition-all active:scale-95"
                       >
-                        <RefreshCw className="w-3 h-3 stroke-[3]" />
-                        <span>Move Stage ➔</span>
+                        <Pencil className="w-3.5 h-3.5" />
                       </button>
-                    )}
 
-                    <button
-                      onClick={() => fetchJobCardHistory(jc)}
-                      title="View Full Stage Movement & Traceability History"
-                      className="py-1.5 px-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1 cursor-pointer shadow-xs active:scale-95"
-                    >
-                      <History className="w-3.5 h-3.5 text-white" />
-                      <span>History</span>
-                    </button>
-
-                    <button
-                      onClick={() => handleOpenEditModal(jc)}
-                      title="Edit Job Card Parameters"
-                      className="p-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-lg inline-flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-
-                    {isSuperAdmin && (
-                      <button
-                        onClick={() => setDeleteConfirmCard(jc)}
-                        disabled={Boolean(deletingCardId && (deletingCardId === jc.id || deletingCardId === jc.jobCardNo))}
-                        title="Delete Job Card (Super Admin Only)"
-                        className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg inline-flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-2xs disabled:opacity-50"
-                      >
-                        {deletingCardId && (deletingCardId === jc.id || deletingCardId === jc.jobCardNo) ? (
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-3.5 h-3.5" />
-                        )}
-                      </button>
-                    )}
+                      {isSuperAdmin && (
+                        <button
+                          onClick={() => setDeleteConfirmCard(jc)}
+                          disabled={Boolean(deletingCardId && (deletingCardId === jc.id || deletingCardId === jc.jobCardNo))}
+                          title="Delete Job Card (Super Admin Only)"
+                          className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 rounded-xl inline-flex items-center justify-center cursor-pointer transition-all active:scale-95 disabled:opacity-50"
+                        >
+                          {deletingCardId && (deletingCardId === jc.id || deletingCardId === jc.jobCardNo) ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );

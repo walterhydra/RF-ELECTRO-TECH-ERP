@@ -52,7 +52,7 @@ export default function LandingPage() {
             <Phone className="w-4 h-4" />
             +91 9205009707
           </a>
-          <Link href={isLoggedIn ? "/dashboard" : "/login"} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-semibold text-sm transition-all shadow-sm ml-2">
+          <Link href={isLoggedIn ? "/dashboard" : "/login"} className="hidden sm:inline-flex bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-semibold text-sm transition-all shadow-sm ml-2">
             {isLoggedIn ? "ERP Dashboard" : "ERP Login"}
           </Link>
         </div>
@@ -312,7 +312,7 @@ export default function LandingPage() {
             Hi, how can I help?
           </a>
         </div>
-        <div className="fixed bottom-6 right-20 sm:right-22 z-[90]">
+        <div className="hidden sm:block fixed bottom-6 right-20 sm:right-22 z-[90]">
           <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="bg-blue-400 hover:bg-blue-500 text-white p-4 rounded-full shadow-lg transition-transform hover:scale-110 flex items-center justify-center cursor-pointer">
             <ArrowUp className="w-5 h-5" />
           </button>

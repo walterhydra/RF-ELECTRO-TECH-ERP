@@ -240,87 +240,208 @@ class MainActivity : AppCompatActivity() {
                     // 3. Inject CSS overrides
                     var styleId = '$MOBILE_CSS_OVERRIDE_ID';
                     var existingStyle = document.getElementById(styleId);
+                    var cssRules = `
+                        @media (max-width: 768px) {
+                            html, body {
+                                max-width: 100vw !important;
+                                overflow-x: hidden !important;
+                                -webkit-tap-highlight-color: transparent;
+                            }
+
+                            /* Hide overlapping or unnecessary elements in the navbar */
+                            header input, 
+                            header div.relative.max-w-2xl,
+                            header button[aria-label*="menu"],
+                            header svg.lucide-menu { 
+                                display: none !important; 
+                            }
+
+                            /* Ensure top header remains a clean single row */
+                            header {
+                                height: 60px !important;
+                                min-height: 60px !important;
+                                padding-left: 55px !important; /* Make room for dots icon */
+                                position: sticky !important;
+                                top: 0 !important;
+                                z-index: 40 !important;
+                                background: #ffffff !important;
+                                display: flex !important;
+                                align-items: center !important;
+                                border-bottom: 1px solid #e2e8f0 !important;
+                            }
+
+                            /* Sidebar Mobile Drawer - restricted to ~65% width */
+                            aside, [class*="w-64"] {
+                                position: fixed !important;
+                                top: 0 !important;
+                                left: 0 !important;
+                                height: 100vh !important;
+                                width: 65vw !important; 
+                                max-width: 320px !important;
+                                z-index: 100000 !important;
+                                transform: translateX(-100%) !important;
+                                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                                box-shadow: 4px 0 25px rgba(0,0,0,0.5) !important;
+                                background: #0F172A !important;
+                                overflow-y: auto !important;
+                                display: block !important;
+                            }
+                            aside.mobile-drawer-open, [class*="w-64"].mobile-drawer-open {
+                                transform: translateX(0) !important;
+                            }
+
+                            /* Backdrop Overlay */
+                            #mobile-sidebar-backdrop {
+                                position: fixed;
+                                top: 0;
+                                left: 0;
+                                width: 100vw;
+                                height: 100vh;
+                                background: rgba(0, 0, 0, 0.45);
+                                z-index: 99999;
+                                display: none;
+                                backdrop-filter: blur(1px);
+                            }
+                            #mobile-sidebar-backdrop.active {
+                                display: block !important;
+                            }
+
+                            /* Main Content Area adjustments & Smooth Bidirectional Touch Scrolling */
+                            main, .flex-1, div.flex-1 {
+                                width: 100% !important;
+                                max-width: 100vw !important;
+                                margin-left: 0 !important;
+                                -webkit-overflow-scrolling: touch !important;
+                                overscroll-behavior-y: contain !important;
+                                touch-action: auto !important;
+                            }
+
+                            /* Recharts Responsive Horizontal Scrolling & Non-overlapping Labels on Mobile */
+                            .recharts-scroll-container,
+                            div:has(> .recharts-responsive-container) {
+                                overflow-x: auto !important;
+                                overflow-y: hidden !important;
+                                -webkit-overflow-scrolling: touch !important;
+                                max-width: 100% !important;
+                                touch-action: pan-x pan-y !important;
+                                padding-bottom: 14px !important;
+                                scrollbar-width: thin !important;
+                            }
+
+                            .recharts-responsive-container {
+                                min-width: 840px !important;
+                            }
+
+                            .recharts-surface, .recharts-wrapper {
+                                overflow: visible !important;
+                            }
+
+                            .recharts-cartesian-axis-tick text {
+                                font-size: 11px !important;
+                                font-weight: 500 !important;
+                            }
+
+                            /* Hide ERP Login / Dashboard button from landing page top navbar in mobile app */
+                            nav.absolute a[href*="login"],
+                            nav.absolute a[href*="dashboard"] {
+                                display: none !important;
+                            }
+
+                            /* Hide floating scroll-to-top arrow button on landing page in mobile app */
+                            button:has(svg.lucide-arrow-up),
+                            div:has(> button svg.lucide-arrow-up),
+                            div.fixed:has(button.bg-blue-400) {
+                                display: none !important;
+                            }
+
+                            /* Hide Job Cards workflow badge, green LIVE badge, and subtitle in mobile app */
+                            div:has(> h1) span:has(span.bg-emerald-500),
+                            div:has(> h1) span.bg-emerald-50,
+                            div:has(> h1) span.bg-slate-100.text-slate-700,
+                            div:has(> div > h1) > p.text-slate-500 {
+                                display: none !important;
+                            }
+
+                            /* Proper arrangement for Job Cards quick action buttons on mobile */
+                            div:has(> a[href*="/job-cards/launch"]) {
+                                display: grid !important;
+                                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                                gap: 8px !important;
+                                width: 100% !important;
+                            }
+                            div:has(> a[href*="/job-cards/launch"]) > button,
+                            div:has(> a[href*="/job-cards/launch"]) > a {
+                                width: 100% !important;
+                                justify-content: center !important;
+                            }
+                            div:has(> a[href*="/job-cards/launch"]) > button:last-child {
+                                grid-column: span 2 / span 2 !important;
+                            }
+
+                            /* Section Switcher Tabs on mobile: side-by-side 2-col segmented control */
+                            div:has(> button:has(svg.lucide-factory)) {
+                                display: grid !important;
+                                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                                gap: 6px !important;
+                                width: 100% !important;
+                            }
+                            div:has(> button:has(svg.lucide-factory)) > button {
+                                width: 100% !important;
+                                justify-content: center !important;
+                                padding-left: 8px !important;
+                                padding-right: 8px !important;
+                            }
+
+                            /* 2x2 Grid for Job Cards KPI metric boxes on mobile */
+                            div:has(> div:has(> form input[placeholder*="Scan"])) {
+                                display: grid !important;
+                                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                                gap: 10px !important;
+                                width: 100% !important;
+                            }
+                            div:has(> form input[placeholder*="Scan"]) {
+                                grid-column: span 2 / span 2 !important;
+                            }
+                            div:has(> div:has(> form input[placeholder*="Scan"])) > div:not(:has(form)) {
+                                padding: 12px !important;
+                                min-height: auto !important;
+                                display: flex !important;
+                                flex-direction: column !important;
+                                justify-content: space-between !important;
+                                gap: 6px !important;
+                            }
+
+                            /* Top 3 WIP Stages & Analytics widgets mobile polish */
+                            div:has(> div > div > h3) {
+                                padding: 12px !important;
+                                border-radius: 16px !important;
+                                font-family: 'Quicksand', sans-serif !important;
+                            }
+                            div:has(> div > div > h3) * {
+                                font-family: 'Quicksand', sans-serif !important;
+                            }
+                            div:has(> div > div > h3) > div:first-child > span:last-child {
+                                white-space: nowrap !important;
+                                font-size: 11px !important;
+                                padding: 2px 8px !important;
+                                flex-shrink: 0 !important;
+                            }
+                            div:has(> div > div > h3) > div:first-child p {
+                                display: none !important;
+                            }
+                            div:has(> div > div > h3) .bg-slate-800 {
+                                background: linear-gradient(90deg, #3b82f6, #1d4ed8) !important;
+                                border-radius: 9999px !important;
+                            }
+                        }
+                    `;
                     if (!existingStyle) {
                         var style = document.createElement('style');
                         style.id = styleId;
-                        style.innerHTML = `
-                            @media (max-width: 768px) {
-                                html, body {
-                                    max-width: 100vw !important;
-                                    overflow-x: hidden !important;
-                                    -webkit-tap-highlight-color: transparent;
-                                }
-
-                                /* Hide overlapping or unnecessary elements in the navbar */
-                                header input, 
-                                header div.relative.max-w-2xl,
-                                header button[aria-label*="menu"],
-                                header svg.lucide-menu { 
-                                    display: none !important; 
-                                }
-
-                                /* Ensure top header remains a clean single row */
-                                header {
-                                    height: 60px !important;
-                                    min-height: 60px !important;
-                                    padding-left: 55px !important; /* Make room for dots icon */
-                                    position: sticky !important;
-                                    top: 0 !important;
-                                    z-index: 40 !important;
-                                    background: #ffffff !important;
-                                    display: flex !important;
-                                    align-items: center !important;
-                                    border-bottom: 1px solid #e2e8f0 !important;
-                                }
-
-                                /* Sidebar Mobile Drawer - restricted to ~65% width */
-                                aside, [class*="w-64"] {
-                                    position: fixed !important;
-                                    top: 0 !important;
-                                    left: 0 !important;
-                                    height: 100vh !important;
-                                    width: 65vw !important; 
-                                    max-width: 320px !important;
-                                    z-index: 100000 !important;
-                                    transform: translateX(-100%) !important;
-                                    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-                                    box-shadow: 4px 0 25px rgba(0,0,0,0.5) !important;
-                                    background: #0F172A !important;
-                                    overflow-y: auto !important;
-                                    display: block !important;
-                                }
-                                aside.mobile-drawer-open, [class*="w-64"].mobile-drawer-open {
-                                    transform: translateX(0) !important;
-                                }
-
-                                /* Backdrop Overlay */
-                                #mobile-sidebar-backdrop {
-                                    position: fixed;
-                                    top: 0;
-                                    left: 0;
-                                    width: 100vw;
-                                    height: 100vh;
-                                    background: rgba(0, 0, 0, 0.45);
-                                    z-index: 99999;
-                                    display: none;
-                                    backdrop-filter: blur(1px);
-                                }
-                                #mobile-sidebar-backdrop.active {
-                                    display: block !important;
-                                }
-
-                                /* Main Content Area adjustments & Smooth Bidirectional Touch Scrolling */
-                                main, .flex-1, div.flex-1 {
-                                    width: 100% !important;
-                                    max-width: 100vw !important;
-                                    margin-left: 0 !important;
-                                    -webkit-overflow-scrolling: touch !important;
-                                    overscroll-behavior-y: contain !important;
-                                    touch-action: pan-y !important;
-                                }
-                            }
-                        `;
+                        style.innerHTML = cssRules;
                         document.head.appendChild(style);
+                    } else if (existingStyle.innerHTML !== cssRules) {
+                        existingStyle.innerHTML = cssRules;
                     }
 
                     // 4. Backdrop Injection
@@ -383,6 +504,192 @@ class MainActivity : AppCompatActivity() {
                     } else if (existingBtn) {
                         existingBtn.remove();
                     }
+
+                    // 7. Chart horizontal scrolling & non-overlapping spacing optimization
+                    var charts = document.querySelectorAll('.recharts-responsive-container');
+                    var chartNeedsResize = false;
+                    charts.forEach(function(chart) {
+                        var parent = chart.parentElement;
+                        if (parent) {
+                            if (!parent.classList.contains('recharts-scroll-container')) {
+                                parent.classList.add('recharts-scroll-container');
+                            }
+                            parent.style.setProperty('overflow-x', 'auto', 'important');
+                            parent.style.setProperty('overflow-y', 'hidden', 'important');
+                            parent.style.setProperty('-webkit-overflow-scrolling', 'touch', 'important');
+                            parent.style.setProperty('max-width', '100%', 'important');
+                            parent.style.setProperty('touch-action', 'pan-x pan-y', 'important');
+                            parent.style.setProperty('padding-bottom', '14px', 'important');
+
+                            // Add subtle scroll indicator hint badge if not present
+                            if (!parent.dataset.hintAdded) {
+                                parent.dataset.hintAdded = 'true';
+                                var card = parent.closest('.rounded-xl') || parent.parentElement;
+                                if (card) {
+                                    var existingHint = card.querySelector('.mobile-chart-hint');
+                                    if (!existingHint) {
+                                        var hint = document.createElement('div');
+                                        hint.className = 'mobile-chart-hint';
+                                        hint.innerHTML = '👉 Swipe horizontally to view all stages';
+                                        hint.style.cssText = 'font-size: 11px; color: #2563eb; font-weight: 600; text-align: right; padding-right: 4px; margin-top: -4px; margin-bottom: 6px; letter-spacing: 0.01em;';
+                                        parent.insertAdjacentElement('beforebegin', hint);
+                                    }
+                                }
+                            }
+                        }
+
+                        // Calculate dynamic min-width based on tick/bar count (guarantee at least 42px per stage)
+                        var tickCount = chart.querySelectorAll('.recharts-xAxis .recharts-cartesian-axis-tick').length || 20;
+                        var targetWidth = Math.max(840, tickCount * 42) + 'px';
+                        if (chart.style.minWidth !== targetWidth) {
+                            chart.style.setProperty('min-width', targetWidth, 'important');
+                            chart.style.setProperty('width', targetWidth, 'important');
+                            chartNeedsResize = true;
+                        }
+                    });
+
+                    if (chartNeedsResize) {
+                        window.dispatchEvent(new Event('resize'));
+                    }
+
+                    // 8. Remove ERP Login / Dashboard button from landing page navbar in mobile app
+                    var landingNavBtns = document.querySelectorAll('nav.absolute a');
+                    landingNavBtns.forEach(function(btn) {
+                        var txt = (btn.textContent || '').trim().toLowerCase();
+                        var href = (btn.getAttribute('href') || '').toLowerCase();
+                        if (txt === 'erp login' || txt === 'erp dashboard' || href.indexOf('login') !== -1 || href.indexOf('dashboard') !== -1) {
+                            btn.style.setProperty('display', 'none', 'important');
+                        }
+                    });
+
+                    // 9. Remove floating scroll-to-top arrow button from landing page in mobile app
+                    var arrowIcons = document.querySelectorAll('button svg.lucide-arrow-up, button svg[class*="arrow-up"]');
+                    arrowIcons.forEach(function(icon) {
+                        var btn = icon.closest('button');
+                        if (btn) {
+                            var parentDiv = btn.parentElement;
+                            if (parentDiv && parentDiv.classList.contains('fixed')) {
+                                parentDiv.style.setProperty('display', 'none', 'important');
+                            } else {
+                                btn.style.setProperty('display', 'none', 'important');
+                            }
+                        }
+                    });
+
+                    // 10. Job Cards page mobile header cleanup: remove workflow badge, green live badge, and subtitle
+                    var headings = document.querySelectorAll('h1');
+                    headings.forEach(function(h1) {
+                        if ((h1.textContent || '').indexOf('Job Cards') !== -1) {
+                            var headerContainer = h1.parentElement;
+                            if (headerContainer) {
+                                var spans = headerContainer.querySelectorAll('span');
+                                spans.forEach(function(s) {
+                                    var sText = (s.textContent || '').trim().toUpperCase();
+                                    if (sText.indexOf('STANDARD PRODUCTION WORKFLOW') !== -1 || sText === 'LIVE' || s.querySelector('.bg-emerald-500')) {
+                                        s.style.setProperty('display', 'none', 'important');
+                                    }
+                                });
+                            }
+                            var infoCol = h1.closest('.min-w-0');
+                            if (infoCol) {
+                                var desc = infoCol.querySelector('p');
+                                if (desc && (desc.textContent || '').indexOf('Track PCB Job Cards') !== -1) {
+                                    desc.style.setProperty('display', 'none', 'important');
+                                }
+                            }
+                        }
+                    });
+
+                    // 11. Proper arrangement for Job Cards quick action buttons on mobile
+                    var actionRow = document.querySelector('div:has(> a[href*="/job-cards/launch"])') ||
+                                    document.querySelector('div:has(> a[href*="/job-cards/movement"])');
+                    if (actionRow && window.innerWidth <= 768) {
+                        actionRow.style.setProperty('display', 'grid', 'important');
+                        actionRow.style.setProperty('grid-template-columns', 'repeat(2, minmax(0, 1fr))', 'important');
+                        actionRow.style.setProperty('gap', '8px', 'important');
+                        actionRow.style.setProperty('width', '100%', 'important');
+                        var btns = actionRow.children;
+                        for (var bIdx = 0; bIdx < btns.length; bIdx++) {
+                            btns[bIdx].style.setProperty('width', '100%', 'important');
+                            btns[bIdx].style.setProperty('justify-content', 'center', 'important');
+                        }
+                        if (btns.length >= 5) {
+                            btns[btns.length - 1].style.setProperty('grid-column', 'span 2 / span 2', 'important');
+                        }
+                    }
+
+                    // 12. Section Switcher Tabs on mobile: side-by-side 2-col segmented control
+                    var tabRow = document.querySelector('div:has(> button:has(svg.lucide-factory))');
+                    if (tabRow && window.innerWidth <= 768) {
+                        tabRow.style.setProperty('display', 'grid', 'important');
+                        tabRow.style.setProperty('grid-template-columns', 'repeat(2, minmax(0, 1fr))', 'important');
+                        tabRow.style.setProperty('gap', '6px', 'important');
+                        tabRow.style.setProperty('width', '100%', 'important');
+                        var tabs = tabRow.children;
+                        for (var tIdx = 0; tIdx < tabs.length; tIdx++) {
+                            tabs[tIdx].style.setProperty('width', '100%', 'important');
+                            tabs[tIdx].style.setProperty('justify-content', 'center', 'important');
+                            tabs[tIdx].style.setProperty('padding-left', '8px', 'important');
+                            tabs[tIdx].style.setProperty('padding-right', '8px', 'important');
+                        }
+                    }
+
+                    // 13. Proper 2x2 box arrangement for KPI metrics on mobile
+                    var kpiContainer = document.querySelector('div:has(> div:has(> form input[placeholder*="Scan"]))');
+                    if (kpiContainer && window.innerWidth <= 768) {
+                        kpiContainer.style.setProperty('display', 'grid', 'important');
+                        kpiContainer.style.setProperty('grid-template-columns', 'repeat(2, minmax(0, 1fr))', 'important');
+                        kpiContainer.style.setProperty('gap', '10px', 'important');
+                        kpiContainer.style.setProperty('width', '100%', 'important');
+
+                        var kpiCards = kpiContainer.children;
+                        if (kpiCards.length >= 5) {
+                            kpiCards[0].style.setProperty('grid-column', 'span 2 / span 2', 'important');
+                            for (var kIdx = 1; kIdx < kpiCards.length; kIdx++) {
+                                var kCard = kpiCards[kIdx];
+                                kCard.style.setProperty('display', 'flex', 'important');
+                                kCard.style.setProperty('flex-direction', 'column', 'important');
+                                kCard.style.setProperty('justify-content', 'space-between', 'important');
+                                kCard.style.setProperty('padding', '12px', 'important');
+                                kCard.style.setProperty('min-height', 'auto', 'important');
+                                kCard.style.setProperty('gap', '6px', 'important');
+                            }
+                        }
+                    }
+
+                    // 14. Top 3 WIP Stages & Analytics widgets cleanup on mobile
+                    var allH3s = document.querySelectorAll('h3');
+                    allH3s.forEach(function(h3) {
+                        var titleText = (h3.textContent || '').toUpperCase();
+                        if (titleText.indexOf('TOP 3 WIP STAGES') !== -1 || titleText.indexOf('TOP 5 REJECTION') !== -1) {
+                            var aCard = h3.closest('.rounded-xl') || h3.closest('.border');
+                            if (aCard) {
+                                aCard.style.setProperty('padding', '12px', 'important');
+                                aCard.style.setProperty('border-radius', '16px', 'important');
+
+                                var hRow = aCard.querySelector('.border-b');
+                                if (hRow) {
+                                    hRow.style.setProperty('padding-bottom', '8px', 'important');
+                                    var sub = hRow.querySelector('p');
+                                    if (sub) {
+                                        sub.style.setProperty('display', 'none', 'important');
+                                    }
+                                    var bdg = hRow.querySelector('span:last-child');
+                                    if (bdg) {
+                                        bdg.style.setProperty('white-space', 'nowrap', 'important');
+                                        bdg.style.setProperty('font-size', '11px', 'important');
+                                        bdg.style.setProperty('padding', '2px 8px', 'important');
+                                    }
+                                }
+
+                                var pBars = aCard.querySelectorAll('.bg-slate-800');
+                                pBars.forEach(function(pb) {
+                                    pb.style.setProperty('background', 'linear-gradient(90deg, #3b82f6, #1d4ed8)', 'important');
+                                    pb.style.setProperty('border-radius', '9999px', 'important');
+                                });
+                            }
+                        }
+                    });
                 }
 
                 // Initial run
