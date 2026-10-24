@@ -11,10 +11,10 @@ export default function FloatingCalculator() {
   const [waitingForOperand, setWaitingForOperand] = useState(false);
   const [history, setHistory] = useState('');
   const [copied, setCopied] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(false);
   const calcRef = useRef<HTMLDivElement>(null);
 
-  // Mechanical switch audio click via Web Audio API (synthetic, 100% offline & instant)
+  // Subtle modern haptic UI click (gentle, crisp 15ms tick)
   const playClickSound = () => {
     if (!soundEnabled) return;
     try {
@@ -23,15 +23,15 @@ export default function FloatingCalculator() {
       const ctx = new AudioCtx();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(650, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.035);
-      gain.gain.setValueAtTime(0.12, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.035);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1200, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.015);
+      gain.gain.setValueAtTime(0.04, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.015);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start();
-      osc.stop(ctx.currentTime + 0.035);
+      osc.stop(ctx.currentTime + 0.015);
     } catch {
       // Audio autoplay policy fallback
     }
@@ -250,47 +250,54 @@ export default function FloatingCalculator() {
     setTimeout(() => setCopied(false), 1500);
   };
 
+  // Dynamic font sizing based on display characters
+  const getDisplayFontSize = (text: string) => {
+    if (text.length > 14) return 'text-xl sm:text-2xl';
+    if (text.length > 10) return 'text-2xl sm:text-3xl';
+    return 'text-3xl sm:text-4xl';
+  };
+
   return (
     <div ref={calcRef} className="fixed bottom-5 right-5 z-[9999999] select-none font-sans">
-      {/* ── MECHANICAL CALCULATOR POPUP ── */}
+      {/* ── PROFESSIONAL CLEAN CALCULATOR POPUP ── */}
       {isOpen && (
-        <div className="absolute bottom-16 right-0 w-[295px] sm:w-[315px] bg-[#eef2f6] border-2 border-[#cbd5e1] rounded-3xl p-4 shadow-[0_20px_50px_rgba(0,0,0,0.4),inset_0_2px_0_rgba(255,255,255,0.9)] text-slate-800 animate-in fade-in zoom-in-95 duration-150 z-[9999999]">
+        <div className="absolute bottom-16 right-0 w-[290px] sm:w-[310px] bg-white/95 backdrop-blur-xl border border-slate-200/90 rounded-3xl p-4 shadow-[0_25px_60px_-15px_rgba(15,23,42,0.3)] text-slate-800 animate-in fade-in zoom-in-95 duration-150 z-[9999999]">
           
-          {/* Mechanical Top Bezel & Solar Cell */}
-          <div className="flex items-center justify-between pb-3 border-b border-[#cbd5e1]">
+          {/* Header Bar */}
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black tracking-widest text-slate-500 uppercase font-mono bg-slate-200/80 px-2 py-0.5 rounded border border-slate-300">
-                RF-TECH 100M
-              </span>
+              <div className="w-6 h-6 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-semibold text-xs border border-blue-100/80">
+                <Calculator className="w-3.5 h-3.5" />
+              </div>
+              <span className="text-xs font-bold text-slate-700 tracking-tight">Calculator</span>
             </div>
 
-            {/* Realistic Photovoltaic Solar Panel */}
-            <div className="flex items-center gap-2">
-              <div 
-                title="Solar Cell" 
-                className="grid grid-cols-4 gap-0.5 bg-[#2c1810] p-0.5 rounded border border-[#4a2818] shadow-inner"
-              >
-                <div className="w-2.5 h-3.5 bg-gradient-to-b from-[#3d2319] to-[#25150e] rounded-[1px]" />
-                <div className="w-2.5 h-3.5 bg-gradient-to-b from-[#3d2319] to-[#25150e] rounded-[1px]" />
-                <div className="w-2.5 h-3.5 bg-gradient-to-b from-[#3d2319] to-[#25150e] rounded-[1px]" />
-                <div className="w-2.5 h-3.5 bg-gradient-to-b from-[#3d2319] to-[#25150e] rounded-[1px]" />
-              </div>
-
+            <div className="flex items-center gap-1">
               {/* Sound Toggle */}
               <button
                 type="button"
                 onClick={() => setSoundEnabled(!soundEnabled)}
-                title={soundEnabled ? 'Mute switch click' : 'Enable mechanical switch click'}
-                className="p-1 rounded text-slate-500 hover:text-slate-800 hover:bg-slate-200/70 transition-colors cursor-pointer"
+                title={soundEnabled ? 'Mute click sound' : 'Enable click sound'}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
               >
-                {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5 text-slate-400" />}
+                {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-blue-600" /> : <VolumeX className="w-3.5 h-3.5" />}
+              </button>
+
+              {/* Copy Button */}
+              <button
+                type="button"
+                onClick={handleCopy}
+                title="Copy result"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
 
               {/* Close Button */}
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="p-1 rounded text-slate-500 hover:text-rose-600 hover:bg-slate-200/70 transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                 title="Close"
               >
                 <X className="w-4 h-4" />
@@ -298,228 +305,228 @@ export default function FloatingCalculator() {
             </div>
           </div>
 
-          {/* ── REALISTIC VINTAGE LCD DISPLAY ── */}
-          <div className="my-3.5 p-3.5 bg-[#dbe5d6] border-2 border-[#94a3b8] rounded-xl shadow-[inset_0_3px_8px_rgba(0,0,0,0.35)] flex flex-col justify-between text-right relative">
-            {/* Screen shine reflection */}
-            <div className="absolute inset-0 bg-gradient-to-b from-white/20 via-transparent to-black/5 pointer-events-none rounded-lg" />
+          {/* ── PROFESSIONAL SLEEK DISPLAY ── */}
+          <div 
+            onClick={handleCopy}
+            title="Click to copy result"
+            className="my-3.5 px-4 py-3 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 rounded-2xl border border-slate-800 shadow-inner flex flex-col justify-between text-right cursor-pointer group transition-all hover:border-slate-700 relative overflow-hidden"
+          >
+            {/* Subtle gloss highlight */}
+            <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/[0.04] to-transparent pointer-events-none" />
 
-            <div className="flex items-center justify-between text-[10px] font-mono font-bold text-[#3d4d3a] tracking-widest relative z-10">
-              <span className="opacity-75">12-DIGIT</span>
-              <div className="flex items-center gap-2">
-                {operation && (
-                  <span className="bg-[#243321] text-[#dbe5d6] px-1 rounded text-[9px]">
-                    {operation}
+            {/* Expression History */}
+            <div className="h-5 flex items-center justify-between text-xs font-mono text-slate-400 relative z-10">
+              <span className="text-[10px] text-slate-500 font-sans font-medium tracking-wider uppercase">
+                {copied ? (
+                  <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                    <Check className="w-3 h-3 inline" /> Copied
                   </span>
+                ) : (
+                  <span className="opacity-70 group-hover:opacity-100 transition-opacity">Copy</span>
                 )}
-                <div className="h-3.5 overflow-hidden truncate max-w-[170px]">
-                  {history || '\u00A0'}
-                </div>
+              </span>
+              <div className="truncate max-w-[190px] font-mono text-slate-400">
+                {history || '\u00A0'}
               </div>
             </div>
 
+            {/* Main Result Display */}
             <div 
-              onClick={handleCopy}
-              title="Click to copy result"
-              className="text-3xl sm:text-4xl font-mono font-black text-[#132010] tracking-wider overflow-x-auto whitespace-nowrap scrollbar-none cursor-pointer hover:opacity-80 transition-opacity py-0.5 relative z-10"
+              className={`${getDisplayFontSize(display)} font-mono font-bold tracking-tight text-white overflow-x-auto whitespace-nowrap scrollbar-none py-1 relative z-10`}
             >
               {display}
             </div>
-
-            {copied && (
-              <span className="text-[9px] font-mono font-bold text-[#1b4317] mt-0.5 relative z-10">
-                COPIED TO CLIPBOARD
-              </span>
-            )}
           </div>
 
-          {/* ── MECHANICAL KEYPAD TRAY (RECESSED PLATE) ── */}
-          <div className="p-2 bg-[#dce4ee] rounded-2xl border border-[#cbd5e1] shadow-[inset_0_2px_4px_rgba(0,0,0,0.15)]">
-            <div className="grid grid-cols-4 gap-2 text-sm font-bold">
-              {/* Row 1 */}
-              <button
-                type="button"
-                onClick={clearAll}
-                title="Clear All"
-                className="h-11 rounded-xl bg-[#e11d48] hover:bg-[#be123c] text-white border-t-2 border-rose-300 shadow-[0_4px_0_#9f1239] active:translate-y-1 active:shadow-[0_0px_0_#9f1239] font-mono font-extrabold transition-all flex items-center justify-center cursor-pointer"
-              >
-                C
-              </button>
-              <button
-                type="button"
-                onClick={backspace}
-                title="Backspace"
-                className="h-11 rounded-xl bg-[#e2e8f0] hover:bg-[#cbd5e1] text-slate-700 border-t-2 border-white shadow-[0_4px_0_#94a3b8] active:translate-y-1 active:shadow-[0_0px_0_#94a3b8] transition-all flex items-center justify-center cursor-pointer"
-              >
-                <Delete className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={inputPercent}
-                className="h-11 rounded-xl bg-[#e2e8f0] hover:bg-[#cbd5e1] text-slate-700 border-t-2 border-white shadow-[0_4px_0_#94a3b8] active:translate-y-1 active:shadow-[0_0px_0_#94a3b8] font-mono transition-all flex items-center justify-center cursor-pointer"
-              >
-                %
-              </button>
-              <button
-                type="button"
-                onClick={() => performOperation('÷')}
-                className={`h-11 rounded-xl font-mono text-xl transition-all flex items-center justify-center cursor-pointer border-t-2 ${
-                  operation === '÷'
-                    ? 'bg-blue-600 text-white border-blue-400 shadow-[0_4px_0_#1e3a8a] translate-y-0.5'
-                    : 'bg-[#334155] hover:bg-[#1e293b] text-white border-slate-500 shadow-[0_4px_0_#0f172a] active:translate-y-1 active:shadow-[0_0px_0_#0f172a]'
-                }`}
-              >
-                ÷
-              </button>
+          {/* ── CLEAN KEYPAD GRID ── */}
+          <div className="grid grid-cols-4 gap-2 text-sm font-semibold">
+            {/* Row 1 */}
+            <button
+              type="button"
+              onClick={clearAll}
+              title="Clear All (Esc)"
+              className="h-11 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/60 font-bold active:scale-95 transition-all flex items-center justify-center cursor-pointer shadow-sm"
+            >
+              {display !== '0' || prevValue !== null ? 'C' : 'AC'}
+            </button>
+            <button
+              type="button"
+              onClick={backspace}
+              title="Backspace"
+              className="h-11 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-700 border border-slate-200/60 active:scale-95 transition-all flex items-center justify-center cursor-pointer shadow-sm"
+            >
+              <Delete className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={inputPercent}
+              title="Percentage"
+              className="h-11 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-700 border border-slate-200/60 active:scale-95 transition-all flex items-center justify-center cursor-pointer shadow-sm font-mono"
+            >
+              %
+            </button>
+            <button
+              type="button"
+              onClick={() => performOperation('÷')}
+              className={`h-11 rounded-xl text-lg font-bold active:scale-95 transition-all flex items-center justify-center cursor-pointer shadow-sm ${
+                operation === '÷'
+                  ? 'bg-blue-600 text-white shadow-blue-500/30'
+                  : 'bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200/70'
+              }`}
+            >
+              ÷
+            </button>
 
-              {/* Row 2 */}
-              <button
-                type="button"
-                onClick={() => inputDigit('7')}
-                className="h-11 rounded-xl bg-[#fdfefe] hover:bg-[#f1f5f9] text-slate-800 border-t-2 border-white shadow-[0_4px_0_#94a3b8] active:translate-y-1 active:shadow-[0_0px_0_#94a3b8] font-mono text-base transition-all flex items-center justify-center cursor-pointer"
-              >
-                7
-              </button>
-              <button
-                type="button"
-                onClick={() => inputDigit('8')}
-                className="h-11 rounded-xl bg-[#fdfefe] hover:bg-[#f1f5f9] text-slate-800 border-t-2 border-white shadow-[0_4px_0_#94a3b8] active:translate-y-1 active:shadow-[0_0px_0_#94a3b8] font-mono text-base transition-all flex items-center justify-center cursor-pointer"
-              >
-                8
-              </button>
-              <button
-                type="button"
-                onClick={() => inputDigit('9')}
-                className="h-11 rounded-xl bg-[#fdfefe] hover:bg-[#f1f5f9] text-slate-800 border-t-2 border-white shadow-[0_4px_0_#94a3b8] active:translate-y-1 active:shadow-[0_0px_0_#94a3b8] font-mono text-base transition-all flex items-center justify-center cursor-pointer"
-              >
-                9
-              </button>
-              <button
-                type="button"
-                onClick={() => performOperation('×')}
-                className={`h-11 rounded-xl font-mono text-xl transition-all flex items-center justify-center cursor-pointer border-t-2 ${
-                  operation === '×'
-                    ? 'bg-blue-600 text-white border-blue-400 shadow-[0_4px_0_#1e3a8a] translate-y-0.5'
-                    : 'bg-[#334155] hover:bg-[#1e293b] text-white border-slate-500 shadow-[0_4px_0_#0f172a] active:translate-y-1 active:shadow-[0_0px_0_#0f172a]'
-                }`}
-              >
-                ×
-              </button>
+            {/* Row 2 */}
+            <button
+              type="button"
+              onClick={() => inputDigit('7')}
+              className="h-11 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 shadow-sm active:scale-95 transition-all font-mono text-base flex items-center justify-center cursor-pointer"
+            >
+              7
+            </button>
+            <button
+              type="button"
+              onClick={() => inputDigit('8')}
+              className="h-11 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 shadow-sm active:scale-95 transition-all font-mono text-base flex items-center justify-center cursor-pointer"
+            >
+              8
+            </button>
+            <button
+              type="button"
+              onClick={() => inputDigit('9')}
+              className="h-11 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 shadow-sm active:scale-95 transition-all font-mono text-base flex items-center justify-center cursor-pointer"
+            >
+              9
+            </button>
+            <button
+              type="button"
+              onClick={() => performOperation('×')}
+              className={`h-11 rounded-xl text-lg font-bold active:scale-95 transition-all flex items-center justify-center cursor-pointer shadow-sm ${
+                operation === '×'
+                  ? 'bg-blue-600 text-white shadow-blue-500/30'
+                  : 'bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200/70'
+              }`}
+            >
+              ×
+            </button>
 
-              {/* Row 3 */}
-              <button
-                type="button"
-                onClick={() => inputDigit('4')}
-                className="h-11 rounded-xl bg-[#fdfefe] hover:bg-[#f1f5f9] text-slate-800 border-t-2 border-white shadow-[0_4px_0_#94a3b8] active:translate-y-1 active:shadow-[0_0px_0_#94a3b8] font-mono text-base transition-all flex items-center justify-center cursor-pointer"
-              >
-                4
-              </button>
-              <button
-                type="button"
-                onClick={() => inputDigit('5')}
-                className="h-11 rounded-xl bg-[#fdfefe] hover:bg-[#f1f5f9] text-slate-800 border-t-2 border-white shadow-[0_4px_0_#94a3b8] active:translate-y-1 active:shadow-[0_0px_0_#94a3b8] font-mono text-base transition-all flex items-center justify-center cursor-pointer"
-              >
-                5
-              </button>
-              <button
-                type="button"
-                onClick={() => inputDigit('6')}
-                className="h-11 rounded-xl bg-[#fdfefe] hover:bg-[#f1f5f9] text-slate-800 border-t-2 border-white shadow-[0_4px_0_#94a3b8] active:translate-y-1 active:shadow-[0_0px_0_#94a3b8] font-mono text-base transition-all flex items-center justify-center cursor-pointer"
-              >
-                6
-              </button>
-              <button
-                type="button"
-                onClick={() => performOperation('-')}
-                className={`h-11 rounded-xl font-mono text-xl transition-all flex items-center justify-center cursor-pointer border-t-2 ${
-                  operation === '-'
-                    ? 'bg-blue-600 text-white border-blue-400 shadow-[0_4px_0_#1e3a8a] translate-y-0.5'
-                    : 'bg-[#334155] hover:bg-[#1e293b] text-white border-slate-500 shadow-[0_4px_0_#0f172a] active:translate-y-1 active:shadow-[0_0px_0_#0f172a]'
-                }`}
-              >
-                −
-              </button>
+            {/* Row 3 */}
+            <button
+              type="button"
+              onClick={() => inputDigit('4')}
+              className="h-11 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 shadow-sm active:scale-95 transition-all font-mono text-base flex items-center justify-center cursor-pointer"
+            >
+              4
+            </button>
+            <button
+              type="button"
+              onClick={() => inputDigit('5')}
+              className="h-11 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 shadow-sm active:scale-95 transition-all font-mono text-base flex items-center justify-center cursor-pointer"
+            >
+              5
+            </button>
+            <button
+              type="button"
+              onClick={() => inputDigit('6')}
+              className="h-11 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 shadow-sm active:scale-95 transition-all font-mono text-base flex items-center justify-center cursor-pointer"
+            >
+              6
+            </button>
+            <button
+              type="button"
+              onClick={() => performOperation('-')}
+              className={`h-11 rounded-xl text-lg font-bold active:scale-95 transition-all flex items-center justify-center cursor-pointer shadow-sm ${
+                operation === '-'
+                  ? 'bg-blue-600 text-white shadow-blue-500/30'
+                  : 'bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200/70'
+              }`}
+            >
+              −
+            </button>
 
-              {/* Row 4 */}
-              <button
-                type="button"
-                onClick={() => inputDigit('1')}
-                className="h-11 rounded-xl bg-[#fdfefe] hover:bg-[#f1f5f9] text-slate-800 border-t-2 border-white shadow-[0_4px_0_#94a3b8] active:translate-y-1 active:shadow-[0_0px_0_#94a3b8] font-mono text-base transition-all flex items-center justify-center cursor-pointer"
-              >
-                1
-              </button>
-              <button
-                type="button"
-                onClick={() => inputDigit('2')}
-                className="h-11 rounded-xl bg-[#fdfefe] hover:bg-[#f1f5f9] text-slate-800 border-t-2 border-white shadow-[0_4px_0_#94a3b8] active:translate-y-1 active:shadow-[0_0px_0_#94a3b8] font-mono text-base transition-all flex items-center justify-center cursor-pointer"
-              >
-                2
-              </button>
-              <button
-                type="button"
-                onClick={() => inputDigit('3')}
-                className="h-11 rounded-xl bg-[#fdfefe] hover:bg-[#f1f5f9] text-slate-800 border-t-2 border-white shadow-[0_4px_0_#94a3b8] active:translate-y-1 active:shadow-[0_0px_0_#94a3b8] font-mono text-base transition-all flex items-center justify-center cursor-pointer"
-              >
-                3
-              </button>
-              <button
-                type="button"
-                onClick={() => performOperation('+')}
-                className={`h-11 rounded-xl font-mono text-xl transition-all flex items-center justify-center cursor-pointer border-t-2 ${
-                  operation === '+'
-                    ? 'bg-blue-600 text-white border-blue-400 shadow-[0_4px_0_#1e3a8a] translate-y-0.5'
-                    : 'bg-[#334155] hover:bg-[#1e293b] text-white border-slate-500 shadow-[0_4px_0_#0f172a] active:translate-y-1 active:shadow-[0_0px_0_#0f172a]'
-                }`}
-              >
-                +
-              </button>
+            {/* Row 4 */}
+            <button
+              type="button"
+              onClick={() => inputDigit('1')}
+              className="h-11 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 shadow-sm active:scale-95 transition-all font-mono text-base flex items-center justify-center cursor-pointer"
+            >
+              1
+            </button>
+            <button
+              type="button"
+              onClick={() => inputDigit('2')}
+              className="h-11 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 shadow-sm active:scale-95 transition-all font-mono text-base flex items-center justify-center cursor-pointer"
+            >
+              2
+            </button>
+            <button
+              type="button"
+              onClick={() => inputDigit('3')}
+              className="h-11 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 shadow-sm active:scale-95 transition-all font-mono text-base flex items-center justify-center cursor-pointer"
+            >
+              3
+            </button>
+            <button
+              type="button"
+              onClick={() => performOperation('+')}
+              className={`h-11 rounded-xl text-lg font-bold active:scale-95 transition-all flex items-center justify-center cursor-pointer shadow-sm ${
+                operation === '+'
+                  ? 'bg-blue-600 text-white shadow-blue-500/30'
+                  : 'bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200/70'
+              }`}
+            >
+              +
+            </button>
 
-              {/* Row 5 */}
-              <button
-                type="button"
-                onClick={toggleSign}
-                className="h-11 rounded-xl bg-[#e2e8f0] hover:bg-[#cbd5e1] text-slate-700 border-t-2 border-white shadow-[0_4px_0_#94a3b8] active:translate-y-1 active:shadow-[0_0px_0_#94a3b8] font-mono text-sm transition-all flex items-center justify-center cursor-pointer"
-              >
-                ±
-              </button>
-              <button
-                type="button"
-                onClick={() => inputDigit('0')}
-                className="h-11 rounded-xl bg-[#fdfefe] hover:bg-[#f1f5f9] text-slate-800 border-t-2 border-white shadow-[0_4px_0_#94a3b8] active:translate-y-1 active:shadow-[0_0px_0_#94a3b8] font-mono text-base transition-all flex items-center justify-center cursor-pointer"
-              >
-                0
-              </button>
-              <button
-                type="button"
-                onClick={inputDecimal}
-                className="h-11 rounded-xl bg-[#fdfefe] hover:bg-[#f1f5f9] text-slate-800 border-t-2 border-white shadow-[0_4px_0_#94a3b8] active:translate-y-1 active:shadow-[0_0px_0_#94a3b8] font-mono text-base transition-all flex items-center justify-center cursor-pointer"
-              >
-                .
-              </button>
-              <button
-                type="button"
-                onClick={handleEquals}
-                className="h-11 rounded-xl bg-[#2563eb] hover:bg-[#1d4ed8] text-white border-t-2 border-blue-400 shadow-[0_4px_0_#1e3a8a] active:translate-y-1 active:shadow-[0_0px_0_#1e3a8a] font-mono text-2xl font-black transition-all flex items-center justify-center cursor-pointer"
-              >
-                =
-              </button>
-            </div>
+            {/* Row 5 */}
+            <button
+              type="button"
+              onClick={toggleSign}
+              title="Toggle Positive / Negative"
+              className="h-11 rounded-xl bg-slate-100 hover:bg-slate-200/80 text-slate-700 border border-slate-200/60 active:scale-95 transition-all flex items-center justify-center cursor-pointer shadow-sm font-mono text-sm"
+            >
+              ±
+            </button>
+            <button
+              type="button"
+              onClick={() => inputDigit('0')}
+              className="h-11 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 shadow-sm active:scale-95 transition-all font-mono text-base flex items-center justify-center cursor-pointer"
+            >
+              0
+            </button>
+            <button
+              type="button"
+              onClick={inputDecimal}
+              className="h-11 rounded-xl bg-white hover:bg-slate-50 text-slate-800 border border-slate-200/80 shadow-sm active:scale-95 transition-all font-mono text-base flex items-center justify-center cursor-pointer"
+            >
+              .
+            </button>
+            <button
+              type="button"
+              onClick={handleEquals}
+              title="Calculate (= or Enter)"
+              className="h-11 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white border border-blue-600 active:scale-95 transition-all flex items-center justify-center cursor-pointer shadow-md shadow-blue-500/25 font-bold text-xl"
+            >
+              =
+            </button>
           </div>
         </div>
       )}
 
-      {/* ── CLEAN WHITE CIRCULAR BUTTON (CORNER POPUP) ── */}
+      {/* ── FLOATING TRIGGER BUTTON ── */}
       <button
         type="button"
         onClick={() => {
           playClickSound();
           setIsOpen(!isOpen);
         }}
-        aria-label="Calculator"
-        title={isOpen ? 'Close' : 'Calculator'}
-        className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg border transition-all duration-200 cursor-pointer ${
+        aria-label="Toggle Calculator"
+        title={isOpen ? 'Close Calculator' : 'Open Calculator'}
+        className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg transition-all duration-200 cursor-pointer ${
           isOpen
-            ? 'bg-slate-800 text-white border-slate-700'
-            : 'bg-white hover:bg-slate-50 text-slate-700 hover:text-blue-600 border-slate-300 hover:border-blue-400 hover:shadow-xl hover:scale-105 active:scale-95'
+            ? 'bg-slate-900 text-white border border-slate-800 shadow-slate-900/30 rotate-90 scale-95'
+            : 'bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-600 border border-slate-200 shadow-slate-900/10 hover:shadow-xl hover:scale-105 active:scale-95'
         }`}
       >
         {isOpen ? (
@@ -531,3 +538,4 @@ export default function FloatingCalculator() {
     </div>
   );
 }
+

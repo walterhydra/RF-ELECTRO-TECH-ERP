@@ -132,6 +132,7 @@ export const Header: React.FC = () => {
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('assignedStage');
     localStorage.removeItem('assignedStageId');
+    localStorage.removeItem('rf_electro_job_cards_v3');
 
     // Clear cookies
     document.cookie = 'rf_session_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0; SameSite=Lax';

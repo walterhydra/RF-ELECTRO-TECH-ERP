@@ -317,25 +317,33 @@ export class JobCardsService {
 
     // Stage filtering criteria: only if explicitly requested via query parameter AND not 'ALL'
     const queryStage = query?.stageName || query?.stage || query?.assignedStage;
-    const isAllQuery = !queryStage || queryStage.toUpperCase() === 'ALL' || queryStage.toUpperCase().includes('ALL STAGES');
+    const isExplicitAll = queryStage && (queryStage.toUpperCase() === 'ALL' || queryStage.toUpperCase().includes('ALL STAGES'));
 
     const roleName = String(user?.roleName || user?.role || user?.role?.name || user?.roleCode || '').toUpperCase();
     const isSuperAdmin = roleName.includes('SUPER') || roleName.includes('ADMIN') || roleName === 'MASTER' || !roleName;
+    const userStageId = user?.assignedStageId || user?.assignedStage?.id;
+    const userStageName = user?.assignedStageName || user?.assignedStage?.name || (typeof user?.assignedStage === 'string' ? user.assignedStage : null);
+
     const isOperator =
       !isSuperAdmin && (
         roleName === 'NORMAL_USER' ||
         roleName === 'PROCESS_OPERATOR' ||
         roleName === 'NORMAL' ||
         roleName === 'OPERATOR' ||
-        roleName.includes('OPERATOR')
+        roleName.includes('OPERATOR') ||
+        Boolean(userStageId || userStageName)
       );
 
-    const targetStageId = !isAllQuery ? (query?.stageId || query?.assignedStageId || (isOperator ? user?.assignedStageId : null)) : null;
-    const targetStageRaw = !isAllQuery ? (queryStage || (isOperator ? (user?.assignedStageName || user?.assignedStage?.name || (typeof user?.assignedStage === 'string' ? user.assignedStage : null)) : null)) : null;
+    const targetStageId = !isExplicitAll
+      ? (query?.stageId || query?.assignedStageId || (isOperator ? userStageId : null))
+      : null;
+    const targetStageRaw = !isExplicitAll
+      ? (queryStage || (isOperator ? userStageName : null))
+      : null;
     const targetStageSlug = targetStageRaw ? normalizeStageSlug(targetStageRaw) : null;
 
-    // Apply strict stage isolation ONLY if an operator or a specific non-ALL stage was explicitly requested
-    if ((isOperator && (targetStageId || targetStageSlug)) || (!isAllQuery && (targetStageId || targetStageSlug))) {
+    // Apply strict stage isolation ONLY if an operator or a specific non-ALL stage was requested
+    if ((isOperator && (targetStageId || targetStageSlug)) || (!isExplicitAll && queryStage && (targetStageId || targetStageSlug))) {
       const filteredCards = jobCards.map((jc: any) => {
         const cardStageSlug = normalizeStageSlug(jc.currentStageName);
         const cardMatches = (targetStageId && jc.currentStageId === targetStageId) || (targetStageSlug && cardStageSlug === targetStageSlug);

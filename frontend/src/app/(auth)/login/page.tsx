@@ -234,6 +234,9 @@ export default function LoginPage() {
     }
     document.cookie = `rf_user_role=${encodeURIComponent(roleName)}; path=/; max-age=7776000; SameSite=Lax`;
 
+    // Purge cached job cards from previous session so fresh role/stage scoped data is fetched
+    localStorage.removeItem('rf_electro_job_cards_v3');
+
     if (assignedStage) {
       localStorage.setItem('assignedStage', assignedStage);
     } else {
@@ -244,7 +247,9 @@ export default function LoginPage() {
     }
 
     const isMobileScreen = typeof window !== 'undefined' && window.innerWidth < 768;
-    if (isMobileScreen) {
+    const isStageOperator = Boolean(assignedStage && assignedStage.toUpperCase() !== 'ALL');
+
+    if (isMobileScreen || isStageOperator) {
       router.push('/job-cards');
     } else {
       router.push('/dashboard');

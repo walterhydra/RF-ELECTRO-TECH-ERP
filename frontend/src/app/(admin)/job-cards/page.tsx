@@ -795,7 +795,11 @@ export default function JobCardsPage() {
         setAssignedStage('ALL');
       }
       const upper = stored.toUpperCase();
-      if (upper.includes('OPERATOR') || upper === 'NORMAL' || upper === 'PROCESS_OPERATOR') {
+      const hasAssignedStage = Boolean(storedStage && storedStage !== 'ALL');
+      const isSuper = upper.includes('SUPER') || (upper.includes('ADMIN') && !upper.includes('OPERATOR'));
+      if (isSuper) {
+        setUserRole('MASTER');
+      } else if (hasAssignedStage || upper.includes('OPERATOR') || upper === 'NORMAL' || upper === 'PROCESS_OPERATOR') {
         setUserRole('NORMAL');
       } else if (upper.includes('PROD') || upper.includes('MANAGER')) {
         setUserRole('SUPER_USER');
@@ -805,11 +809,11 @@ export default function JobCardsPage() {
     }
   }, []);
 
-  // Super Admin Check Helper
+  // Super Admin Check Helper (Only true if full system access and not locked to a single stage)
   const isSuperAdmin = React.useMemo(() => {
     const upper = userRole.toUpperCase();
-    return (upper.includes('SUPER') || upper.includes('MASTER') || upper.includes('ADMIN') || userRole === 'MASTER') && !userRole.includes('OPERATOR');
-  }, [userRole]);
+    return (upper.includes('SUPER') || upper.includes('MASTER') || upper.includes('ADMIN') || userRole === 'MASTER') && !userRole.includes('OPERATOR') && (!assignedStage || assignedStage === 'ALL');
+  }, [userRole, assignedStage]);
 
   // Toast Notification State (Replaces native browser alerts)
   const [toast, setToast] = useState<{ id: string; type: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -1757,15 +1761,21 @@ export default function JobCardsPage() {
   const canUserMoveStage = (jobStageName: string) => {
     if (userRole === 'MASTER' || userRole === 'SUPER_USER' || isSuperAdmin) return true;
     if (userRole === 'NORMAL') {
-      return !assignedStage || jobStageName.trim().toLowerCase() === assignedStage.trim().toLowerCase();
+      if (!assignedStage || assignedStage === 'ALL') return true;
+      const targetIdx = normalizeStageIndex(assignedStage);
+      const jobIdx = normalizeStageIndex(jobStageName);
+      const targetSlug = normalizeStageSlug(assignedStage);
+      const jobSlug = normalizeStageSlug(jobStageName);
+      return jobIdx === targetIdx || jobSlug === targetSlug;
     }
     return true;
   };
 
   // Launch Existing Unlaunched Job Card
   const handleLaunchExistingJobCard = async (jobCardId: string) => {
-    if (userRole === 'NORMAL') {
-      showToast('Permission Denied: Normal Users cannot launch Job Cards.', 'error');
+    const isShearingOp = normalizeStageIndex(assignedStage) === 0;
+    if (userRole === 'NORMAL' && !isShearingOp) {
+      showToast('Permission Denied: Only Shearing Operators or Management can launch Job Cards into Stage 1.', 'error');
       return;
     }
 
@@ -2989,7 +2999,13 @@ export default function JobCardsPage() {
       .trim();
   };
 
-  const isOperatorUser = userRole === 'NORMAL';
+  const isOperatorUser = React.useMemo(() => {
+    const roleUpper = (userRole || '').toUpperCase();
+    const isSuperOrAdmin = roleUpper.includes('SUPER') || (roleUpper.includes('ADMIN') && !roleUpper.includes('OPERATOR'));
+    if (isSuperOrAdmin) return false;
+    if (assignedStage && assignedStage.toUpperCase() !== 'ALL') return true;
+    return roleUpper.includes('OPERATOR') || roleUpper === 'NORMAL' || roleUpper === 'PROCESS_OPERATOR';
+  }, [userRole, assignedStage]);
 
   // Helper to identify 100% completed or dispatched job cards
   const isCardCompleted = useCallback((jc: JobCard) => {
@@ -3010,19 +3026,29 @@ export default function JobCardsPage() {
 
     if (!isOperatorUser || !assignedStage || assignedStage === 'ALL') return activeOnly;
     const targetSlug = normalizeStageSlug(assignedStage);
+    const targetIdx = normalizeStageIndex(assignedStage);
+
     return activeOnly.filter((jc) => {
       const isCardUnlaunched = jc.status === 'UNLAUNCHED' || jc.status === 'CREATED';
-      if (isCardUnlaunched) return targetSlug === 'shearing' || targetSlug === '1shearing';
+      if (isCardUnlaunched) {
+        return targetSlug === 'shearing' || targetSlug === '1shearing' || targetIdx === 0;
+      }
 
       const cardStageSlug = normalizeStageSlug(jc.currentStageName);
-      if (cardStageSlug === targetSlug || (jc.currentStageName || '').toLowerCase().includes(assignedStage.toLowerCase())) {
+      const cardStageIdx = jc.currentStageIndex !== undefined && jc.currentStageIndex >= 0
+        ? jc.currentStageIndex
+        : normalizeStageIndex(jc.currentStageName);
+
+      // Match exact stage index or slug to prevent substring collision (e.g. PIT vs PIT-QC, PISM vs PISM-QC)
+      if (cardStageIdx === targetIdx || cardStageSlug === targetSlug) {
         return true;
       }
       if (jc.subJobCards && Array.isArray(jc.subJobCards) && jc.subJobCards.length > 0) {
         return jc.subJobCards.some((s: any) => {
           const subStageName = s.currentStage?.name || jc.currentStageName || '';
           const subSlug = normalizeStageSlug(subStageName);
-          return subSlug === targetSlug || subStageName.toLowerCase().includes(assignedStage.toLowerCase());
+          const subIdx = s.currentStage?.defaultOrder ? (s.currentStage.defaultOrder - 1) : normalizeStageIndex(subStageName);
+          return subIdx === targetIdx || subSlug === targetSlug;
         });
       }
       return false;
@@ -5746,108 +5772,215 @@ export default function JobCardsPage() {
       {/* MODAL 2: JOB MOVEMENT OPTIONS (Wide Horizontal Landscape Dashboard View) */}
       {selectedMovementJob && (
         <Portal>
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[9999] flex items-center justify-center p-3 sm:p-5 overflow-hidden">
-            <div className="bg-white border border-slate-200/90 rounded-3xl w-full max-w-6xl max-h-[92vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900 overflow-hidden font-sans">
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[9999] flex items-center justify-center p-2 sm:p-5 overflow-hidden font-quicksand">
+            <div className="bg-white border border-slate-200/90 rounded-2xl sm:rounded-3xl w-full max-w-6xl max-h-[94vh] sm:max-h-[92vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900 overflow-hidden font-sans">
               
-              {/* 1. Fixed Sticky Header (High-Tech Wide Header with Integrated Tab Switcher) */}
-              <div className="p-4 sm:p-5 border-b border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white shrink-0 shadow-md">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0">
-                    <FileText className="w-5 h-5 text-amber-400" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                      <span className="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-widest block">
-                        JOB CARD DASHBOARD & MOVEMENT
-                      </span>
+              {/* 1. Fixed Sticky Header (Responsive Header with Integrated Tab Switcher) */}
+              <div className="p-3 sm:p-5 border-b border-slate-200 md:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 bg-white md:bg-gradient-to-r md:from-slate-950 md:via-slate-900 md:to-slate-950 text-slate-900 md:text-white shrink-0 shadow-xs md:shadow-md">
+                
+                {/* A. MOBILE-ONLY CLEAN ENTERPRISE HEADER (< md, MATCHING PDF TRAVELER DESIGN) */}
+                <div className="md:hidden flex flex-col gap-2.5 w-full">
+                  {/* Top Bar: Subtitle Badge + Uniform Action Buttons */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <div className="w-6 h-6 rounded-lg bg-blue-50 border border-blue-200/80 flex items-center justify-center shrink-0">
+                        <FileText className="w-3.5 h-3.5 text-blue-700" />
+                      </div>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse shrink-0"></span>
+                        <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider truncate">
+                          JOB CARD MOVEMENT
+                        </span>
+                      </div>
                     </div>
-                    <h3 className="font-black text-white text-xl sm:text-2xl flex items-center gap-3 mt-0.5 font-mono tracking-tight">
-                      <span className="text-amber-300">{selectedMovementJob.jobCardNo}</span>
-                      <span className="text-xs px-3 py-1 rounded-full bg-blue-950/90 text-blue-300 border border-blue-500/40 font-bold font-sans flex items-center gap-1.5 shadow-xs">
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
-                        Stage: {selectedMovementJob.currentStageName || PF01_STAGES[0]}
-                      </span>
-                    </h3>
-                  </div>
-                </div>
 
-                {/* Horizontal Segmented Pill Tab Switcher in Header */}
-                <div className="flex items-center gap-3">
-                  <div className="flex bg-slate-900/90 p-1.5 rounded-2xl border border-slate-800 gap-1.5 text-xs font-sans shadow-inner">
+                    {/* Mobile-Only Action Buttons (Delete, Calc, Close) - Clean 32px Light Touch Targets */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {isSuperAdmin && (
+                        <button
+                          onClick={() => setDeleteConfirmCard(selectedMovementJob)}
+                          title="Delete this Job Card (Super Admin Only)"
+                          className="w-8 h-8 rounded-xl bg-rose-50 hover:bg-rose-100 active:scale-90 text-rose-600 border border-rose-200 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (typeof window !== 'undefined') {
+                            window.dispatchEvent(new CustomEvent('toggle-calculator'));
+                          }
+                        }}
+                        className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-90 text-slate-700 border border-slate-200 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+                        title="Open Calculator"
+                      >
+                        <Calculator className="w-3.5 h-3.5 text-amber-600" />
+                      </button>
+                      <button
+                        onClick={() => setSelectedMovementJob(null)}
+                        className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 active:scale-90 text-slate-600 hover:text-slate-900 border border-slate-200 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+                        title="Close Modal"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Main Info Row: Crisp Dark Card No + Blue Stage Badge */}
+                  <div className="flex items-center justify-between gap-2 pt-0.5">
+                    <h3 className="font-black text-slate-950 text-xl font-mono tracking-tight truncate">
+                      {selectedMovementJob.jobCardNo}
+                    </h3>
+                    <span className="text-[10.5px] px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200/90 font-bold font-sans flex items-center gap-1.5 shadow-2xs whitespace-nowrap shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+                      Stage: {selectedMovementJob.currentStageName || PF01_STAGES[0]}
+                    </span>
+                  </div>
+
+                  {/* Mobile-Only Segmented Tabs Bar (Clean Enterprise Light Theme) */}
+                  <div className="grid grid-cols-3 bg-slate-100/90 p-1 rounded-xl border border-slate-200/90 gap-1 text-xs font-sans shadow-inner w-full mt-0.5">
                     <button
                       onClick={() => setMovementTab('VIEW')}
-                      className={`py-2 px-3 sm:px-4 rounded-xl font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      className={`py-2 px-1 rounded-lg font-extrabold text-[11px] transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center active:scale-95 ${
                         movementTab === 'VIEW'
-                          ? 'bg-amber-400 text-slate-950 shadow-md font-black'
-                          : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                          ? 'bg-white text-slate-950 shadow-xs border border-slate-200/90 font-black'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 font-bold'
                       }`}
                     >
-                      <ImageIcon className="w-4 h-4 shrink-0" />
-                      <span>A. Job Card View</span>
+                      <ImageIcon className="w-3.5 h-3.5 shrink-0" />
+                      <span>Overview</span>
                     </button>
 
                     <button
                       onClick={() => setMovementTab('FULL')}
-                      className={`py-2 px-3 sm:px-4 rounded-xl font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      className={`py-2 px-1 rounded-lg font-extrabold text-[11px] transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center active:scale-95 ${
                         movementTab === 'FULL'
-                          ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
-                          : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                          ? 'bg-emerald-600 text-white shadow-xs border border-emerald-600 font-black'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 font-bold'
                       }`}
                     >
-                      <ArrowRight className="w-4 h-4 shrink-0" />
-                      <span>B. Full Movement</span>
+                      <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                      <span>Full Move</span>
                     </button>
 
                     <button
                       onClick={() => setMovementTab('PARTIAL')}
-                      className={`py-2 px-3 sm:px-4 rounded-xl font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      className={`py-2 px-1 rounded-lg font-extrabold text-[11px] transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center active:scale-95 ${
                         movementTab === 'PARTIAL'
-                          ? 'bg-amber-500 text-slate-950 shadow-md font-black'
-                          : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                          ? 'bg-amber-500 text-slate-950 shadow-xs border border-amber-500 font-black'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 font-bold'
                       }`}
                     >
-                      <Split className="w-4 h-4 shrink-0" />
-                      <span>C. Uncompleted / Split</span>
+                      <Split className="w-3.5 h-3.5 shrink-0" />
+                      <span>Split Lot</span>
                     </button>
                   </div>
+                </div>
 
-                  {isSuperAdmin && (
-                    <button
-                      onClick={() => setDeleteConfirmCard(selectedMovementJob)}
-                      title="Delete this Job Card (Super Admin Only)"
-                      className="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-sm border border-rose-500 shrink-0 active:scale-95"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      <span className="hidden sm:inline">Delete Job Card</span>
-                    </button>
-                  )}
+                {/* B. DESKTOP-ONLY HEADER & TABS (>= md) - 100% PRESERVED */}
+                <div className="hidden md:flex items-center justify-between w-full">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0">
+                      <FileText className="w-5 h-5 text-amber-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                        <span className="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-widest truncate">
+                          JOB CARD DASHBOARD & MOVEMENT
+                        </span>
+                      </div>
+                      <h3 className="font-black text-white text-2xl flex items-center gap-3 mt-0.5 font-mono tracking-tight">
+                        <span className="text-amber-300">{selectedMovementJob.jobCardNo}</span>
+                        <span className="text-xs px-3 py-1 rounded-full bg-blue-950/90 text-blue-300 border border-blue-500/40 font-bold font-sans flex items-center gap-1 shadow-xs whitespace-nowrap">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                          Stage: {selectedMovementJob.currentStageName || PF01_STAGES[0]}
+                        </span>
+                      </h3>
+                    </div>
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (typeof window !== 'undefined') {
-                        window.dispatchEvent(new CustomEvent('toggle-calculator'));
-                      }
-                    }}
-                    className="text-slate-300 hover:text-white text-xs font-bold px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 cursor-pointer transition-all shrink-0 border border-slate-700 flex items-center gap-1.5 shadow-sm"
-                    title="Open Calculator"
-                  >
-                    <Calculator className="w-4 h-4 text-amber-400" />
-                    <span className="hidden sm:inline">Calc</span>
-                  </button>
+                  {/* Desktop Tab Switcher & Desktop Action Buttons */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex bg-slate-900/95 p-1.5 rounded-2xl border border-slate-800 gap-1.5 text-xs font-sans shadow-inner">
+                      <button
+                        onClick={() => setMovementTab('VIEW')}
+                        className={`py-2 px-4 rounded-xl font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer text-center text-xs active:scale-95 ${
+                          movementTab === 'VIEW'
+                            ? 'bg-amber-400 text-slate-950 shadow-md font-black'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        <ImageIcon className="w-4 h-4 shrink-0" />
+                        <span>A. Job Card View</span>
+                      </button>
 
-                  <button
-                    onClick={() => setSelectedMovementJob(null)}
-                    className="text-slate-400 hover:text-white text-sm font-bold p-2.5 rounded-xl hover:bg-slate-800/80 cursor-pointer transition-all shrink-0 border border-slate-800/80 flex items-center justify-center w-10 h-10 active:scale-95"
-                  >
-                    ✕
-                  </button>
+                      <button
+                        onClick={() => setMovementTab('FULL')}
+                        className={`py-2 px-4 rounded-xl font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer text-center text-xs active:scale-95 ${
+                          movementTab === 'FULL'
+                            ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        <ArrowRight className="w-4 h-4 shrink-0" />
+                        <span>B. Full Movement</span>
+                      </button>
+
+                      <button
+                        onClick={() => setMovementTab('PARTIAL')}
+                        className={`py-2 px-4 rounded-xl font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer text-center text-xs active:scale-95 ${
+                          movementTab === 'PARTIAL'
+                            ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        <Split className="w-4 h-4 shrink-0" />
+                        <span>C. Uncompleted / Split</span>
+                      </button>
+                    </div>
+
+                    {/* Desktop Only Extra Buttons */}
+                    <div className="flex items-center gap-2">
+                      {isSuperAdmin && (
+                        <button
+                          onClick={() => setDeleteConfirmCard(selectedMovementJob)}
+                          title="Delete this Job Card (Super Admin Only)"
+                          className="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 cursor-pointer transition-all shadow-sm border border-rose-500 shrink-0 active:scale-95"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span>Delete Job Card</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (typeof window !== 'undefined') {
+                            window.dispatchEvent(new CustomEvent('toggle-calculator'));
+                          }
+                        }}
+                        className="text-slate-300 hover:text-white text-xs font-bold px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 cursor-pointer transition-all shrink-0 border border-slate-700 flex items-center gap-1.5 shadow-sm"
+                        title="Open Calculator"
+                      >
+                        <Calculator className="w-4 h-4 text-amber-400" />
+                        <span>Calc</span>
+                      </button>
+
+                      <button
+                        onClick={() => setSelectedMovementJob(null)}
+                        className="text-slate-400 hover:text-white text-sm font-bold p-2.5 rounded-xl hover:bg-slate-800/80 cursor-pointer transition-all shrink-0 border border-slate-800/80 flex items-center justify-center w-10 h-10 active:scale-95"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* 2. Scrollable Body Content (Horizontal Multi-Column Layout) */}
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/40">
+              {/* 2. Scrollable Body Content (with padding-bottom for mobile calculator clearance) */}
+              <div className="flex-1 overflow-y-auto p-3 sm:p-6 pb-20 sm:pb-6 bg-slate-50/50">
 
                 {/* TAB A: JOB CARD VIEW (HORIZONTAL 2-COLUMN SIDE-BY-SIDE LAYOUT) */}
                 {movementTab === 'VIEW' && (
@@ -5890,17 +6023,96 @@ export default function JobCardsPage() {
                       )}
 
                       {/* Specifications Main Container */}
-                      <div className="bg-white p-5 rounded-2xl border border-slate-200/90 space-y-4 font-sans shadow-xs">
+                      {/* Specifications Main Container */}
+                      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 space-y-4 font-sans shadow-xs">
                         <div className="font-bold text-slate-900 text-sm border-b border-slate-100 pb-3 flex items-center justify-between">
                           <span className="flex items-center gap-2 font-extrabold text-slate-900 tracking-tight">
-                            <FileText className="w-4.5 h-4.5 text-amber-600 shrink-0" />
+                            <FileText className="w-4.5 h-4.5 text-blue-700 shrink-0" />
                             Job Card Specifications & Details
                           </span>
                           {getStatusBadge(selectedMovementJob.status)}
                         </div>
                         
-                        {/* 4-Column Horizontal Grid */}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 text-xs">
+                        {/* A. MOBILE-ONLY CLEAN EXECUTIVE OVERVIEW (< md, NO NESTED BOXES) */}
+                        <div className="md:hidden space-y-3.5">
+                          {/* 1. At-A-Glance Production KPIs Strip */}
+                          <div className="grid grid-cols-3 gap-2 p-3 bg-slate-50/90 rounded-xl border border-slate-200/80 shadow-2xs">
+                            <div className="text-center">
+                              <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Quantity</span>
+                              <strong className="text-indigo-700 font-mono text-sm block mt-0.5 font-black">
+                                {selectedMovementJob.totalPcbQty || (selectedMovementJob.custPnlQty && selectedMovementJob.custPnlQty > 50 ? selectedMovementJob.custPnlQty : Math.round((selectedMovementJob.prodPnlQty || 0) * 4))} PCBs
+                              </strong>
+                            </div>
+                            <div className="text-center border-x border-slate-200/90 px-1">
+                              <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">WIP Area</span>
+                              <strong className="text-emerald-700 font-mono text-sm block mt-0.5 font-black">
+                                {selectedMovementJob.custPnlAreaSqm || selectedMovementJob.prodPnlAreaSqm} m²
+                              </strong>
+                            </div>
+                            <div className="text-center">
+                              <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">Target Date</span>
+                              <strong className="text-slate-800 font-mono text-xs block mt-0.5 font-bold">
+                                {selectedMovementJob.targetDate}
+                              </strong>
+                            </div>
+                          </div>
+
+                          {/* 2. Structured Key-Value Details (Clean & Eye-Friendly) */}
+                          <div className="divide-y divide-slate-100 text-xs font-sans">
+                            <div className="flex items-center justify-between py-2.5">
+                              <span className="text-slate-500 font-medium">Job Card No</span>
+                              <span className="font-mono font-black text-slate-900">{selectedMovementJob.jobCardNo}</span>
+                            </div>
+                            <div className="flex items-center justify-between py-2.5">
+                              <span className="text-slate-500 font-medium">Current Stage</span>
+                              <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-200/80">
+                                {selectedMovementJob.currentStageName || PF01_STAGES[0]}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between py-2.5">
+                              <span className="text-slate-500 font-medium">Customer Code</span>
+                              <span className="font-semibold text-slate-900">{selectedMovementJob.customerCode || '—'}</span>
+                            </div>
+                            <div className="flex items-center justify-between py-2.5">
+                              <span className="text-slate-500 font-medium">Customer Part No</span>
+                              <span className="font-semibold text-slate-900 truncate max-w-[180px]">{selectedMovementJob.customerPartNo || '—'}</span>
+                            </div>
+                            <div className="flex items-center justify-between py-2.5">
+                              <span className="text-slate-500 font-medium">R.F.E. Part Code</span>
+                              <span className="font-mono font-bold text-blue-800 bg-blue-50/60 px-2 py-0.5 rounded border border-blue-100">{selectedMovementJob.rfePartCode || '—'}</span>
+                            </div>
+                            <div className="flex items-center justify-between py-2.5">
+                              <span className="text-slate-500 font-medium">Priority</span>
+                              <span className={`font-mono font-bold text-[10px] px-2.5 py-0.5 rounded-lg border ${
+                                selectedMovementJob.priority === 'MOST URGENT'
+                                  ? 'bg-rose-100 text-rose-800 border-rose-300'
+                                  : selectedMovementJob.priority === 'HIGH'
+                                  ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                  : 'bg-slate-100 text-slate-700 border-slate-200'
+                              }`}>
+                                {selectedMovementJob.priority || 'NORMAL'}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between py-2.5">
+                              <span className="text-slate-500 font-medium">Job Flow</span>
+                              <span className="font-mono font-bold text-slate-800">{selectedMovementJob.jobFlowSelection || 'PF-01 Standard'}</span>
+                            </div>
+                            {Boolean(selectedMovementJob.rejectedPcbQty && selectedMovementJob.rejectedPcbQty > 0) && (
+                              <div className="flex items-center justify-between py-2.5 bg-rose-50/60 px-2.5 rounded-xl mt-1.5 border border-rose-200/80">
+                                <span className="text-rose-800 font-bold flex items-center gap-1.5">
+                                  <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                                  Rejections / Scrap
+                                </span>
+                                <span className="font-mono font-black text-rose-700">
+                                  {selectedMovementJob.rejectedPcbQty} PCBs {selectedMovementJob.rejectedAreaSqm ? `(${selectedMovementJob.rejectedAreaSqm.toFixed(2)} m²)` : ''}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* B. DESKTOP-ONLY 4-COLUMN HORIZONTAL GRID (hidden md:grid) - 100% PRESERVED */}
+                        <div className="hidden md:grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 text-xs">
                           <div className="bg-slate-50/80 p-3 rounded-xl border border-slate-200/70 shadow-2xs hover:border-slate-300 transition-colors">
                             <span className="text-[10px] text-slate-400 font-mono uppercase block font-bold tracking-wider">JOB CARD NO</span>
                             <strong className="text-slate-900 font-mono text-sm block mt-0.5 font-black">{selectedMovementJob.jobCardNo}</strong>
@@ -5983,37 +6195,40 @@ export default function JobCardsPage() {
                         </div>
                       </div>
 
-                      {/* Rejection & Defect History in Tab A */}
+                      {/* Rejection & Defect History in Tab A (Clean & Simple Minimalist Styling) */}
                       {selectedMovementJob.rejectionLogs && selectedMovementJob.rejectionLogs.length > 0 && (
-                        <div className="bg-rose-50/60 border border-rose-200 p-4 rounded-2xl space-y-2.5 font-sans shadow-xs">
-                          <div className="flex items-center justify-between border-b border-rose-200 pb-2">
-                            <span className="flex items-center gap-1.5 font-black text-rose-950 text-xs uppercase tracking-wider font-mono">
-                              <AlertCircle className="w-4 h-4 text-rose-600" />
-                              Rejection & Quality Log ({selectedMovementJob.rejectionLogs.length} Records)
-                            </span>
-                            <span className="text-xs font-mono font-black text-rose-700 bg-rose-100 px-2 py-0.5 rounded-lg border border-rose-300">
+                        <div className="bg-white border border-slate-200/80 p-4 rounded-2xl space-y-3 font-sans shadow-xs">
+                          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                            <h5 className="flex items-center gap-1.5 font-bold text-slate-800 text-xs uppercase tracking-wider font-mono">
+                              <AlertCircle className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                              <span>Rejection & Quality Log</span>
+                              <span className="text-[11px] font-mono font-normal text-slate-400">({selectedMovementJob.rejectionLogs.length})</span>
+                            </h5>
+                            <span className="text-xs font-mono font-semibold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200">
                               Total: {selectedMovementJob.rejectedPcbQty || 0} Rejected PCBs
                             </span>
                           </div>
-                          <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                          <div className="space-y-2 max-h-48 overflow-y-auto pr-0.5">
                             {selectedMovementJob.rejectionLogs.map((log, lIdx) => (
-                              <div key={lIdx} className="bg-white p-2.5 rounded-xl border border-rose-100 flex items-center justify-between text-xs shadow-2xs">
-                                <div>
-                                  <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-950 font-bold font-mono text-[11px] border border-rose-300 inline-block mb-1">
-                                    Defect Stage: {log.stageName || 'Stage'}
+                              <div key={lIdx} className="bg-slate-50/70 p-3 rounded-xl border border-slate-200/60 space-y-1.5 text-xs">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-xs font-semibold text-slate-700">
+                                    Stage: <span className="font-mono font-bold text-slate-900">{log.stageName || 'Stage'}</span>
                                   </span>
-                                  <span className="text-slate-600 text-[11px] block font-medium">{log.remark || 'Rejected during movement'}</span>
-                                </div>
-                                <div className="text-right">
-                                  <span className="font-mono font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 text-xs">
-                                    {log.rejectedPcbQty} PCBs
-                                  </span>
-                                  {log.timestamp && (
-                                    <span className="text-[10px] text-slate-400 block font-mono">
-                                      {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span className="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200 text-xs">
+                                      {log.rejectedPcbQty} PCBs
                                     </span>
-                                  )}
+                                    {log.timestamp && (
+                                      <span className="text-[11px] text-slate-400 font-mono">
+                                        {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
+                                <p className="text-slate-600 text-xs leading-relaxed font-normal break-words">
+                                  {log.remark || 'Rejected during movement'}
+                                </p>
                               </div>
                             ))}
                           </div>
@@ -6027,34 +6242,40 @@ export default function JobCardsPage() {
                       <div className="space-y-4">
                         {/* Sub-Job Lots Breakdown Box */}
                         {selectedMovementJob.subJobCards && selectedMovementJob.subJobCards.length > 0 && (
-                          <div className="bg-gradient-to-br from-amber-50/90 via-amber-50/50 to-orange-50/40 border border-amber-300/80 p-4 rounded-2xl space-y-3 font-sans shadow-xs">
-                            <div className="flex items-center justify-between border-b border-amber-200 pb-2">
-                              <h5 className="text-xs font-black text-amber-950 uppercase tracking-wider flex items-center gap-1.5 font-mono">
-                                <Split className="w-4 h-4 text-amber-700 shrink-0" />
-                                SUB-JOB LOTS BREAKDOWN ({selectedMovementJob.subJobCards.length} LOTS)
+                          <div className="bg-white border border-slate-200/90 p-4 rounded-2xl space-y-3 font-sans shadow-xs">
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                              <h5 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                                <Split className="w-4 h-4 text-blue-600 shrink-0" />
+                                Sub-Job Lots Breakdown ({selectedMovementJob.subJobCards.length})
                               </h5>
-                              <span className="text-xs text-amber-900 font-mono font-black bg-amber-200/80 px-2.5 py-0.5 rounded-lg border border-amber-400/80 shadow-2xs">
+                              <span className="text-xs text-slate-700 font-mono font-bold bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200">
                                 Total: {selectedMovementJob.totalPcbQty || (selectedMovementJob.custPnlQty && selectedMovementJob.custPnlQty > 50 ? selectedMovementJob.custPnlQty : Math.round((selectedMovementJob.prodPnlQty || 0) * 4))} PCBs
                               </span>
                             </div>
-                            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                            <div className="space-y-2 max-h-56 overflow-y-auto pr-0.5">
                               {selectedMovementJob.subJobCards.map((sub) => {
                                 const sPcb = (sub as any).totalPcbQty || (sub as any).qty || selectedMovementJob.totalPcbQty || 160;
 
                                 return (
-                                  <div key={sub.id} className="bg-white p-3 rounded-xl border border-slate-200 flex items-center justify-between text-xs font-sans shadow-2xs hover:border-amber-400 transition-all">
-                                    <div className="flex items-center gap-2 font-mono">
-                                      <strong className="text-slate-900 font-bold bg-amber-100/70 px-2 py-0.5 rounded border border-amber-200">{sub.subJobCardNo}</strong>
-                                      <span className="text-[10px] text-slate-400">QR: {sub.qrCodeValue}</span>
+                                  <div key={sub.id} className="bg-slate-50/80 p-2.5 sm:p-3 rounded-xl border border-slate-200/80 space-y-1.5 text-xs font-sans shadow-2xs hover:border-blue-400 transition-all">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <strong className="text-slate-900 font-mono font-black bg-white px-2 py-0.5 rounded border border-slate-200 text-xs truncate">
+                                        {sub.subJobCardNo}
+                                      </strong>
+                                      <div className="flex items-center gap-1.5 shrink-0">
+                                        <span className="font-mono font-black text-indigo-700 bg-indigo-50/80 px-2.5 py-0.5 rounded border border-indigo-200 text-[11px]">
+                                          {sPcb} PCBs
+                                        </span>
+                                        <span className="font-bold text-[11px] text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">
+                                          {sub.currentStage?.name || selectedMovementJob.currentStageName}
+                                        </span>
+                                      </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-mono font-black text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded border border-indigo-200 text-[11px]">
-                                        {sPcb} PCBs
-                                      </span>
-                                      <span className="font-bold text-[11px] text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
-                                        {sub.currentStage?.name || selectedMovementJob.currentStageName}
-                                      </span>
-                                    </div>
+                                    {sub.qrCodeValue && (
+                                      <div className="text-[10px] text-slate-400 font-mono truncate">
+                                        QR: {sub.qrCodeValue}
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               })}
@@ -6088,7 +6309,7 @@ export default function JobCardsPage() {
                         {selectedMovementJob.status === 'IN_PROGRESS' && (
                           <button
                             onClick={() => handleMarkAsCompleted(selectedMovementJob.id)}
-                            className="w-full py-3.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black rounded-2xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-600/20 transition-all active:scale-98 border border-emerald-500/30"
+                            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-xs transition-all active:scale-98 border border-emerald-500/30"
                           >
                             <CheckCircle2 className="w-4 h-4" />
                             <span>MARK JOB CARD AS COMPLETED (Stage 20 PACKING)</span>
@@ -6098,16 +6319,16 @@ export default function JobCardsPage() {
                         <div className="grid grid-cols-2 gap-2.5">
                           <button
                             onClick={() => setShowQrModal(selectedMovementJob)}
-                            className="py-3.5 bg-slate-950 hover:bg-slate-800 text-white font-extrabold rounded-2xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md transition-all active:scale-98 border border-slate-800"
+                            className="py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-xs transition-all active:scale-98 border border-slate-800"
                           >
                             <QrCode className="w-4 h-4 text-amber-400" />
-                            <span>VIEW & PRINT QR TAG</span>
+                            <span>VIEW & PRINT QR</span>
                           </button>
 
                           <button
                             type="button"
                             onClick={() => setPdfPreviewJob(selectedMovementJob)}
-                            className="py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black rounded-2xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md text-center transition-all active:scale-98 border border-amber-600/80"
+                            className="py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-xs text-center transition-all active:scale-98 border border-blue-500"
                           >
                             <FileText className="w-4 h-4" />
                             <span>OPEN JOB CARD PDF</span>
@@ -6130,140 +6351,203 @@ export default function JobCardsPage() {
                   const nextStageTitle = PF01_STAGES[currentStageIdx + 1] || '20. PACKING (COMPLETED)';
 
                   return (
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 text-xs font-sans">
-                      <div className="lg:col-span-6 bg-blue-50/80 border border-blue-200 p-5 rounded-2xl text-blue-950 space-y-3 shadow-2xs flex flex-col justify-between">
-                        <div>
-                          <p className="font-black text-blue-900 text-sm flex items-center gap-2">
-                            <ArrowRight className="w-4 h-4 text-blue-600" />
-                            Full Lot Stage Movement Confirmation
-                          </p>
-                          <p className="text-xs leading-relaxed text-blue-950 mt-2">
-                            Are you sure you want to move Job Card No. <strong className="text-slate-900 font-mono font-black">{selectedMovementJob.jobCardNo}</strong> ({currentTotalPcb} PCBs, {selectedMovementJob.custPnlAreaSqm || selectedMovementJob.prodPnlAreaSqm || 45} Sqm) to the next process stage?
-                          </p>
-
-                          {Boolean(selectedMovementJob.rejectedPcbQty && selectedMovementJob.rejectedPcbQty > 0) && (
-                            <div className="mt-3 p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-950 text-xs flex items-center justify-between shadow-2xs">
-                              <span className="font-bold flex items-center gap-1.5">
-                                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                                Previous Rejections on this Card:
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 text-xs font-sans">
+                      {/* Left: Stage Progression Pipeline & Lot Stats */}
+                      <div className="lg:col-span-6 bg-gradient-to-br from-blue-50/90 via-indigo-50/40 to-slate-50/80 border border-blue-200/90 p-4 sm:p-5 rounded-2xl text-blue-950 space-y-4 shadow-2xs flex flex-col justify-between">
+                        <div className="space-y-3.5">
+                          <div className="flex items-center justify-between border-b border-blue-200/60 pb-2.5">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-blue-600/10 border border-blue-500/20 flex items-center justify-center">
+                                <ArrowRight className="w-4 h-4 text-blue-600" />
+                              </div>
+                              <span className="font-extrabold text-blue-950 text-xs sm:text-sm">
+                                Full Lot Stage Movement
                               </span>
-                              <span className="font-mono font-black text-rose-700 bg-rose-100 px-2 py-0.5 rounded border border-rose-300">
+                            </div>
+                            <span className="text-[10px] font-mono font-bold text-blue-800 bg-blue-100/80 px-2 py-0.5 rounded-md border border-blue-300/60">
+                              {selectedMovementJob.jobFlowSelection || 'PF-01 Standard'}
+                            </span>
+                          </div>
+
+                          {/* Visual Stage Transition Stepper */}
+                          <div className="bg-white/90 border border-blue-200/80 p-3 sm:p-3.5 rounded-xl shadow-2xs">
+                            <div className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold mb-2">
+                              Stage Transition Pipeline
+                            </div>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex-1 min-w-0 bg-slate-100/90 border border-slate-200 p-2 sm:p-2.5 rounded-lg text-center">
+                                <span className="text-[9px] font-mono text-slate-500 uppercase block font-bold">FROM CURRENT</span>
+                                <span className="text-xs sm:text-sm font-extrabold text-slate-800 block truncate font-mono mt-0.5">
+                                  {selectedMovementJob.currentStageName || PF01_STAGES[0]}
+                                </span>
+                              </div>
+
+                              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse">
+                                <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                              </div>
+
+                              <div className="flex-1 min-w-0 bg-blue-600 border border-blue-700 p-2 sm:p-2.5 rounded-lg text-center text-white shadow-xs">
+                                <span className="text-[9px] font-mono text-blue-200 uppercase block font-bold">TO NEXT STAGE</span>
+                                <span className="text-xs sm:text-sm font-black text-white block truncate font-mono mt-0.5">
+                                  {nextStageTitle}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Lot Details Summary Chips */}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            <div className="bg-white/80 border border-slate-200 p-2 sm:p-2.5 rounded-xl text-center">
+                              <span className="text-[10px] text-slate-400 font-mono font-bold block uppercase">Moving Qty</span>
+                              <span className="text-xs sm:text-sm font-black font-mono text-indigo-700 block mt-0.5">
+                                {movingPcbQty} PCBs
+                              </span>
+                            </div>
+                            <div className="bg-white/80 border border-slate-200 p-2 sm:p-2.5 rounded-xl text-center">
+                              <span className="text-[10px] text-slate-400 font-mono font-bold block uppercase">Total Area</span>
+                              <span className="text-xs sm:text-sm font-black font-mono text-slate-800 block mt-0.5">
+                                {selectedMovementJob.custPnlAreaSqm || selectedMovementJob.prodPnlAreaSqm || 45} Sqm
+                              </span>
+                            </div>
+                            <div className="col-span-2 sm:col-span-1 bg-white/80 border border-slate-200 p-2 sm:p-2.5 rounded-xl text-center">
+                              <span className="text-[10px] text-slate-400 font-mono font-bold block uppercase">Job Card</span>
+                              <span className="text-xs sm:text-sm font-black font-mono text-slate-900 block mt-0.5 truncate">
+                                {selectedMovementJob.jobCardNo}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Previous Rejection Alert Banner */}
+                          {Boolean(selectedMovementJob.rejectedPcbQty && selectedMovementJob.rejectedPcbQty > 0) && (
+                            <div className="p-2.5 bg-rose-50/90 border border-rose-200 rounded-xl text-rose-950 text-xs flex items-center justify-between shadow-2xs">
+                              <span className="font-bold flex items-center gap-1.5 text-[11px] sm:text-xs">
+                                <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                                Previous Rejections:
+                              </span>
+                              <span className="font-mono font-black text-rose-700 bg-white px-2 py-0.5 rounded border border-rose-300 text-[11px]">
                                 {selectedMovementJob.rejectedPcbQty} PCBs ({selectedMovementJob.rejectedAreaSqm || 0} Sqm)
                               </span>
                             </div>
                           )}
                         </div>
-                        <div className="p-3 font-bold text-blue-900 bg-white rounded-xl border border-blue-200 font-mono text-xs shadow-2xs">
-                          Next Stage: <span className="text-blue-700 font-extrabold">{nextStageTitle}</span>
+
+                        <div className="mt-3 pt-2.5 border-t border-blue-200/50 flex items-center justify-between text-[11px] text-blue-900/80 font-medium">
+                          <span className="truncate">Part: <strong className="text-slate-900 font-mono font-bold">{selectedMovementJob.customerPartNo || selectedMovementJob.rfePartCode}</strong></span>
+                          <span className="font-mono text-slate-500 shrink-0">Client: {selectedMovementJob.customerCode || '—'}</span>
                         </div>
                       </div>
 
-                      <div className="lg:col-span-6 bg-white p-5 rounded-2xl border border-slate-200 space-y-4 shadow-xs">
-                        {/* Rejection Option Toggle */}
-                        <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl space-y-3">
-                          <label className="flex items-center justify-between cursor-pointer select-none">
-                            <span className="text-xs font-bold text-slate-800 flex items-center gap-2">
-                              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                              <span>Record Defective / Rejected PCBs in this stage?</span>
-                            </span>
-                            <input
-                              type="checkbox"
-                              checked={hasRejectionInMovement}
-                              onChange={(e) => {
-                                setHasRejectionInMovement(e.target.checked);
-                                if (!e.target.checked) {
-                                  setFullMoveRejectQty(0);
-                                  setFullMoveRemarks('');
-                                  setFullMoveRemarkType('Clear Movement');
-                                }
-                              }}
-                              className="w-4 h-4 accent-blue-600 rounded cursor-pointer"
-                            />
-                          </label>
+                      {/* Right: Stage Movement Execution & Defect Option */}
+                      <div className="lg:col-span-6 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 space-y-4 shadow-xs flex flex-col justify-between">
+                        <div className="space-y-3.5">
+                          {/* Rejection Option Toggle */}
+                          <div className="bg-slate-50/80 border border-slate-200/80 p-3 sm:p-3.5 rounded-xl space-y-3">
+                            <label className="flex items-center justify-between cursor-pointer select-none">
+                              <span className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                                <span>Record Defective / Rejected PCBs in this stage?</span>
+                              </span>
+                              <input
+                                type="checkbox"
+                                checked={hasRejectionInMovement}
+                                onChange={(e) => {
+                                  setHasRejectionInMovement(e.target.checked);
+                                  if (!e.target.checked) {
+                                    setFullMoveRejectQty(0);
+                                    setFullMoveRemarks('');
+                                    setFullMoveRemarkType('Clear Movement');
+                                  }
+                                }}
+                                className="w-4 h-4 accent-blue-600 rounded cursor-pointer shrink-0"
+                              />
+                            </label>
 
-                          {hasRejectionInMovement && (
-                            <div className="pt-2 border-t border-slate-200 space-y-3">
-                              <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl space-y-2">
-                                <label className="block text-xs font-bold text-rose-950 flex items-center justify-between">
-                                  <span>Reject PCB Quantity</span>
-                                  <span className="text-[10px] font-mono font-black text-rose-700">
-                                    Available: {currentTotalPcb} PCBs
-                                  </span>
-                                </label>
-                                <input
-                                  type="number"
-                                  min={1}
-                                  max={currentTotalPcb}
-                                  value={fullMoveRejectQty}
-                                  onChange={(e) => setFullMoveRejectQty(e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0))}
-                                  placeholder="Enter rejected qty..."
-                                  className="w-full bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-rose-500 shadow-2xs"
-                                />
-                                {parsedRejectQty > 0 && (
-                                  <p className="text-[11px] text-rose-800 font-bold">
-                                    ⚠️ {parsedRejectQty} PCBs will be rejected. Only {movingPcbQty} PCBs will move to next stage.
-                                  </p>
-                                )}
+                            {hasRejectionInMovement && (
+                              <div className="pt-2 border-t border-slate-200 space-y-3 animate-in fade-in duration-150">
+                                <div className="bg-rose-50 border border-rose-200 p-3 rounded-xl space-y-2">
+                                  <label className="block text-xs font-bold text-rose-950 flex items-center justify-between">
+                                    <span>Reject PCB Quantity</span>
+                                    <span className="text-[10px] font-mono font-black text-rose-700">
+                                      Available: {currentTotalPcb} PCBs
+                                    </span>
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={currentTotalPcb}
+                                    value={fullMoveRejectQty}
+                                    onChange={(e) => setFullMoveRejectQty(e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value, 10) || 0))}
+                                    placeholder="Enter rejected qty..."
+                                    className="w-full bg-white border border-rose-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-rose-500 shadow-2xs"
+                                  />
+                                  {parsedRejectQty > 0 && (
+                                    <p className="text-[11px] text-rose-800 font-bold">
+                                      ⚠️ {parsedRejectQty} PCBs will be rejected. Only {movingPcbQty} PCBs will move to next stage.
+                                    </p>
+                                  )}
+                                </div>
+
+                                <div>
+                                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                                    Movement Remarks Category
+                                  </label>
+                                  <select
+                                    value={fullMoveRemarkType}
+                                    onChange={(e) => setFullMoveRemarkType(e.target.value)}
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-900 font-bold focus:outline-none focus:border-blue-500 shadow-2xs"
+                                  >
+                                    <option value="Rejection">Rejection</option>
+                                    <option value="Rework">Rework</option>
+                                    <option value="Process issue">Process issue</option>
+                                    <option value="Other relevant remarks">Other relevant movement remarks</option>
+                                  </select>
+                                </div>
+
+                                <div>
+                                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                                    <span>Remarks / Defect Details (Optional)</span>
+                                    <span className="text-[10px] text-slate-400 font-medium">Auto-filled if empty</span>
+                                  </label>
+                                  <textarea
+                                    rows={2}
+                                    value={fullMoveRemarks}
+                                    onChange={(e) => setFullMoveRemarks(e.target.value)}
+                                    placeholder="Enter optional defect reason (e.g. Scratched track, drilled off-center)..."
+                                    className="w-full border rounded-xl p-2.5 text-xs text-slate-900 bg-white border-slate-200 focus:bg-white focus:border-rose-500 focus:outline-none shadow-2xs font-medium"
+                                  />
+                                </div>
                               </div>
+                            )}
 
+                            {!hasRejectionInMovement && (
                               <div>
                                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                                  Movement Remarks Category
+                                  Movement Remarks (Optional)
                                 </label>
-                                <select
-                                  value={fullMoveRemarkType}
-                                  onChange={(e) => setFullMoveRemarkType(e.target.value)}
-                                  className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-900 font-bold focus:outline-none focus:border-blue-500 shadow-2xs"
-                                >
-                                  <option value="Rejection">Rejection</option>
-                                  <option value="Rework">Rework</option>
-                                  <option value="Process issue">Process issue</option>
-                                  <option value="Other relevant remarks">Other relevant movement remarks</option>
-                                </select>
-                              </div>
-
-                              <div>
-                                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-                                  <span>Remarks / Defect Details (Optional)</span>
-                                  <span className="text-[10px] text-slate-400 font-medium">Auto-filled if empty</span>
-                                </label>
-                                <textarea
-                                  rows={2}
+                                <input
+                                  type="text"
                                   value={fullMoveRemarks}
                                   onChange={(e) => setFullMoveRemarks(e.target.value)}
-                                  placeholder="Enter optional defect reason (e.g. Scratched track, drilled off-center)..."
-                                  className="w-full border rounded-xl p-2.5 text-xs text-slate-900 bg-white border-slate-200 focus:bg-white focus:border-rose-500 focus:outline-none shadow-2xs font-medium"
+                                  placeholder="Optional stage remarks (e.g. All OK)..."
+                                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-medium focus:outline-none focus:border-blue-500 shadow-2xs"
                                 />
                               </div>
-                            </div>
-                          )}
-
-                          {!hasRejectionInMovement && (
-                            <div>
-                              <label className="block text-xs font-bold text-slate-700 mb-1">
-                                Movement Remarks (Optional)
-                              </label>
-                              <input
-                                type="text"
-                                value={fullMoveRemarks}
-                                onChange={(e) => setFullMoveRemarks(e.target.value)}
-                                placeholder="Optional stage remarks (e.g. All OK)..."
-                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-medium focus:outline-none focus:border-blue-500 shadow-2xs"
-                              />
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
 
-                        <div className="space-y-2 pt-1">
+                        {/* Confirmation Buttons */}
+                        <div className="space-y-2 pt-2">
                           <button
                             type="button"
                             onClick={handleFullJobMovement}
-                            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl text-xs shadow-md transition-all cursor-pointer active:scale-98 border border-blue-500/40 flex items-center justify-center gap-1.5"
+                            className="w-full py-3 sm:py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white font-black rounded-xl sm:rounded-2xl text-xs sm:text-sm shadow-md transition-all cursor-pointer active:scale-98 border border-blue-500/40 flex items-center justify-center gap-2"
                           >
+                            <ArrowRight className="w-4 h-4 shrink-0" />
                             <span>
                               {parsedRejectQty > 0
-                                ? `CONFIRM MOVEMENT (${movingPcbQty} PCBs ➔ Next Stage | ${parsedRejectQty} Rejected)`
-                                : `CONFIRM FULL MOVEMENT (${currentTotalPcb} PCBs ➔ Next Stage)`}
+                                ? `CONFIRM MOVEMENT (${movingPcbQty} PCBs ➔ ${nextStageTitle} | ${parsedRejectQty} Rejected)`
+                                : `CONFIRM FULL MOVEMENT (${currentTotalPcb} PCBs ➔ ${nextStageTitle})`}
                             </span>
                           </button>
 
@@ -6271,9 +6555,9 @@ export default function JobCardsPage() {
                             <button
                               type="button"
                               onClick={() => handleMarkAsCompleted(selectedMovementJob.id)}
-                              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all cursor-pointer active:scale-98 border border-emerald-500/40"
+                              className="w-full py-2.5 sm:py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl sm:rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer active:scale-98 border border-emerald-500/40"
                             >
-                              <CheckCircle2 className="w-4 h-4" />
+                              <CheckCircle2 className="w-4 h-4 shrink-0" />
                               <span>MARK AS COMPLETED & READY FOR DISPATCH</span>
                             </button>
                           )}
@@ -6292,46 +6576,88 @@ export default function JobCardsPage() {
                   const totalArea = selectedMovementJob.custPnlAreaSqm || selectedMovementJob.prodPnlAreaSqm || 45;
                   const movedArea = Number(((validMoveQty * totalArea) / masterPcb).toFixed(2));
                   const remArea = Number(((remPcb * totalArea) / masterPcb).toFixed(2));
+                  const currentStageIdx = (selectedMovementJob.currentStageIndex !== undefined && selectedMovementJob.currentStageIndex >= 0)
+                    ? selectedMovementJob.currentStageIndex
+                    : normalizeStageIndex(selectedMovementJob.currentStageName);
+                  const nextStageTitle = PF01_STAGES[currentStageIdx + 1] || '20. PACKING (COMPLETED)';
 
                   return (
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 text-xs font-sans">
-                      <div className="lg:col-span-5 bg-amber-50/80 border border-amber-200 p-5 rounded-2xl text-amber-950 space-y-2 shadow-2xs flex flex-col justify-between">
-                        <div>
-                          <p className="font-black text-amber-900 flex items-center gap-2 text-sm">
-                            <Split className="w-4.5 h-4.5 text-amber-700 shrink-0" />
-                            Uncompleted / Partial Job Movement (PCB Split)
-                          </p>
-                          <p className="mt-2 text-xs text-amber-900/90 leading-relaxed">
-                            Required when complete PCB lot is not ready to move forward. Enter exact PCB quantity moving to next stage.
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 text-xs font-sans">
+                      {/* Left: Split Summary (Clean & Eye-Friendly) */}
+                      <div className="lg:col-span-5 bg-white border border-slate-200/90 p-4 sm:p-5 rounded-2xl space-y-4 shadow-xs flex flex-col justify-between">
+                        <div className="space-y-2.5">
+                          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-200/60 flex items-center justify-center">
+                                <Split className="w-4 h-4 text-blue-600 shrink-0" />
+                              </div>
+                              <h4 className="font-bold text-slate-900 text-xs sm:text-sm">
+                                Partial Lot Split & Movement
+                              </h4>
+                            </div>
+                            <span className="text-[10px] font-mono font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200">
+                              Total: {masterPcb} PCBs
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 leading-relaxed font-normal">
+                            Use this when only part of the lot is ready to advance. The remaining batch will stay in the current stage as a balance sub-lot.
                           </p>
                         </div>
-                        <div className="space-y-2 pt-3">
-                          <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-emerald-950 font-medium">
-                            <div className="font-bold text-emerald-900">Next Stage: {PF01_STAGES[selectedMovementJob.currentStageIndex + 1] || 'COMPLETED'}</div>
-                            <div className="text-sm font-black text-emerald-700 font-mono mt-1">{validMoveQty} PCBs Moved</div>
-                            <div className="text-[10px] text-slate-500 font-mono">
-                              Area: {movedArea} Sqm
+
+                        <div className="space-y-2.5 pt-1">
+                          {/* Advancing / Moving Batch */}
+                          <div className="bg-slate-50/80 border border-slate-200/80 p-3 sm:p-3.5 rounded-xl space-y-1.5 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                Next Stage: <span className="font-mono font-bold text-slate-900">{nextStageTitle}</span>
+                              </span>
+                              <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md font-bold">
+                                MOVING FORWARD
+                              </span>
+                            </div>
+                            <div className="flex items-baseline justify-between pt-1">
+                              <div className="text-base font-black text-slate-900 font-mono">
+                                {validMoveQty} <span className="text-xs font-semibold text-slate-500">PCBs</span>
+                              </div>
+                              <div className="text-[11px] text-slate-500 font-mono">
+                                Area: <strong className="text-slate-700">{movedArea}</strong> Sqm
+                              </div>
                             </div>
                           </div>
 
-                          <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-amber-950 font-medium">
-                            <div className="font-bold text-amber-900">Stays at: {selectedMovementJob.currentStageName}</div>
-                            <div className="text-sm font-black text-amber-700 font-mono mt-1">{remPcb} PCBs Balance</div>
-                            <div className="text-[10px] text-slate-500 font-mono">
-                              Area: {remArea} Sqm
+                          {/* Remaining / Balance Batch */}
+                          <div className="bg-slate-50/80 border border-slate-200/80 p-3 sm:p-3.5 rounded-xl space-y-1.5 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-amber-500" />
+                                Stays at: <span className="font-mono font-bold text-slate-900">{selectedMovementJob.currentStageName}</span>
+                              </span>
+                              <span className="text-[10px] font-mono text-slate-700 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md font-bold">
+                                BALANCE REMAINING
+                              </span>
+                            </div>
+                            <div className="flex items-baseline justify-between pt-1">
+                              <div className="text-base font-black text-slate-900 font-mono">
+                                {remPcb} <span className="text-xs font-semibold text-slate-500">PCBs</span>
+                              </div>
+                              <div className="text-[11px] text-slate-500 font-mono">
+                                Area: <strong className="text-slate-700">{remArea}</strong> Sqm
+                              </div>
                             </div>
                           </div>
                         </div>
                       </div>
 
-                      <div className="lg:col-span-7 bg-white p-5 rounded-2xl border border-slate-200 space-y-4 shadow-xs flex flex-col justify-between">
-                        <div className="space-y-3">
+                      {/* Right: Split Input Controls */}
+                      <div className="lg:col-span-7 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 space-y-4 shadow-xs flex flex-col justify-between">
+                        <div className="space-y-3.5">
                           <div>
-                            <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center justify-between mb-1.5">
                               <label className="block text-xs font-bold text-slate-700">
                                 Quantity Ready to Move Forward (PCBs) *
                               </label>
-                              <span className="text-xs font-black text-indigo-700 font-mono bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                              <span className="text-xs font-black text-indigo-700 font-mono bg-indigo-50 px-2.5 py-0.5 rounded-lg border border-indigo-100">
                                 = {validMoveQty} PCBs
                               </span>
                             </div>
@@ -6349,7 +6675,7 @@ export default function JobCardsPage() {
                                   setPartialMoveQty(isNaN(parsed) ? '' : parsed);
                                 }
                               }}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-900 focus:outline-none focus:border-amber-500 font-mono shadow-2xs"
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-900 focus:outline-none focus:border-blue-500 font-mono shadow-2xs"
                               placeholder={`Enter PCBs (1 to ${masterPcb - 1})`}
                             />
                             {parsedMoveQty >= masterPcb && (
@@ -6360,13 +6686,13 @@ export default function JobCardsPage() {
                           </div>
 
                           <div>
-                            <label className="block text-xs font-bold text-amber-900 mb-1">
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">
                               Pending Work Reason:
                             </label>
                             <select
                               value={incompletePendingReason}
                               onChange={(e) => setIncompletePendingReason(e.target.value)}
-                              className="w-full bg-amber-50/50 border border-amber-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-amber-500"
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-900 focus:outline-none focus:border-blue-500"
                             >
                               <option value="Drilling & Hole Check Pending">Drilling & Hole Check Pending</option>
                               <option value="Solder Mask Touch-Up Required">Solder Mask Touch-Up Required</option>
@@ -6381,7 +6707,7 @@ export default function JobCardsPage() {
 
                           {incompletePendingReason === 'Other / Custom Pending Reason' && (
                             <div>
-                              <label className="block text-xs font-bold text-slate-700 mb-1">
+                              <label className="block text-xs font-bold text-slate-700 mb-1.5">
                                 Specify Custom Pending Reason:
                               </label>
                               <input
@@ -6389,13 +6715,13 @@ export default function JobCardsPage() {
                                 placeholder="e.g. Special Gold Finger Plating Inspection Pending"
                                 value={incompleteCustomReason}
                                 onChange={(e) => setIncompleteCustomReason(e.target.value)}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
                               />
                             </div>
                           )}
 
                           <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-1">
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">
                               Work Notes / Incomplete Movement Remarks:
                             </label>
                             <textarea
@@ -6403,16 +6729,17 @@ export default function JobCardsPage() {
                               placeholder="Enter specific work details pending on remaining PCBs..."
                               value={incompleteRemarks}
                               onChange={(e) => setIncompleteRemarks(e.target.value)}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-amber-500"
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-blue-500"
                             />
                           </div>
                         </div>
 
                         <button
                           onClick={handlePartialJobMovement}
-                          className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-2xl text-xs shadow-md transition-all cursor-pointer border border-amber-600 active:scale-98 mt-2"
+                          className="w-full py-3 sm:py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs sm:text-sm shadow-sm transition-all cursor-pointer border border-blue-600 active:scale-98 mt-3 flex items-center justify-center gap-2"
                         >
-                          CONFIRM PARTIAL MOVEMENT ({validMoveQty} PCBs Forward • {remPcb} PCBs Balance)
+                          <Split className="w-4 h-4" />
+                          <span>CONFIRM SPLIT MOVEMENT ({validMoveQty} Forward • {remPcb} Balance)</span>
                         </button>
                       </div>
                     </div>

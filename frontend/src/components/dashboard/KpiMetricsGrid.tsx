@@ -114,42 +114,45 @@ export const KpiMetricsGrid: React.FC<KpiMetricsGridProps> = ({
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
-      {cards.map((card) => {
+    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-2.5 sm:gap-3">
+      {cards.map((card, idx) => {
         const Icon = card.icon;
+        const isLast = idx === cards.length - 1;
         return (
           <div
             key={card.id}
             onClick={card.onClick}
-            className={`bg-white border border-slate-200 rounded-xl p-3.5 shadow-sm flex flex-col justify-between transition-all duration-150 ${
+            className={`bg-white border border-slate-200 rounded-xl p-3 sm:p-3.5 shadow-2xs flex flex-col justify-between transition-all duration-150 ${
+              isLast ? 'col-span-2 sm:col-span-1' : ''
+            } ${
               card.onClick ? 'cursor-pointer hover:shadow-md' : ''
             } ${card.borderAccent}`}
           >
             {/* Top row: Icon & Status Badge */}
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <div className={`p-2 rounded-lg ${card.iconBg}`}>
-                <Icon className="w-4 h-4" />
+            <div className="flex items-center justify-between gap-1.5 mb-1.5 sm:mb-2">
+              <div className={`p-1.5 sm:p-2 rounded-lg ${card.iconBg}`}>
+                <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border tracking-wide uppercase ${card.badgeColor}`}>
+              <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold border tracking-wide uppercase truncate max-w-[100px] ${card.badgeColor}`}>
                 {card.badge}
               </span>
             </div>
 
             {/* Main Value & Label */}
             <div>
-              <div className="text-2xl font-bold text-slate-900 tracking-tight">
+              <div className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
                 {card.value}
               </div>
-              <div className="text-xs font-semibold text-slate-600 line-clamp-1 mt-0.5">
+              <div className="text-[11px] sm:text-xs font-semibold text-slate-600 line-clamp-1 mt-0.5">
                 {card.title}
               </div>
             </div>
 
             {/* Footer / Subtitle */}
-            <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-medium">
+            <div className="mt-2 pt-1.5 sm:mt-2.5 sm:pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 font-medium">
               <span className="truncate">{card.subtitle}</span>
               {card.actionText && (
-                <span className="font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5">
+                <span className="font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 shrink-0 ml-1">
                   {card.actionText} <ChevronRight className="w-3 h-3" />
                 </span>
               )}

@@ -72,32 +72,33 @@ export const DeptProductionBarChart: React.FC<DeptProductionBarChartProps> = ({ 
         </div>
       </div>
 
-      {/* Bar Chart */}
-      <div className="w-full h-64 lg:h-72 overflow-x-auto pb-2">
-        <div className="min-w-[760px] lg:min-w-0 w-full h-full">
+      {/* Bar Chart (Taller Height & Cleaner Font Scaling) */}
+      <div className="w-full h-80 sm:h-84 lg:h-96 overflow-x-auto pb-2">
+        <div className="min-w-[700px] lg:min-w-0 w-full h-full">
           <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={sortedData} margin={{ top: 12, right: 10, left: -15, bottom: 45 }}>
+          <BarChart data={sortedData} margin={{ top: 14, right: 12, left: -12, bottom: 20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
             <XAxis 
               dataKey="fullName" 
-              stroke="#64748b" 
-              fontSize={11} 
-              fontWeight={600}
+              stroke="#94a3b8"
+              fill="#64748b" 
+              fontSize={9.5} 
+              fontWeight={500}
               tickLine={false}
               interval={0}
-              angle={-38}
+              angle={-30}
               textAnchor="end"
-              height={60}
-              dy={4}
+              height={48}
+              dy={3}
             />
             <YAxis 
-              stroke="#64748b" 
-              fontSize={11} 
+              stroke="#94a3b8" 
+              fontSize={10} 
               tickLine={false}
               unit="m²"
             />
             <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey="sqm" radius={[4, 4, 0, 0]}>
+            <Bar dataKey="sqm" radius={[5, 5, 0, 0]}>
               {sortedData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.color} />
               ))}

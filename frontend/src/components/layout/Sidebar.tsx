@@ -62,7 +62,7 @@ export const Sidebar: React.FC = () => {
   
   const allNavItems = [
     { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { label: assignedStage ? `Job Cards (${assignedStage.replace(/^\d+\.\s*/, '')})` : 'Job Cards & Split', href: '/job-cards', icon: Layers, roles: ['Super Admin', 'Production Manager', 'Stage Operator', 'PROCESS_OPERATOR', 'NORMAL'] },
+    { label: assignedStage ? `Job Cards (${assignedStage.replace(/^\d+\.\s*/, '')})` : 'Job Cards & Split', href: '/job-cards', icon: Layers, roles: ['Super Admin', 'Production Manager', 'Stage Operator', 'PROCESS_OPERATOR', 'NORMAL', 'Quality Inspector', 'QC_OFFICER'] },
     { label: 'Job Movement & Update', href: '/job-cards/movement', icon: Activity, roles: ['Super Admin', 'Production Manager', 'Stage Operator', 'PROCESS_OPERATOR', 'NORMAL', 'Quality Inspector'] },
     { label: 'Floor Monitor', href: '/floor', icon: Activity, roles: ['Super Admin', 'Production Manager', 'Quality Inspector', 'Stage Operator', 'PROCESS_OPERATOR', 'NORMAL'] },
     { label: 'Customer Master', href: '/customers', icon: Building2, roles: ['Super Admin', 'Production Manager'] },
