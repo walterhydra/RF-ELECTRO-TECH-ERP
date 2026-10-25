@@ -291,6 +291,7 @@ export class AuthService {
       name: user.name,
       email: user.email,
       phone: user.phone,
+      createdAt: user.createdAt,
       role: user.role.name,
       roleId: user.roleId,
       department: user.department ? { id: user.department.id, name: user.department.name } : null,

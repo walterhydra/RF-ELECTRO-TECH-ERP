@@ -3,7 +3,7 @@ import { Send, Map, Headphones, Award, Phone, Mail } from 'lucide-react';
 
 export default function ContactAboutSection() {
   return (
-    <section className="py-24 px-6 relative bg-slate-50 overflow-hidden">
+    <section id="contact" className="py-24 px-6 relative bg-slate-50 overflow-hidden scroll-mt-12">
       {/* Subtle Dot Pattern Background */}
       <div 
         className="absolute inset-0 z-0 opacity-40 pointer-events-none"
@@ -19,10 +19,13 @@ export default function ContactAboutSection() {
           {/* Left Column - Map and Quote */}
           <div className="flex-1 flex flex-col gap-6">
             <div className="flex items-start">
-              <button className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-full font-bold shadow-lg transition-all flex items-center gap-2">
+              <a 
+                href="mailto:info@rfelectrotech.com?subject=PCB%20Manufacturing%20Quote%20Request" 
+                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-full font-bold shadow-lg transition-all flex items-center gap-2"
+              >
                 Get a Quote
                 <Send className="w-4 h-4" />
-              </button>
+              </a>
             </div>
             
             <div className="relative bg-white rounded-3xl overflow-hidden shadow-xl border border-slate-200">
@@ -101,9 +104,9 @@ export default function ContactAboutSection() {
                 </div>
               </div>
               
-              {/* EDIT: Email address */}
+              {/* Company email address */}
               <a 
-                href="mailto:info@company.com" 
+                href="mailto:info@rfelectrotech.com" 
                 className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-md"
               >
                 <Mail className="w-5 h-5" />

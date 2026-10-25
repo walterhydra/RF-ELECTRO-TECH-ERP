@@ -725,7 +725,7 @@ export default function JobCardsPage() {
   const [pdfPreviewJob, setPdfPreviewJob] = useState<JobCard | null>(null);
   const [deleteConfirmCard, setDeleteConfirmCard] = useState<JobCard | null>(null);
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
-  const [serverHost, setServerHost] = useState<string>('rf-electro-tech-erp.onrender.com');
+  const [serverHost, setServerHost] = useState<string>('');
   const [photoLightbox, setPhotoLightbox] = useState<string | null>(null);
   const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
   const [unitPcbAreaSqm, setUnitPcbAreaSqm] = useState<number>(0.28125);
@@ -2977,7 +2977,12 @@ export default function JobCardsPage() {
   const [globalSearch, setGlobalSearch] = useState('');
   const [showColFilters, setShowColFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(25);
+
+  // Reset pagination to page 1 whenever any filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusRadio, globalSearch, colFilters, assignedStage]);
 
   const todayStr = React.useMemo(() => new Date().toISOString().split('T')[0], []);
 
@@ -3104,6 +3109,14 @@ export default function JobCardsPage() {
 
     return matchesWip && matchesProduct && matchesCode && matchesCust && matchesStage && matchesPriority && matchesPndg && matchesRejection && matchesGlobal && matchesRadio;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredCards.length / pageSize));
+  const validCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (validCurrentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, filteredCards.length);
+  const paginatedCards = useMemo(() => {
+    return filteredCards.slice(startIndex, endIndex);
+  }, [filteredCards, startIndex, endIndex]);
 
   const totalMasterCards = scopedCards.length;
   const inProgressCount = scopedCards.filter((j) => j.status === 'IN_PROGRESS').length;
@@ -4035,7 +4048,7 @@ export default function JobCardsPage() {
                   </td>
                 </tr>
               ) : (
-                filteredCards.map((jc, idx) => {
+                paginatedCards.map((jc, idx) => {
                   const isUnlaunched = jc.status === 'UNLAUNCHED' || jc.status === 'CREATED' || (jc.status as string) === 'PENDING_LAUNCH';
                   const isCompleted = jc.status === 'COMPLETED';
                   const stageIndex = jc.currentStageIndex !== undefined && jc.currentStageIndex >= 0 ? jc.currentStageIndex : normalizeStageIndex(jc.currentStageName);
@@ -4295,7 +4308,7 @@ export default function JobCardsPage() {
               No job cards found for current selection.
             </div>
           ) : (
-            filteredCards.map((jc, idx) => {
+            paginatedCards.map((jc, idx) => {
               const isUnlaunched = jc.status === 'UNLAUNCHED' || jc.status === 'CREATED' || (jc.status as string) === 'PENDING_LAUNCH';
               const isCompleted = jc.status === 'COMPLETED';
               const stageIndex = jc.currentStageIndex !== undefined && jc.currentStageIndex >= 0 ? jc.currentStageIndex : normalizeStageIndex(jc.currentStageName);
@@ -4529,26 +4542,76 @@ export default function JobCardsPage() {
           </div>
 
           <div className="flex items-center gap-3 font-mono text-[11px] flex-wrap">
-            <div>
-              Page <input type="text" value={currentPage} readOnly className="w-8 text-center bg-white border border-slate-300 rounded py-0.5 font-bold" /> of 40
+            <div className="flex items-center gap-1.5">
+              <span>Page</span>
+              <input
+                type="number"
+                min={1}
+                max={totalPages}
+                value={validCurrentPage}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  if (!isNaN(val)) {
+                    setCurrentPage(Math.min(Math.max(1, val), totalPages));
+                  }
+                }}
+                className="w-12 text-center bg-white border border-slate-300 rounded py-0.5 font-bold text-slate-900 focus:outline-none focus:border-blue-500 shadow-2xs"
+              />
+              <span>of {totalPages}</span>
             </div>
             <div className="flex items-center gap-1">
-              <button className="px-2 py-0.5 bg-white border border-slate-300 rounded font-bold hover:bg-slate-50 cursor-pointer">|&lt;&lt;</button>
-              <button className="px-2 py-0.5 bg-white border border-slate-300 rounded font-bold hover:bg-slate-50 cursor-pointer">&lt;</button>
-              <button className="px-2 py-0.5 bg-white border border-slate-300 rounded font-bold hover:bg-slate-50 cursor-pointer">&gt;</button>
-              <button className="px-2 py-0.5 bg-white border border-slate-300 rounded font-bold hover:bg-slate-50 cursor-pointer">&gt;&gt;|</button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage(1)}
+                disabled={validCurrentPage <= 1}
+                title="First Page"
+                className="px-2 py-0.5 bg-white border border-slate-300 rounded font-bold hover:bg-slate-50 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                |&lt;&lt;
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={validCurrentPage <= 1}
+                title="Previous Page"
+                className="px-2 py-0.5 bg-white border border-slate-300 rounded font-bold hover:bg-slate-50 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                &lt;
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={validCurrentPage >= totalPages}
+                title="Next Page"
+                className="px-2 py-0.5 bg-white border border-slate-300 rounded font-bold hover:bg-slate-50 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                &gt;
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={validCurrentPage >= totalPages}
+                title="Last Page"
+                className="px-2 py-0.5 bg-white border border-slate-300 rounded font-bold hover:bg-slate-50 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                &gt;&gt;|
+              </button>
             </div>
             <select
               value={pageSize}
-              onChange={(e) => setPageSize(Number(e.target.value))}
-              className="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-bold cursor-pointer"
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-bold cursor-pointer shadow-2xs"
             >
               <option value={10}>10</option>
               <option value={25}>25</option>
               <option value={50}>50</option>
+              <option value={100}>100</option>
             </select>
-            <div>
-              View 1 - {filteredCards.length} of {totalMasterCards}
+            <div className="text-slate-600 font-sans">
+              View <span className="font-bold text-slate-900">{filteredCards.length === 0 ? 0 : startIndex + 1}</span> - <span className="font-bold text-slate-900">{endIndex}</span> of <span className="font-bold text-slate-900">{filteredCards.length}</span>
             </div>
           </div>
         </div>

@@ -80,11 +80,12 @@ export default function LandingPage() {
 
       {/* Why Choose Us */}
       <motion.section 
+        id="why-choose-us"
         initial={{ opacity: 0, y: 50 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, margin: "-100px" }}
         transition={{ duration: 0.7 }}
-        className="py-24 px-6 max-w-7xl mx-auto relative"
+        className="py-24 px-6 max-w-7xl mx-auto relative scroll-mt-12"
       >
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1px] h-24 bg-gradient-to-b from-transparent to-slate-200" />
         <div className="text-center mb-16 pt-8">
@@ -118,7 +119,7 @@ export default function LandingPage() {
       </motion.section>
 
       {/* Products - Dark Tech Theme */}
-      <section className="py-24 px-6 bg-[#0B1120] relative overflow-hidden">
+      <section id="products" className="py-24 px-6 bg-[#0B1120] relative overflow-hidden scroll-mt-12">
         {/* Glow Effects */}
         <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[120px] pointer-events-none" />
         <div className="absolute bottom-0 left-1/4 w-[500px] h-[500px] bg-indigo-600/20 rounded-full blur-[120px] pointer-events-none" />
@@ -250,9 +251,16 @@ export default function LandingPage() {
             <div className="space-y-6">
               <h4 className="text-white text-xl font-bold tracking-wide">Quick Links</h4>
               <ul className="space-y-3">
-                {['Home', 'About Us', 'Our Products', 'Career', 'Why Choose Us', 'Contact Us'].map((link) => (
-                  <li key={link}>
-                    <a href="#" className="text-sm text-slate-400 hover:text-white transition-colors">{link}</a>
+                {[
+                  { label: 'Home', href: '/' },
+                  { label: 'About Us', href: '#contact' },
+                  { label: 'Our Products', href: '#products' },
+                  { label: 'Career', href: 'mailto:info@rfelectrotech.com?subject=Career%20Inquiry%20-%20RF%20Electrotech' },
+                  { label: 'Why Choose Us', href: '#why-choose-us' },
+                  { label: 'Contact Us', href: '#contact' }
+                ].map((item) => (
+                  <li key={item.label}>
+                    <a href={item.href} className="text-sm text-slate-400 hover:text-white transition-colors">{item.label}</a>
                   </li>
                 ))}
               </ul>
@@ -262,9 +270,20 @@ export default function LandingPage() {
             <div className="space-y-6">
               <h4 className="text-white text-xl font-bold tracking-wide">Our Products</h4>
               <ul className="space-y-3">
-                {['SINGLE SIDED PCB', 'METAL CORE PCB', 'DOUBLE SIDED PCB', 'MULTILAYER PCB', 'RF PCB', 'SS FLEX PCB'].map((link) => (
-                  <li key={link}>
-                    <a href="#" className="text-sm text-slate-400 hover:text-white transition-colors">{link}</a>
+                {['SINGLE SIDED PCB', 'METAL CORE PCB', 'DOUBLE SIDED PCB', 'MULTILAYER PCB', 'RF PCB', 'SS FLEX PCB'].map((productName) => (
+                  <li key={productName}>
+                    <a 
+                      href="#products" 
+                      onClick={(e) => {
+                        const prod = products.find(p => p.name === productName);
+                        if (prod) {
+                          setSelectedProduct(prod);
+                        }
+                      }}
+                      className="text-sm text-slate-400 hover:text-white transition-colors cursor-pointer"
+                    >
+                      {productName}
+                    </a>
                   </li>
                 ))}
               </ul>
@@ -280,7 +299,7 @@ export default function LandingPage() {
                 </li>
                 <li className="flex items-center gap-3">
                   <Phone className="w-5 h-5 text-blue-400 shrink-0" />
-                  <span className="text-sm text-slate-400">Call Us: +91 9205009707</span>
+                  <a href="tel:+919205009707" className="text-sm text-slate-400 hover:text-white">+91 9205009707</a>
                 </li>
                 <li className="flex items-center gap-3">
                   <Mail className="w-5 h-5 text-blue-400 shrink-0" />
@@ -288,10 +307,10 @@ export default function LandingPage() {
                 </li>
               </ul>
               <div className="flex gap-4 pt-2">
-                <a href="#" className="text-slate-400 hover:text-white transition-colors"><Facebook className="w-5 h-5" /></a>
-                <a href="#" className="text-slate-400 hover:text-white transition-colors"><Twitter className="w-5 h-5" /></a>
-                <a href="#" className="text-slate-400 hover:text-white transition-colors"><Globe className="w-5 h-5" /></a>
-                <a href="#" className="text-slate-400 hover:text-white transition-colors"><Linkedin className="w-5 h-5" /></a>
+                <a href="https://wa.me/919205009707" target="_blank" rel="noopener noreferrer" title="WhatsApp" className="text-slate-400 hover:text-emerald-400 transition-colors"><MessageCircle className="w-5 h-5" /></a>
+                <a href="mailto:info@rfelectrotech.com" title="Email" className="text-slate-400 hover:text-blue-400 transition-colors"><Mail className="w-5 h-5" /></a>
+                <a href="https://maps.google.com/maps?q=Plot+No+106,+Sector+Ecotech+12,+Greater+Noida,+G.+B.+Nagar,+U.p" target="_blank" rel="noopener noreferrer" title="Google Maps" className="text-slate-400 hover:text-white transition-colors"><Globe className="w-5 h-5" /></a>
+                <a href="tel:+919205009707" title="Call Us" className="text-slate-400 hover:text-white transition-colors"><Phone className="w-5 h-5" /></a>
               </div>
             </div>
 

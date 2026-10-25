@@ -26,9 +26,10 @@ import {
 
 interface User {
   id: string;
+  name?: string;
   email: string;
-  firstName: string;
-  lastName: string;
+  firstName?: string;
+  lastName?: string;
   role: string;
   department?: string;
   phone?: string;
@@ -37,18 +38,26 @@ interface User {
 }
 
 const AVAILABLE_STAGES = [
-  'CAM & Gerber Verification',
-  'CNC Material Cutting',
-  'CNC Drilling & Routing',
-  'Electroless Copper / Plating',
-  'Dry Film Imaging & Etching',
-  'AOI (Automated Optical Inspection)',
-  'LPI Solder Mask & Curing',
-  'Legend / Component Silkscreen',
-  'Surface Finish (ENIG / HASL)',
-  'Electrical Testing (E-Test)',
-  'Final CNC Routing & V-Scored Profiling',
-  'Final QC & Vacuum Packaging',
+  '1. SHEARING',
+  '2. DRILLING',
+  '3. DRL-QC',
+  '4. DML',
+  '5. PIT',
+  '6. PIT-QC',
+  '7. PLATING',
+  '8. ETCHING',
+  '9. PREMASK-QC/AOI',
+  '10. PISM',
+  '11. PISM-QC',
+  '12. LEGEND PRINT',
+  '13. HASL',
+  '14. HASL-QC',
+  '15. ROUTING',
+  '16. VG',
+  '17. BBT',
+  '18. FQC (AI)',
+  '19. PDI-AQL',
+  '20. PACKING',
 ];
 
 const ROLES = [
@@ -65,8 +74,8 @@ const ROLES = [
 ];
 
 // Format role names cleanly
-const formatRoleName = (role: string) => {
-  return role.replace(/_/g, ' ');
+const formatRoleName = (role?: string) => {
+  return (role || 'OPERATOR').replace(/_/g, ' ');
 };
 
 // Stage chip styling for Light Theme
@@ -116,10 +125,23 @@ export default function UsersPage() {
       .then((data) => {
         if (Array.isArray(data)) {
           setUsers(
-            data.map((u: any) => ({
-              ...u,
-              assignedStages: u.assignedStages?.length ? u.assignedStages : ['Unassigned / General'],
-            }))
+            data.map((u: any) => {
+              const nameParts = (u.name || '').trim().split(/\s+/).filter(Boolean);
+              const firstName = u.firstName || nameParts[0] || (u.email ? u.email.split('@')[0] : 'User');
+              const lastName = u.lastName || nameParts.slice(1).join(' ') || '';
+              const roleName = typeof u.role === 'string' ? u.role : (u.role?.name || 'PROCESS_OPERATOR');
+              const stages = u.assignedStages?.length 
+                ? u.assignedStages 
+                : (u.assignedStage?.name ? [u.assignedStage.name] : ['Unassigned / General']);
+              return {
+                ...u,
+                firstName,
+                lastName,
+                role: roleName,
+                department: u.department?.name || u.department || 'Production',
+                assignedStages: stages,
+              };
+            })
           );
         }
       })
@@ -129,12 +151,15 @@ export default function UsersPage() {
 
   // Filtered list
   const filteredUsers = users.filter((u) => {
+    const fullName = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name || '';
+    const userEmail = u.email || '';
+    const userRole = u.role || '';
     const matchesSearch =
-      u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      `${u.firstName} ${u.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      userEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      userRole.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.assignedStages?.some((s) => s.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesRole = selectedRoleFilter === 'ALL' || u.role === selectedRoleFilter;
+    const matchesRole = selectedRoleFilter === 'ALL' || userRole === selectedRoleFilter;
     return matchesSearch && matchesRole;
   });
 
@@ -163,16 +188,17 @@ export default function UsersPage() {
 
   const handleOpenEdit = (user: User) => {
     setEditingUser(user);
+    const nameParts = (user.name || '').trim().split(/\s+/).filter(Boolean);
     setFormData({
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
+      email: user.email || '',
+      firstName: user.firstName || nameParts[0] || '',
+      lastName: user.lastName || nameParts.slice(1).join(' ') || '',
       password: '',
-      role: user.role,
+      role: user.role || 'PROCESS_OPERATOR',
       department: user.department || 'Production',
       phone: user.phone || '',
       assignedStages: user.assignedStages || [],
-      isActive: user.isActive,
+      isActive: user.isActive !== undefined ? user.isActive : true,
     });
     setError('');
     setIsModalOpen(true);
@@ -221,7 +247,14 @@ export default function UsersPage() {
 
       if (res.ok) {
         const saved = await res.json();
-        const formatted = { ...saved, assignedStages: formData.assignedStages };
+        const formatted: User = { 
+          ...saved, 
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+          role: formData.role,
+          department: formData.department,
+          assignedStages: formData.assignedStages 
+        };
         if (editingUser) {
           setUsers(users.map((u) => (u.id === saved.id ? formatted : u)));
         } else {
@@ -405,11 +438,12 @@ export default function UsersPage() {
                   <td className="py-3.5 px-5">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-xs font-bold text-slate-700 shrink-0">
-                        {user.firstName[0]}{user.lastName[0]}
+                        {(user.firstName?.[0] || user.name?.[0] || 'U').toUpperCase()}
+                        {(user.lastName?.[0] || user.name?.split(' ')?.[1]?.[0] || '').toUpperCase()}
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-slate-900">
-                          {user.firstName} {user.lastName}
+                          {user.firstName || user.name || 'User'} {user.lastName || ''}
                         </p>
                         {user.department && (
                           <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5">
@@ -444,7 +478,7 @@ export default function UsersPage() {
                         ? 'bg-amber-50 border-amber-200 text-amber-800 font-bold'
                         : user.role === 'PROCESS_OPERATOR'
                         ? 'bg-emerald-50 border-emerald-200 text-emerald-800 font-semibold'
-                        : user.role.includes('ENGINEER') || user.role.includes('MANAGER')
+                        : (user.role || '').includes('ENGINEER') || (user.role || '').includes('MANAGER')
                         ? 'bg-blue-50 border-blue-200 text-blue-800 font-semibold'
                         : 'bg-slate-100 border-slate-200 text-slate-700'
                     }`}>

@@ -2,460 +2,595 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  Camera, 
-  Edit2, 
   User, 
   Mail, 
   Phone, 
   MapPin, 
   ShieldCheck, 
   Building2, 
-  Calendar, 
   Key, 
   Lock, 
   CheckCircle2, 
-  Award, 
-  Clock, 
-  Sparkles,
-  Save,
-  X
+  AlertCircle, 
+  Eye, 
+  EyeOff, 
+  Save, 
+  Shield, 
+  Layers, 
+  Laptop, 
+  Clock,
+  Check,
+  Building
 } from 'lucide-react';
-import { getApiBaseUrl, fetchApi } from '@/lib/utils';
+import { fetchApi } from '@/lib/utils';
+
+type ProfileTab = 'general' | 'security' | 'permissions';
 
 export default function ProfilePage() {
-  const [userRole, setUserRole] = useState('Super Admin');
-  const [userEmail, setUserEmail] = useState('');
+  const [activeTab, setActiveTab] = useState<ProfileTab>('general');
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [successMsg, setSuccessMsg] = useState('');
-  const [resetMsg, setResetMsg] = useState('');
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const [profileData, setProfileData] = useState({
+  // Profile fields
+  const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
-    dob: '1992-05-15',
     email: '',
-    phone: '+91 98765 43210',
-    role: 'Super Admin',
-    plantLocation: 'Plant-01 (Noida Sector 62)',
+    phone: '',
+    role: 'SUPER_ADMIN',
+    department: 'Management & IT Operations',
+    plantLocation: 'Greater Noida Plant (Ecotech 12)',
+    address: 'Plot No 106, Sector Ecotech 12',
+    city: 'Greater Noida',
+    state: 'Uttar Pradesh',
     country: 'India',
-    city: 'Noida, Uttar Pradesh',
-    postalCode: '201309',
-    department: 'Executive Systems & Governance',
+    pinCode: '201306',
+    joiningDate: '',
   });
 
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  // Password fields
+  const [passwordData, setPasswordData] = useState({
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
+
   useEffect(() => {
-    const role = localStorage.getItem('userRole');
-    const email = localStorage.getItem('userEmail');
-    const name = localStorage.getItem('userName');
-    if (role) setUserRole(role);
-    if (email) {
-      setUserEmail(email);
-      setProfileData(prev => ({ ...prev, email }));
-    }
-    if (name) {
-      const parts = name.trim().split(' ');
-      setProfileData(prev => ({
-        ...prev,
-        firstName: parts[0] || 'User',
-        lastName: parts.slice(1).join(' ') || ''
-      }));
-    }
+    const role = localStorage.getItem('userRole') || 'SUPER_ADMIN';
+    const email = localStorage.getItem('userEmail') || 'admin@rfelectro.com';
+    const name = localStorage.getItem('userName') || 'Super Admin';
+
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    setFormData(prev => ({
+      ...prev,
+      firstName: parts[0] || 'Super',
+      lastName: parts.slice(1).join(' ') || 'Admin',
+      email,
+      role,
+    }));
 
     fetchApi('/auth/me')
       .then((res) => (res.ok ? res.json() : null))
       .then((user) => {
         if (user && user.email) {
           setCurrentUser(user);
-          setUserRole(user.role || role || 'Super Admin');
-          setUserEmail(user.email);
-          const parts = (user.name || '').trim().split(' ');
-          setProfileData((prev) => ({
+          const nameParts = (user.name || '').trim().split(/\s+/).filter(Boolean);
+          setFormData((prev) => ({
             ...prev,
-            firstName: parts[0] || 'User',
-            lastName: parts.slice(1).join(' ') || '',
+            firstName: nameParts[0] || prev.firstName,
+            lastName: nameParts.slice(1).join(' ') || prev.lastName,
             email: user.email,
             phone: user.phone || prev.phone,
             role: user.role || prev.role,
             department: user.department?.name || prev.department,
+            joiningDate: user.createdAt 
+              ? new Date(user.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+              : 'Oct 2024',
           }));
         }
       })
-      .catch((err) => console.error('Failed to fetch auth profile:', err));
+      .catch((err) => console.error('Failed to load profile:', err));
   }, []);
 
-  const initials = profileData.firstName.substring(0, 1) + (profileData.lastName ? profileData.lastName.substring(0, 1) : '');
-
-  const handleSaveProfile = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsEditing(false);
-    setSuccessMsg('Profile details updated successfully!');
-    setTimeout(() => setSuccessMsg(''), 4000);
+  const triggerToast = (type: 'success' | 'error', message: string) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 3500);
   };
 
+  const handleSaveGeneral = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.firstName.trim()) {
+      triggerToast('error', 'First name is required');
+      return;
+    }
+
+    try {
+      setIsSavingProfile(true);
+      const targetId = currentUser?.id || localStorage.getItem('userId');
+      const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`.trim();
+
+      if (targetId) {
+        const res = await fetchApi(`/users/${targetId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            name: fullName,
+            phone: formData.phone || undefined,
+          }),
+        });
+
+        if (res.ok) {
+          localStorage.setItem('userName', fullName);
+          triggerToast('success', 'Profile details updated successfully');
+          // Instantly re-fetch from database to reflect backend state
+          fetchApi('/auth/me')
+            .then((r) => (r.ok ? r.json() : null))
+            .then((updatedUser) => {
+              if (updatedUser) {
+                setCurrentUser(updatedUser);
+                const nameParts = (updatedUser.name || '').trim().split(/\s+/).filter(Boolean);
+                setFormData((prev) => ({
+                  ...prev,
+                  firstName: nameParts[0] || prev.firstName,
+                  lastName: nameParts.slice(1).join(' ') || prev.lastName,
+                  email: updatedUser.email || prev.email,
+                  phone: updatedUser.phone || prev.phone,
+                  role: updatedUser.role || prev.role,
+                  department: updatedUser.department?.name || prev.department,
+                }));
+              }
+            });
+        } else {
+          localStorage.setItem('userName', fullName);
+          triggerToast('success', 'Profile updated locally');
+        }
+      } else {
+        localStorage.setItem('userName', fullName);
+        triggerToast('success', 'Profile updated locally');
+      }
+    } catch {
+      triggerToast('error', 'Unable to reach server. Please check connection.');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleSavePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordData.newPassword || passwordData.newPassword.length < 6) {
+      triggerToast('error', 'New password must be at least 6 characters long');
+      return;
+    }
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      triggerToast('error', 'New password and confirm password do not match');
+      return;
+    }
+
+    try {
+      setIsSavingPassword(true);
+      const targetId = currentUser?.id || localStorage.getItem('userId');
+      if (targetId) {
+        const res = await fetchApi(`/users/${targetId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ password: passwordData.newPassword }),
+        });
+        if (res.ok) {
+          triggerToast('success', 'Password updated successfully');
+          setPasswordData({ newPassword: '', confirmPassword: '' });
+        } else {
+          triggerToast('error', 'Failed to update password');
+        }
+      } else {
+        triggerToast('error', 'Active session not found. Please log in again.');
+      }
+    } catch {
+      triggerToast('error', 'Server error while updating password');
+    } finally {
+      setIsSavingPassword(false);
+    }
+  };
+
+  const initials = ((formData.firstName?.[0] || 'S') + (formData.lastName?.[0] || 'A')).toUpperCase();
+
   return (
-    <div className="space-y-6 p-6 max-w-[1200px] mx-auto pb-16 bg-slate-100 min-h-screen text-slate-900 font-sans">
+    <div className="min-h-screen bg-slate-50 text-slate-900 p-4 sm:p-6 lg:p-8 font-sans">
       
-      {/* Success Banner */}
-      {successMsg && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl text-xs flex items-center justify-between shadow-2xs">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span className="font-semibold">{successMsg}</span>
-          </div>
-          <button onClick={() => setSuccessMsg('')} className="text-emerald-700 hover:text-emerald-900 font-bold text-sm">✕</button>
+      {/* Toast Alert */}
+      {toast && (
+        <div className={`fixed top-5 right-5 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium transition-all ${
+          toast.type === 'success' 
+            ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+            : 'bg-rose-50 text-rose-800 border-rose-200'
+        }`}>
+          {toast.type === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          ) : (
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+          )}
+          <span>{toast.message}</span>
+          <button onClick={() => setToast(null)} className="ml-2 text-slate-400 hover:text-slate-600">✕</button>
         </div>
       )}
 
-      {/* Profile Banner & Cover Header */}
-      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-        
-        {/* Cover Background */}
-        <div className="h-32 bg-gradient-to-r from-slate-900 via-amber-950 to-slate-900 relative p-6 flex items-end justify-between">
-          <div className="absolute inset-0 bg-[radial-gradient(#f59e0b_1px,transparent_1px)] [background-size:16px_16px] opacity-20" />
-          <span className="relative text-[10px] font-mono font-bold text-amber-400 bg-slate-950/60 px-3 py-1 rounded-full border border-amber-500/30 backdrop-blur-sm">
-            RF ELECTRO ERP • ENTERPRISE USER PROFILE
-          </span>
+      <div className="max-w-5xl mx-auto space-y-6">
+
+        {/* Page Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Account Settings</h1>
+            <p className="text-sm text-slate-500 mt-0.5">
+              Manage your personal information, security credentials, and system access.
+            </p>
+          </div>
         </div>
 
-        {/* Profile Avatar & Info Row */}
-        <div className="p-6 pt-0 relative flex flex-col md:flex-row md:items-end justify-between gap-4">
-          
-          <div className="flex items-end gap-5 -mt-12">
-            {/* Avatar Circle */}
-            <div className="relative">
-              <div className="w-24 h-24 rounded-2xl border-4 border-white bg-amber-50 border-amber-300 shadow-md flex items-center justify-center text-2xl font-bold font-mono text-amber-700">
-                {initials || 'SA'}
-              </div>
-              <button 
-                className="absolute -bottom-1 -right-1 bg-white p-2 rounded-xl border border-slate-200 shadow-sm hover:bg-slate-50 text-slate-700 transition-colors"
-                title="Change Avatar Photo"
-              >
-                <Camera className="w-4 h-4 text-amber-600" />
-              </button>
+        {/* User Identity Summary Banner (Clean, Real Theme) */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-blue-600 text-white font-bold text-xl flex items-center justify-center shrink-0 shadow-xs">
+              {initials}
             </div>
-
-            {/* Name & Role */}
-            <div className="pb-1">
+            <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-slate-900">{profileData.firstName} {profileData.lastName}</h1>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3 text-emerald-600" /> Verified
+                <h2 className="text-lg font-bold text-slate-900">{formData.firstName} {formData.lastName}</h2>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <Check className="w-3 h-3 stroke-[3]" /> Active
                 </span>
               </div>
-              <p className="text-xs font-semibold text-slate-500 mt-0.5">{profileData.role} • {profileData.department}</p>
-              <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono mt-1">
-                <MapPin className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                <span>{profileData.city}</span>
-              </div>
+              <p className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-2">
+                <span>{formData.email}</span>
+                <span>•</span>
+                <span className="font-semibold text-slate-700">{formData.role.replace(/_/g, ' ')}</span>
+                <span>•</span>
+                <span>{formData.plantLocation}</span>
+              </p>
             </div>
           </div>
 
-          {/* Action CTAs */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsEditing(!isEditing)}
-              className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-sm shrink-0"
-            >
-              <Edit2 className="w-4 h-4 stroke-[2.5]" />
-              <span>{isEditing ? 'Cancel Editing' : 'Edit Profile Details'}</span>
-            </button>
-          </div>
-
-        </div>
-      </div>
-
-      {/* Top User Quick Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200 p-4 rounded-xl flex items-center gap-3.5 shadow-sm">
-          <div className="w-10 h-10 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0">
-            <ShieldCheck className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-500">Security Clearance</p>
-            <p className="text-sm font-bold text-slate-900 mt-0.5">Level 5 (Super Admin)</p>
+          <div className="text-xs text-slate-400 font-medium sm:text-right">
+            <span>Employee ID: </span>
+            <span className="font-mono font-semibold text-slate-700">
+              {currentUser?.id ? `RFE-${currentUser.id.slice(0, 6).toUpperCase()}` : 'RFE-001'}
+            </span>
+            {formData.joiningDate && (
+              <p className="text-[11px] text-slate-400 mt-0.5">Member since {formData.joiningDate}</p>
+            )}
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 p-4 rounded-xl flex items-center gap-3.5 shadow-sm">
-          <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0">
-            <Building2 className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-500">Factory Facility</p>
-            <p className="text-sm font-bold text-slate-900 mt-0.5">{profileData.plantLocation}</p>
-          </div>
+        {/* Tab Navigation */}
+        <div className="flex border-b border-slate-200 gap-6 text-sm font-medium">
+          <button
+            onClick={() => setActiveTab('general')}
+            className={`pb-3 flex items-center gap-2 transition-colors cursor-pointer border-b-2 -mb-px ${
+              activeTab === 'general'
+                ? 'border-blue-600 text-blue-600 font-semibold'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <User className="w-4 h-4" />
+            <span>Personal Information</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('security')}
+            className={`pb-3 flex items-center gap-2 transition-colors cursor-pointer border-b-2 -mb-px ${
+              activeTab === 'security'
+                ? 'border-blue-600 text-blue-600 font-semibold'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Lock className="w-4 h-4" />
+            <span>Login & Security</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('permissions')}
+            className={`pb-3 flex items-center gap-2 transition-colors cursor-pointer border-b-2 -mb-px ${
+              activeTab === 'permissions'
+                ? 'border-blue-600 text-blue-600 font-semibold'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>Station Access & Permissions</span>
+          </button>
         </div>
 
-        <div className="bg-white border border-slate-200 p-4 rounded-xl flex items-center gap-3.5 shadow-sm">
-          <div className="w-10 h-10 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 shrink-0">
-            <Clock className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-500">Current Shift Status</p>
-            <p className="text-sm font-bold text-blue-700 mt-0.5">🟢 Active On Duty</p>
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 p-4 rounded-xl flex items-center gap-3.5 shadow-sm">
-          <div className="w-10 h-10 rounded-lg bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-600 shrink-0">
-            <Key className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-500">Authentication Mode</p>
-            <p className="text-sm font-bold text-slate-900 mt-0.5">2FA & JWT Token</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Profile Data Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left Column: Personal Information Form/View */}
-        <div className="lg:col-span-2 space-y-6">
-          
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 font-bold">
-                  <User className="w-4 h-4" />
-                </div>
-                <h2 className="text-base font-bold text-slate-900">Personal Information</h2>
+        {/* TAB 1: PERSONAL INFORMATION */}
+        {activeTab === 'general' && (
+          <div className="space-y-6">
+            
+            {/* Personal Details Form */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-6">
+              <div className="border-b border-slate-100 pb-4">
+                <h3 className="text-base font-bold text-slate-900">Personal Details</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Update your personal contact information.</p>
               </div>
-              <span className="text-[11px] font-mono text-slate-400">USER ID: RF-USER-001</span>
-            </div>
 
-            {isEditing ? (
-              <form onSubmit={handleSaveProfile} className="space-y-4 text-xs">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <form onSubmit={handleSaveGeneral} className="space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 text-sm">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">FIRST NAME *</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">First Name</label>
                     <input
                       type="text"
                       required
-                      value={profileData.firstName}
-                      onChange={(e) => setProfileData({ ...profileData, firstName: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-slate-900 text-xs focus:bg-white focus:outline-none focus:border-amber-500 font-semibold"
+                      value={formData.firstName}
+                      onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
+
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">LAST NAME *</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">Last Name</label>
                     <input
                       type="text"
                       required
-                      value={profileData.lastName}
-                      onChange={(e) => setProfileData({ ...profileData, lastName: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-slate-900 text-xs focus:bg-white focus:outline-none focus:border-amber-500 font-semibold"
+                      value={formData.lastName}
+                      onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">EMAIL ADDRESS *</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">Email Address</label>
                     <input
                       type="email"
-                      required
-                      value={profileData.email}
-                      onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-slate-900 text-xs focus:bg-white focus:outline-none focus:border-amber-500 font-semibold"
+                      disabled
+                      value={formData.email}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-500 cursor-not-allowed"
                     />
+                    <p className="text-[11px] text-slate-400 mt-1">To change email, contact system administrator.</p>
                   </div>
+
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">PHONE NUMBER *</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">Phone Number</label>
                     <input
                       type="text"
-                      required
-                      value={profileData.phone}
-                      onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-slate-900 font-mono text-xs focus:bg-white focus:outline-none focus:border-amber-500 font-semibold"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      placeholder="+91 92050 09707"
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">DATE OF BIRTH</label>
-                    <input
-                      type="date"
-                      value={profileData.dob}
-                      onChange={(e) => setProfileData({ ...profileData, dob: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-slate-900 font-mono text-xs focus:bg-white focus:outline-none focus:border-amber-500 font-semibold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">USER ROLE</label>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">Department</label>
                     <input
                       type="text"
                       disabled
-                      value={profileData.role}
-                      className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3.5 py-2 text-slate-500 font-mono text-xs cursor-not-allowed font-semibold"
+                      value={formData.department}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-600 cursor-not-allowed"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">Assigned Facility</label>
+                    <input
+                      type="text"
+                      disabled
+                      value={formData.plantLocation}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-600 cursor-not-allowed"
                     />
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setIsEditing(false)}
-                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors"
-                  >
-                    Cancel
-                  </button>
+                <div className="flex justify-end pt-3 border-t border-slate-100">
                   <button
                     type="submit"
-                    className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs transition-all shadow-sm flex items-center gap-1.5"
+                    disabled={isSavingProfile}
+                    className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-xl text-sm font-semibold transition-all shadow-xs flex items-center gap-2 cursor-pointer"
                   >
-                    <Save className="w-3.5 h-3.5" />
-                    <span>Save Changes</span>
+                    <Save className="w-4 h-4" />
+                    <span>{isSavingProfile ? 'Saving...' : 'Save Changes'}</span>
                   </button>
                 </div>
               </form>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-xs">
+            </div>
+
+            {/* Plant & Office Address */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+              <div className="border-b border-slate-100 pb-3">
+                <h3 className="text-base font-bold text-slate-900">Registered Office & Plant Address</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Physical facility location of RF Electro Tech.</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                <div className="p-3.5 bg-slate-50 border border-slate-100 rounded-xl">
+                  <span className="text-xs font-medium text-slate-500 block">Address Line</span>
+                  <p className="font-semibold text-slate-800 mt-0.5">{formData.address}</p>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 border border-slate-100 rounded-xl">
+                  <span className="text-xs font-medium text-slate-500 block">City & State</span>
+                  <p className="font-semibold text-slate-800 mt-0.5">{formData.city}, {formData.state}</p>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 border border-slate-100 rounded-xl">
+                  <span className="text-xs font-medium text-slate-500 block">Postal PIN</span>
+                  <p className="font-semibold text-slate-800 mt-0.5">{formData.pinCode}</p>
+                </div>
+
+                <div className="p-3.5 bg-slate-50 border border-slate-100 rounded-xl">
+                  <span className="text-xs font-medium text-slate-500 block">Country</span>
+                  <p className="font-semibold text-slate-800 mt-0.5">{formData.country}</p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* TAB 2: LOGIN & SECURITY */}
+        {activeTab === 'security' && (
+          <div className="space-y-6">
+            
+            {/* Change Password Card */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-6">
+              <div className="border-b border-slate-100 pb-4">
+                <h3 className="text-base font-bold text-slate-900">Change Password</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Ensure your account uses a strong, secure password.</p>
+              </div>
+
+              <form onSubmit={handleSavePassword} className="space-y-4 max-w-lg text-sm">
                 <div>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block mb-1">First Name</span>
-                  <span className="font-bold text-slate-900 text-sm">{profileData.firstName}</span>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">New Password</label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={passwordData.newPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                      placeholder="Minimum 6 characters"
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block mb-1">Last Name</span>
-                  <span className="font-bold text-slate-900 text-sm">{profileData.lastName}</span>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Confirm New Password</label>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={passwordData.confirmPassword}
+                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                    placeholder="Re-enter new password"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
                 </div>
 
-                <div>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block mb-1">Date of Birth</span>
-                  <span className="font-bold font-mono text-slate-900 text-sm">{new Date(profileData.dob).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    disabled={isSavingPassword}
+                    className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-xl text-sm font-semibold transition-all shadow-xs flex items-center gap-2 cursor-pointer"
+                  >
+                    <Key className="w-4 h-4" />
+                    <span>{isSavingPassword ? 'Updating...' : 'Update Password'}</span>
+                  </button>
                 </div>
+              </form>
+            </div>
 
-                <div>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block mb-1">Email Address</span>
-                  <span className="font-semibold text-blue-700 text-sm flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    {profileData.email}
+            {/* Authentication & Session Details */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+              <div className="border-b border-slate-100 pb-3">
+                <h3 className="text-base font-bold text-slate-900">Authentication & Security Settings</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Active security methods configured for your account.</p>
+              </div>
+
+              <div className="divide-y divide-slate-100 text-sm">
+                <div className="py-3.5 flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold text-slate-900">Two-Factor Authentication (2FA)</p>
+                    <p className="text-xs text-slate-500 mt-0.5">One-time passcodes sent via email/SMS for enhanced security.</p>
+                  </div>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    Enabled
                   </span>
                 </div>
 
-                <div>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block mb-1">Phone Number</span>
-                  <span className="font-bold font-mono text-slate-900 text-sm flex items-center gap-1.5">
-                    <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    {profileData.phone}
+                <div className="py-3.5 flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold text-slate-900">Single Sign-On (SSO) Identifier</p>
+                    <p className="text-xs text-slate-500 mt-0.5 font-mono">
+                      {currentUser?.id ? `SSO-${currentUser.id.slice(0, 8).toUpperCase()}` : 'SSO-ACTIVE-SESSION'}
+                    </p>
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
+                    JWT Managed
                   </span>
                 </div>
 
-                <div>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block mb-1">ERP Governance Role</span>
-                  <span className="px-2.5 py-1 rounded-md bg-amber-50 border border-amber-200 text-amber-800 font-bold font-mono inline-block">
-                    {profileData.role}
+                <div className="py-3.5 flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold text-slate-900">Active Workstation Session</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Chrome on Windows (Current Web Session)</p>
+                  </div>
+                  <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 font-semibold">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Online Now
                   </span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* TAB 3: STATION ACCESS & PERMISSIONS */}
+        {activeTab === 'permissions' && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-6">
+            <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Assigned Manufacturing Access Rights</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Authority matrix for Role: <span className="font-semibold text-slate-700">{formData.role}</span>
+                </p>
+              </div>
+              <span className="text-xs font-semibold px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 self-start sm:self-auto">
+                {formData.role === 'SUPER_ADMIN' ? 'Full Administrator Rights' : `${formData.role.replace(/_/g, ' ')} Clearance`}
+              </span>
+            </div>
+
+            {currentUser?.assignedStage && (
+              <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-xl flex items-center justify-between text-xs">
+                <div>
+                  <span className="font-bold text-blue-900 block">Assigned Shop Floor Manufacturing Stage:</span>
+                  <span className="text-blue-700 font-semibold">{currentUser.assignedStage.name} ({currentUser.assignedStage.code})</span>
+                </div>
+                <span className="px-2.5 py-1 rounded-md bg-blue-600 text-white font-bold text-[10px]">
+                  Order: {currentUser.assignedStage.defaultOrder}
+                </span>
+              </div>
+            )}
+
+            {currentUser?.permissions && currentUser.permissions.length > 0 && (
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">Live Security Permission Keys</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {currentUser.permissions.map((permKey: string) => (
+                    <span key={permKey} className="text-[11px] font-mono font-medium px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-700">
+                      {permKey}
+                    </span>
+                  ))}
                 </div>
               </div>
             )}
 
-          </div>
-
-          {/* Location & Address Card */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-600 font-bold">
-                  <MapPin className="w-4 h-4" />
-                </div>
-                <h2 className="text-base font-bold text-slate-900">Registered Office Address</h2>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-xs">
-              <div>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block mb-1">Country</span>
-                <span className="font-bold text-slate-900 text-sm">{profileData.country}</span>
-              </div>
-
-              <div>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block mb-1">City & State</span>
-                <span className="font-bold text-slate-900 text-sm">{profileData.city}</span>
-              </div>
-
-              <div>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block mb-1">Postal Code</span>
-                <span className="font-bold font-mono text-slate-900 text-sm">{profileData.postalCode}</span>
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-        {/* Right Column: Station Permissions & Security Credentials */}
-        <div className="space-y-6">
-          
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-            <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
-              <div className="w-8 h-8 rounded-lg bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-600 font-bold">
-                <Lock className="w-4 h-4" />
-              </div>
-              <h2 className="text-base font-bold text-slate-900">Security Credentials</h2>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
-                <span className="text-[10px] font-mono text-slate-400 uppercase">Single Sign-On (SSO) ID</span>
-                <p className="font-mono font-bold text-slate-900">
-                  {currentUser?.id ? `RFE-SSO-${currentUser.id.slice(0, 8).toUpperCase()}` : 'RFE-SSO-ACTIVE'}
-                </p>
-              </div>
-
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
-                <span className="text-[10px] font-mono text-slate-400 uppercase">Authentication Security</span>
-                <p className="font-mono font-bold text-emerald-700 flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5" /> 2FA OTP Verified Session Active
-                </p>
-              </div>
-
-              {resetMsg && (
-                <div className="p-2.5 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl text-[11px] font-medium animate-in fade-in">
-                  {resetMsg}
-                </div>
-              )}
-
-              <button 
-                onClick={() => setResetMsg('A secure password reset verification link has been dispatched to ' + (currentUser?.email || userEmail || 'your email') + '.')}
-                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs border border-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Key className="w-3.5 h-3.5 text-amber-600" />
-                <span>Reset User Password</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Station Privileges */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-            <div className="flex items-center gap-2.5 border-b border-slate-100 pb-3">
-              <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 font-bold">
-                <Award className="w-4 h-4" />
-              </div>
-              <h2 className="text-base font-bold text-slate-900">ERP Station Access</h2>
-            </div>
-
-            <div className="space-y-2 text-xs">
+            <div className="divide-y divide-slate-100 text-sm">
               {[
-                { name: 'Customer Master & PO Entry', level: 'Full Read/Write' },
-                { name: 'Product Gerber Master Specs', level: 'Full Read/Write' },
-                { name: 'Job Card Generation & Split', level: 'Full Read/Write' },
-                { name: 'Shop Floor PWA & QC Disposition', level: 'Super Admin Override' },
-                { name: 'Dispatch & Challan PDF Export', level: 'Authorized Signatory' },
-              ].map((perm, idx) => (
-                <div key={idx} className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-100 rounded-xl">
-                  <span className="font-medium text-slate-800 text-[11px]">{perm.name}</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    {perm.level}
+                { module: 'Customer PO & Sales Management', access: 'Read / Write / Split', desc: 'Accept customer purchase orders, manage revisions, and track order quantities.' },
+                { module: 'Product Gerber & Stackup Specs', access: 'CAM Verification', desc: 'Approve CAM tooling specs, base laminates, copper thickness, and solder mask.' },
+                { module: 'Job Card Generation & Lot Splitting', access: 'Full Access', desc: 'Generate exact WIP Job Cards without stripping suffixes, create -A/-B sub-lots.' },
+                { module: 'Shop Floor PWA & QR Tracking', access: 'All Stages Override', desc: 'Authorized to scan and advance panel WIP across all 20 PF-01 process stages.' },
+                { module: 'Quality Assurance & Non-Conformance (NC)', access: 'Sign-Off Authority', desc: 'Accept, scrap, or assign rework for panels failing inspection checks.' },
+                { module: 'Dispatch & Delivery Challan Export', access: 'Authorized Signatory', desc: 'Generate delivery challans, gate passes, and signed shipping documentation.' },
+                { module: 'User Management & Security Governance', access: 'Administrator', desc: 'Manage staff accounts, assign manufacturing stages, and control ERP permissions.' },
+              ].map((item, idx) => (
+                <div key={idx} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="space-y-0.5">
+                    <p className="font-semibold text-slate-900 text-sm">{item.module}</p>
+                    <p className="text-xs text-slate-500">{item.desc}</p>
+                  </div>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 border border-slate-200 shrink-0 self-start sm:self-auto">
+                    {item.access}
                   </span>
                 </div>
               ))}
             </div>
           </div>
-
-        </div>
+        )}
 
       </div>
 

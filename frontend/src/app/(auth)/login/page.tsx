@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Image from 'next/image';
 import { Mail, Lock, ArrowRight, Eye, EyeOff, ArrowLeft, RefreshCw, AlertCircle, KeyRound } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/utils';
@@ -11,6 +12,7 @@ export default function LoginPage() {
   
   // Step State: 'CREDENTIALS' -> 'OTP'
   const [step, setStep] = useState<'CREDENTIALS' | 'OTP'>('CREDENTIALS');
+  const [showForgotInfo, setShowForgotInfo] = useState(false);
   
   // Credentials
   const [email, setEmail] = useState('');
@@ -301,9 +303,9 @@ export default function LoginPage() {
           <div className="text-sm text-slate-500 font-medium">
             &copy; {new Date().getFullYear()} RF Electrotech. All rights reserved.
           </div>
-          <div className="flex gap-4 text-sm text-slate-500 font-medium">
-            <a href="#" className="hover:text-white transition-colors">Privacy</a>
-            <a href="#" className="hover:text-white transition-colors">Terms</a>
+          <div className="flex gap-4 text-sm text-slate-400 font-medium">
+            <Link href="/" className="hover:text-white transition-colors">Privacy Policy</Link>
+            <Link href="/" className="hover:text-white transition-colors">Terms of Service</Link>
           </div>
         </div>
       </div>
@@ -362,8 +364,28 @@ export default function LoginPage() {
                   <div className="group">
                     <div className="flex justify-between items-center mb-1.5">
                       <label htmlFor="password" className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider group-focus-within:text-blue-600 transition-colors">Password</label>
-                      <a href="#" className="text-[12px] text-blue-600 hover:text-blue-800 font-semibold transition-colors">Forgot password?</a>
+                      <button
+                        type="button"
+                        onClick={() => setShowForgotInfo(true)}
+                        className="text-[12px] text-blue-600 hover:text-blue-800 font-semibold transition-colors cursor-pointer"
+                      >
+                        Forgot password?
+                      </button>
                     </div>
+                    {showForgotInfo && (
+                      <div className="mb-2 p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-start justify-between gap-2 animate-in fade-in">
+                        <p className="leading-relaxed">
+                          For factory security, password resets are handled by System Administration. Please reach out to <span className="font-bold">admin@rfelectro.com</span> or your Plant Supervisor to reset your login.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setShowForgotInfo(false)}
+                          className="text-blue-600 hover:text-blue-800 font-bold text-sm shrink-0"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
                     <div className="relative">
                       <Lock className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" />
                       <input

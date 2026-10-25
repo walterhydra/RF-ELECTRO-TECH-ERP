@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, ConflictException, 
 import { PrismaService } from '../../prisma/prisma.service';
 import { JobCardStatus, SubJobCardStatus, POStatus, RoleCode } from '@prisma/client';
 import * as qrcode from 'qrcode';
+import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class JobCardsService {
@@ -690,11 +691,12 @@ export class JobCardsService {
     let defaultUser = await this.prisma.user.findFirst().catch(() => null);
     if (!defaultUser && superAdminRole) {
       try {
+        const defaultPasswordHash = await bcrypt.hash('Admin@123', 10);
         defaultUser = await this.prisma.user.create({
           data: {
             name: 'System Admin',
             email: 'admin@rfelectro.com',
-            passwordHash: 'dummy_hash',
+            passwordHash: defaultPasswordHash,
             roleId: superAdminRole.id,
           },
         });
@@ -715,11 +717,12 @@ export class JobCardsService {
             create: { name: RoleCode.SUPER_ADMIN, description: 'Super Administrator' },
           });
         }
+        const defaultPasswordHash = await bcrypt.hash('Admin@123', 10);
         defaultUser = await this.prisma.user.create({
           data: {
             name: 'System Admin',
             email: `admin_${Date.now()}@rfelectro.com`,
-            passwordHash: 'dummy_hash',
+            passwordHash: defaultPasswordHash,
             roleId: role.id,
           },
         });

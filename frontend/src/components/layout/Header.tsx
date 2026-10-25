@@ -12,11 +12,56 @@ export const Header: React.FC = () => {
   const [userEmail, setUserEmail] = React.useState('admin@rfelectro.com');
   const [showProfileMenu, setShowProfileMenu] = React.useState(false);
   const [showNotifications, setShowNotifications] = React.useState(false);
+  const [notifications, setNotifications] = React.useState<any[]>([]);
+  const [loadingNotifications, setLoadingNotifications] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [isSearching, setIsSearching] = React.useState(false);
   const [searchResults, setSearchResults] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const searchTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const loadNotifications = React.useCallback(async () => {
+    try {
+      setLoadingNotifications(true);
+      const res = await fetchApi('/notifications');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setNotifications(data);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch notifications:', e);
+    } finally {
+      setLoadingNotifications(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 30000);
+    return () => clearInterval(interval);
+  }, [loadNotifications]);
+
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+      await fetchApi(`/notifications/${id}/read`, { method: 'PATCH' });
+    } catch (e) {
+      console.warn('Failed to mark read:', e);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      await fetchApi('/notifications/read-all', { method: 'PATCH' });
+    } catch (e) {
+      console.warn('Failed to mark all read:', e);
+    }
+  };
+
+  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -233,29 +278,93 @@ export const Header: React.FC = () => {
               onClick={() => {
                 setShowNotifications(!showNotifications);
                 setShowProfileMenu(false);
+                if (!showNotifications) {
+                  loadNotifications();
+                }
               }}
               className="relative p-2 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100/80 transition-all cursor-pointer"
+              title="Notifications"
             >
               <Bell className="w-5 h-5 text-slate-500" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-blue-500 ring-2 ring-white animate-pulse" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-black flex items-center justify-center ring-2 ring-white animate-pulse">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
 
             {/* Notifications Dropdown */}
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200/80 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
-                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                  <h3 className="font-bold text-slate-800 text-sm">Notifications</h3>
-                  <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold">1 New</span>
-                </div>
-                <div className="max-h-64 overflow-y-auto">
-                  <div className="p-4 hover:bg-slate-50 border-b border-slate-50 cursor-pointer transition-colors">
-                    <p className="text-sm text-slate-800 font-semibold">System Update</p>
-                    <p className="text-xs text-slate-500 mt-1">Role-based dashboards are now active.</p>
-                    <p className="text-[10px] text-slate-400 mt-2 font-medium">Just now</p>
+              <div className="absolute right-0 mt-2 w-80 sm:w-88 bg-white rounded-2xl shadow-xl border border-slate-200/80 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/70">
+                  <div className="flex items-center gap-2">
+                    <Bell className="w-4 h-4 text-blue-600" />
+                    <h3 className="font-bold text-slate-800 text-sm">Notifications</h3>
                   </div>
+                  {unreadCount > 0 ? (
+                    <span className="text-[10px] bg-blue-100 text-blue-700 px-2.5 py-0.5 rounded-full font-bold">
+                      {unreadCount} New
+                    </span>
+                  ) : (
+                    <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">
+                      All caught up
+                    </span>
+                  )}
                 </div>
-                <div className="p-3 text-center border-t border-slate-100 bg-slate-50/80">
-                  <button className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors">Mark all as read</button>
+
+                <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                  {loadingNotifications && notifications.length === 0 ? (
+                    <div className="p-8 text-center text-slate-400 text-xs">
+                      <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-blue-500" />
+                      Loading notifications...
+                    </div>
+                  ) : notifications.length === 0 ? (
+                    <div className="p-8 text-center text-slate-400 text-xs">
+                      <Bell className="w-7 h-7 mx-auto mb-2 text-slate-300" />
+                      No notifications yet
+                    </div>
+                  ) : (
+                    notifications.map((n) => (
+                      <div
+                        key={n.id}
+                        onClick={() => handleMarkAsRead(n.id)}
+                        className={`p-3.5 hover:bg-slate-50 cursor-pointer transition-colors relative ${
+                          !n.isRead ? 'bg-blue-50/30' : ''
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className={`text-xs font-semibold ${!n.isRead ? 'text-slate-900 font-bold' : 'text-slate-700'}`}>
+                            {n.title}
+                          </p>
+                          {!n.isRead && (
+                            <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0 mt-1" />
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">{n.message}</p>
+                        <p className="text-[10px] text-slate-400 mt-1.5 font-medium">
+                          {new Date(n.createdAt).toLocaleDateString('en-GB', {
+                            day: '2-digit',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="p-3 text-center border-t border-slate-100 bg-slate-50/80 flex items-center justify-between px-4">
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    {notifications.length} total
+                  </span>
+                  <button
+                    onClick={handleMarkAllAsRead}
+                    disabled={unreadCount === 0}
+                    className="text-xs font-bold text-blue-600 hover:text-blue-800 disabled:text-slate-300 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  >
+                    Mark all as read
+                  </button>
                 </div>
               </div>
             )}

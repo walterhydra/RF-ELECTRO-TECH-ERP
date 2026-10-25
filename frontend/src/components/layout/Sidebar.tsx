@@ -26,7 +26,6 @@ export const Sidebar: React.FC = () => {
   const pathname = usePathname();
   const [userRole, setUserRole] = React.useState('Super Admin');
   const [userEmail, setUserEmail] = React.useState('admin@rfelectro.com');
-  const [showRestrictedModal, setShowRestrictedModal] = React.useState(false);
 
   const [isMobileOpen, setIsMobileOpen] = React.useState(false);
   const [isMobileScreen, setIsMobileScreen] = React.useState(false);
@@ -126,27 +125,6 @@ export const Sidebar: React.FC = () => {
           {displayedNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname?.startsWith(item.href);
-            
-            if (item.href === '/scan') {
-              return (
-                <a
-                  key={item.href}
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setShowRestrictedModal(true);
-                  }}
-                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-blue-600/10 text-blue-500 border-r-4 border-blue-600'
-                      : 'hover:bg-slate-800 hover:text-white'
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span className="text-sm font-medium">{item.label}</span>
-                </a>
-              );
-            }
 
             if (isActive) {
               return (
@@ -186,41 +164,6 @@ export const Sidebar: React.FC = () => {
           </div>
         </div>
       </aside>
-
-      {showRestrictedModal && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="w-full bg-[#0a0a0a] border-y border-white/10 py-16 px-8 md:px-24 flex flex-col md:flex-row items-center justify-center gap-12 shadow-[0_0_100px_rgba(0,0,0,1)] animate-in slide-in-from-bottom-8 zoom-in-95 duration-500 ease-out">
-            <div className="flex flex-col md:flex-row items-center md:items-start text-center md:text-left gap-8">
-              <div className="w-20 h-20 shrink-0 rounded-full bg-[#1a1a1a] border border-white/5 flex items-center justify-center shadow-inner relative group">
-                <div className="absolute inset-0 bg-amber-500/20 rounded-full blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                <Lock className="w-6 h-6 text-amber-500 relative z-10" />
-              </div>
-              <div className="space-y-3 pt-1">
-                <h2 className="text-3xl font-black text-white tracking-tight">FEATURE IN PROGRESS</h2>
-                <p className="text-sm text-slate-400 max-w-2xl leading-relaxed">
-                  This module is currently under development and requires exclusive clearance. Please contact our team to verify your identity and unlock this feature.
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-8 shrink-0 mt-8 md:mt-0">
-              <button 
-                onClick={() => setShowRestrictedModal(false)}
-                className="text-sm font-bold text-slate-400 hover:text-white transition-colors"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={() => setShowRestrictedModal(false)}
-                className="flex items-center gap-2 px-8 py-3.5 bg-white text-black font-bold rounded-full hover:bg-slate-200 transition-colors shadow-lg hover:shadow-xl hover:-translate-y-0.5 transform duration-200"
-              >
-                Got it <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
     </>
   );
 };
