@@ -4339,7 +4339,7 @@ export default function JobCardsPage() {
                     {/* Header: Card Number + Quick Actions & Priority */}
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="font-bold text-sm text-slate-900 tracking-tight truncate">
+                        <span className="font-mono font-black text-[15px] sm:text-base text-amber-950 bg-amber-100/90 border border-amber-300/90 px-2 py-0.5 rounded-lg shadow-2xs tracking-tight truncate">
                           {jc.subJobCardNo || jc.jobCardNo}
                         </span>
                         {isNewTagVisible && (
@@ -4394,8 +4394,12 @@ export default function JobCardsPage() {
                           </p>
                         </div>
                         {jc.rfePartCode ? (
-                          <span className="text-[10px] font-bold text-blue-700 px-2 py-0.5 bg-blue-50 border border-blue-200/70 rounded-md shrink-0">
-                            {jc.rfePartCode}
+                          <span 
+                            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-black text-blue-950 bg-blue-100/90 border border-blue-300/90 px-2.5 py-1 rounded-lg shadow-2xs font-mono tracking-tight shrink-0"
+                            title={`R.F.E. Code: ${jc.rfePartCode}`}
+                          >
+                            <span className="text-[9.5px] font-bold text-blue-700 font-sans uppercase tracking-wider">RFE</span>
+                            <span>{jc.rfePartCode}</span>
                           </span>
                         ) : null}
                       </div>
@@ -6124,7 +6128,7 @@ export default function JobCardsPage() {
                           <div className="divide-y divide-slate-100 text-xs font-sans">
                             <div className="flex items-center justify-between py-2.5">
                               <span className="text-slate-500 font-medium">Job Card No</span>
-                              <span className="font-mono font-black text-slate-900">{selectedMovementJob.jobCardNo}</span>
+                              <span className="font-mono font-black text-sm text-amber-950 bg-amber-100/90 border border-amber-300/90 px-2 py-0.5 rounded-lg shadow-2xs">{selectedMovementJob.jobCardNo}</span>
                             </div>
                             <div className="flex items-center justify-between py-2.5">
                               <span className="text-slate-500 font-medium">Current Stage</span>
@@ -6142,7 +6146,10 @@ export default function JobCardsPage() {
                             </div>
                             <div className="flex items-center justify-between py-2.5">
                               <span className="text-slate-500 font-medium">R.F.E. Part Code</span>
-                              <span className="font-mono font-bold text-blue-800 bg-blue-50/60 px-2 py-0.5 rounded border border-blue-100">{selectedMovementJob.rfePartCode || '—'}</span>
+                              <span className="inline-flex items-center gap-1 font-mono font-black text-xs text-blue-950 bg-blue-100/90 border border-blue-300/90 px-2 py-0.5 rounded-lg shadow-2xs">
+                                <span className="text-[9px] font-bold text-blue-700 uppercase">RFE</span>
+                                <span>{selectedMovementJob.rfePartCode || '—'}</span>
+                              </span>
                             </div>
                             <div className="flex items-center justify-between py-2.5">
                               <span className="text-slate-500 font-medium">Priority</span>
@@ -6618,7 +6625,7 @@ export default function JobCardsPage() {
                             <button
                               type="button"
                               onClick={() => handleMarkAsCompleted(selectedMovementJob.id)}
-                              className="w-full py-2.5 sm:py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl sm:rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer active:scale-98 border border-emerald-500/40"
+                              className="hidden md:flex w-full py-2.5 sm:py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl sm:rounded-2xl text-xs items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer active:scale-98 border border-emerald-500/40"
                             >
                               <CheckCircle2 className="w-4 h-4 shrink-0" />
                               <span>MARK AS COMPLETED & READY FOR DISPATCH</span>
