@@ -795,11 +795,13 @@ export default function JobCardsPage() {
         setAssignedStage('ALL');
       }
       const upper = stored.toUpperCase();
-      const hasAssignedStage = Boolean(storedStage && storedStage !== 'ALL');
-      const isSuper = upper.includes('SUPER') || (upper.includes('ADMIN') && !upper.includes('OPERATOR'));
-      if (isSuper) {
+      const hasAssignedStage = Boolean(storedStage && storedStage.toUpperCase() !== 'ALL');
+      const isSuper = !hasAssignedStage && (upper.includes('SUPER') || (upper.includes('ADMIN') && !upper.includes('OPERATOR')));
+      if (hasAssignedStage) {
+        setUserRole('NORMAL');
+      } else if (isSuper) {
         setUserRole('MASTER');
-      } else if (hasAssignedStage || upper.includes('OPERATOR') || upper === 'NORMAL' || upper === 'PROCESS_OPERATOR') {
+      } else if (upper.includes('OPERATOR') || upper === 'NORMAL' || upper === 'PROCESS_OPERATOR') {
         setUserRole('NORMAL');
       } else if (upper.includes('PROD') || upper.includes('MANAGER')) {
         setUserRole('SUPER_USER');
@@ -828,11 +830,17 @@ export default function JobCardsPage() {
   const handleForceCloudSync = async () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('rf_electro_job_cards_v3');
-      localStorage.removeItem('assignedStage');
-      localStorage.removeItem('assignedStageId');
     }
-    setAssignedStage('ALL');
-    setUserRole('MASTER');
+    const currentStoredStage = typeof window !== 'undefined' ? localStorage.getItem('assignedStage') : null;
+    const hasAssignedStage = Boolean(currentStoredStage && currentStoredStage.toUpperCase() !== 'ALL');
+    if (!hasAssignedStage) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('assignedStage');
+        localStorage.removeItem('assignedStageId');
+      }
+      setAssignedStage('ALL');
+      setUserRole('MASTER');
+    }
     setStatusRadio('All');
     setGlobalSearch('');
     setShowColFilters(false);
@@ -1085,7 +1093,11 @@ export default function JobCardsPage() {
     }
 
     try {
-      const res = await fetch(`${targetUrl}/job-cards`, {
+      const storedStageForQuery = (typeof window !== 'undefined' ? localStorage.getItem('assignedStage') || assignedStage : assignedStage) || '';
+      const stageQueryParam = (storedStageForQuery && storedStageForQuery.toUpperCase() !== 'ALL')
+        ? `?stage=${encodeURIComponent(storedStageForQuery)}`
+        : '';
+      const res = await fetch(`${targetUrl}/job-cards${stageQueryParam}`, {
         headers: {
           'Content-Type': 'application/json',
           'bypass-tunnel-reminder': 'true',
@@ -3005,10 +3017,10 @@ export default function JobCardsPage() {
   };
 
   const isOperatorUser = React.useMemo(() => {
+    if (assignedStage && assignedStage.toUpperCase() !== 'ALL') return true;
     const roleUpper = (userRole || '').toUpperCase();
     const isSuperOrAdmin = roleUpper.includes('SUPER') || (roleUpper.includes('ADMIN') && !roleUpper.includes('OPERATOR'));
     if (isSuperOrAdmin) return false;
-    if (assignedStage && assignedStage.toUpperCase() !== 'ALL') return true;
     return roleUpper.includes('OPERATOR') || roleUpper === 'NORMAL' || roleUpper === 'PROCESS_OPERATOR';
   }, [userRole, assignedStage]);
 
@@ -3048,7 +3060,8 @@ export default function JobCardsPage() {
       if (cardStageIdx === targetIdx || cardStageSlug === targetSlug) {
         return true;
       }
-      if (jc.subJobCards && Array.isArray(jc.subJobCards) && jc.subJobCards.length > 0) {
+      // Only for un-flattened parent cards without subJobCardNo:
+      if (!jc.parentJobCardId && !jc.subJobCardNo && jc.subJobCards && Array.isArray(jc.subJobCards) && jc.subJobCards.length > 0) {
         return jc.subJobCards.some((s: any) => {
           const subStageName = s.currentStage?.name || jc.currentStageName || '';
           const subSlug = normalizeStageSlug(subStageName);

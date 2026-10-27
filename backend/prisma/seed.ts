@@ -50,35 +50,38 @@ async function main() {
 
   // 3. Process Stages (Standard 20-Stage Double Sided PCB Flow for PF-01)
   const stages = [
-    { name: 'SHEARING', defaultOrder: 1, code: 'SHR', description: 'Cutting and Shearing' },
-    { name: 'DRILLING', defaultOrder: 2, code: 'DRL', description: 'CNC Drilling' },
-    { name: 'DRL-QC', defaultOrder: 3, code: 'DRL-QC', description: 'Drilling Quality Control' },
-    { name: 'DML', defaultOrder: 4, code: 'DML', description: 'Direct Metallization Line' },
-    { name: 'PIT', defaultOrder: 5, code: 'PIT', description: 'Photo Image Transfer' },
-    { name: 'PIT-QC', defaultOrder: 6, code: 'PIT-QC', description: 'Photo Image Quality Control' },
-    { name: 'PLATING', defaultOrder: 7, code: 'PLT', description: 'Pattern & Panel Plating' },
-    { name: 'ETCHING', defaultOrder: 8, code: 'ETC', description: 'Etching Line' },
-    { name: 'PREMASK-QC/AOI', defaultOrder: 9, code: 'AOI', description: 'Premask QC & Automated Optical Inspection' },
-    { name: 'PISM', defaultOrder: 10, code: 'PISM', description: 'Photo Imageable Solder Mask' },
-    { name: 'PISM-QC', defaultOrder: 11, code: 'PISM-QC', description: 'Solder Mask Quality Control' },
-    { name: 'LEGEND PRINT', defaultOrder: 12, code: 'LGD', description: 'Legend / Silkscreen Printing' },
-    { name: 'HASL', defaultOrder: 13, code: 'HASL', description: 'Hot Air Solder Leveling' },
-    { name: 'HASL-QC', defaultOrder: 14, code: 'HASL-QC', description: 'HASL Quality Control' },
-    { name: 'ROUTING', defaultOrder: 15, code: 'RTE', description: 'CNC Routing' },
-    { name: 'VG', defaultOrder: 16, code: 'VG', description: 'V-Grooving' },
-    { name: 'BBT', defaultOrder: 17, code: 'BBT', description: 'Bare Board Testing / E-Test' },
-    { name: 'FQC (AI)', defaultOrder: 18, code: 'FQC', description: 'Final Quality Control with AI' },
-    { name: 'PDI-AQL', defaultOrder: 19, code: 'PDI', description: 'Pre-Dispatch Inspection AQL' },
-    { name: 'PACKING', defaultOrder: 20, code: 'PKG', description: 'Final Packing & Outbound Dispatch Ready' },
+    { name: '1. SHEARING', defaultOrder: 1, code: 'SHR', description: 'Cutting and Shearing' },
+    { name: '2. DRILLING', defaultOrder: 2, code: 'DRL', description: 'CNC Drilling' },
+    { name: '3. DRL-QC', defaultOrder: 3, code: 'DRL-QC', description: 'Drilling Quality Control' },
+    { name: '4. DML', defaultOrder: 4, code: 'DML', description: 'Direct Metallization Line' },
+    { name: '5. PIT', defaultOrder: 5, code: 'PIT', description: 'Photo Image Transfer' },
+    { name: '6. PIT-QC', defaultOrder: 6, code: 'PIT-QC', description: 'Photo Image Quality Control' },
+    { name: '7. PLATING', defaultOrder: 7, code: 'PLT', description: 'Pattern & Panel Plating' },
+    { name: '8. ETCHING', defaultOrder: 8, code: 'ETC', description: 'Etching Line' },
+    { name: '9. PREMASK-QC/AOI', defaultOrder: 9, code: 'PM-QC', description: 'Premask QC & Automated Optical Inspection' },
+    { name: '10. PISM', defaultOrder: 10, code: 'PISM', description: 'Photo Imageable Solder Mask' },
+    { name: '11. PISM-QC', defaultOrder: 11, code: 'PISM-QC', description: 'Solder Mask Quality Control' },
+    { name: '12. LEGEND PRINT', defaultOrder: 12, code: 'LGD', description: 'Legend / Silkscreen Printing' },
+    { name: '13. HASL', defaultOrder: 13, code: 'HASL', description: 'Hot Air Solder Leveling' },
+    { name: '14. HASL-QC', defaultOrder: 14, code: 'HASL-QC', description: 'HASL Quality Control' },
+    { name: '15. ROUTING', defaultOrder: 15, code: 'RTE', description: 'CNC Routing' },
+    { name: '16. VG', defaultOrder: 16, code: 'VG', description: 'V-Grooving' },
+    { name: '17. BBT', defaultOrder: 17, code: 'BBT', description: 'Bare Board Testing / E-Test' },
+    { name: '18. FQC (AI)', defaultOrder: 18, code: 'FQC', description: 'Final Quality Control with AI' },
+    { name: '19. PDI-AQL', defaultOrder: 19, code: 'PDI', description: 'Pre-Dispatch Inspection AQL' },
+    { name: '20. PACKING', defaultOrder: 20, code: 'PKG', description: 'Final Packing & Outbound Dispatch Ready' },
   ];
 
   const stageMap: Record<string, string> = {};
   for (const stg of stages) {
+    const unnumbered = stg.name.replace(/^\d+\.\s*/, '');
     const existing = await prisma.processStage.findFirst({
       where: {
         OR: [
           { name: stg.name },
+          { name: unnumbered },
           { code: stg.code },
+          { defaultOrder: stg.defaultOrder },
         ],
       },
     });
@@ -95,6 +98,8 @@ async function main() {
       });
     }
     stageMap[stg.name] = created.id;
+    stageMap[unnumbered] = created.id;
+    if (stg.code) stageMap[stg.code] = created.id;
   }
   console.log(`✅ Seeded ${stages.length} Process Stages`);
 
@@ -183,7 +188,8 @@ async function main() {
   };
 
   for (const stg of stages) {
-    const stageEmail = stageEmailSlugs[stg.name] || `stage${String(stg.defaultOrder).padStart(2, '0')}.${stg.code.toLowerCase()}@rfelectro.com`;
+    const unnumbered = stg.name.replace(/^\d+\.\s*/, '');
+    const stageEmail = stageEmailSlugs[stg.name] || stageEmailSlugs[unnumbered] || `stage${String(stg.defaultOrder).padStart(2, '0')}.${stg.code.toLowerCase()}@rfelectro.com`;
     const isQc = stg.name.includes('QC') || stg.name.includes('AOI') || stg.name.includes('FQC') || stg.name.includes('PDI');
     const roleId = isQc ? roleMap[RoleCode.QC_OFFICER] : roleMap[RoleCode.PROCESS_OPERATOR];
     const deptId = isQc ? deptMap['Quality Assurance'] : deptMap['Production & Engineering'];
@@ -267,10 +273,10 @@ async function main() {
   // 6. Default Process Flow Master (PF-01)
   const defaultFlow = await prisma.processFlowMaster.upsert({
     where: { name: 'PF-01' },
-    update: { totalSteps: 19 },
+    update: { totalSteps: 20 },
     create: {
       name: 'PF-01',
-      totalSteps: 19,
+      totalSteps: 20,
       isActive: true,
       createdById: adminUser.id,
     },
@@ -290,7 +296,7 @@ async function main() {
         },
       });
     }
-    console.log('✅ Seeded PF-01 Process Flow Steps (19 stages)');
+    console.log('✅ Seeded PF-01 Process Flow Steps (20 stages)');
   }
   console.log('✅ Seeded Default Process Flow Master (PF-01)');
 

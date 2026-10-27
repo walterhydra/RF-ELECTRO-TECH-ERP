@@ -138,7 +138,10 @@ export default function JobMovementUpdatePage() {
       } else {
         setAssignedStage('ALL');
       }
-      if (storedRole) {
+      const hasAssignedStage = Boolean(storedStage && storedStage.toUpperCase() !== 'ALL');
+      if (hasAssignedStage) {
+        setUserRole('NORMAL');
+      } else if (storedRole) {
         const upper = storedRole.toUpperCase();
         if (upper.includes('SUPER') || upper.includes('MASTER') || upper.includes('ADMIN')) {
           setUserRole('MASTER');
@@ -170,7 +173,9 @@ export default function JobMovementUpdatePage() {
   const inFlightMovements = React.useRef<Map<string, { stageIdx: number; stageName: string; timestamp: number }>>(new Map());
 
   const fetchMovementJobs = React.useCallback(() => {
-    fetchApi('/job-cards')
+    const storedStage = typeof window !== 'undefined' ? localStorage.getItem('assignedStage') || assignedStage : assignedStage;
+    const stageQuery = (storedStage && storedStage.toUpperCase() !== 'ALL') ? `?stage=${encodeURIComponent(storedStage)}` : '';
+    fetchApi(`/job-cards${stageQuery}`)
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         if (Array.isArray(data)) {
@@ -356,11 +361,11 @@ export default function JobMovementUpdatePage() {
   };
 
   const canUserMoveStage = (jobStageName: string) => {
-    if (userRole === 'MASTER' || userRole === 'SUPER_USER') return true;
-    if (userRole === 'NORMAL') {
-      return jobStageName.trim().toLowerCase() === assignedStage.trim().toLowerCase();
-    }
-    return false;
+    const isStageLocked = (assignedStage && assignedStage.toUpperCase() !== 'ALL') || userRole === 'NORMAL';
+    if (!isStageLocked) return true;
+    const assignedSlug = normalizeStageSlug(assignedStage);
+    const jobSlug = normalizeStageSlug(jobStageName);
+    return assignedSlug === jobSlug || jobStageName.trim().toLowerCase() === assignedStage.trim().toLowerCase();
   };
 
   const handleAdvanceStage = (jobId: string) => {
@@ -673,7 +678,8 @@ export default function JobMovementUpdatePage() {
   };
 
   const filteredJobs = jobs.filter((j) => {
-    if (userRole === 'NORMAL') {
+    const isStageLocked = (assignedStage && assignedStage.toUpperCase() !== 'ALL') || userRole === 'NORMAL';
+    if (isStageLocked) {
       const assignedSlug = normalizeStageSlug(assignedStage);
       const isUnlaunched = j.status === 'UNLAUNCHED';
       const isCompleted = j.status === 'COMPLETED';

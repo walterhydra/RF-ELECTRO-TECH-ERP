@@ -321,19 +321,22 @@ export class JobCardsService {
     const isExplicitAll = queryStage && (queryStage.toUpperCase() === 'ALL' || queryStage.toUpperCase().includes('ALL STAGES'));
 
     const roleName = String(user?.roleName || user?.role || user?.role?.name || user?.roleCode || '').toUpperCase();
-    const isSuperAdmin = roleName.includes('SUPER') || roleName.includes('ADMIN') || roleName === 'MASTER' || !roleName;
     const userStageId = user?.assignedStageId || user?.assignedStage?.id;
     const userStageName = user?.assignedStageName || user?.assignedStage?.name || (typeof user?.assignedStage === 'string' ? user.assignedStage : null);
+    const hasAssignedStage = Boolean(userStageId || (userStageName && userStageName.toUpperCase() !== 'ALL'));
+
+    const isSuperAdmin = !hasAssignedStage && (roleName.includes('SUPER') || roleName.includes('ADMIN') || roleName === 'MASTER' || (!roleName && !queryStage));
 
     const isOperator =
-      !isSuperAdmin && (
+      hasAssignedStage ||
+      (!isSuperAdmin && (
         roleName === 'NORMAL_USER' ||
         roleName === 'PROCESS_OPERATOR' ||
         roleName === 'NORMAL' ||
         roleName === 'OPERATOR' ||
         roleName.includes('OPERATOR') ||
-        Boolean(userStageId || userStageName)
-      );
+        roleName.includes('QC')
+      ));
 
     const targetStageId = !isExplicitAll
       ? (query?.stageId || query?.assignedStageId || (isOperator ? userStageId : null))

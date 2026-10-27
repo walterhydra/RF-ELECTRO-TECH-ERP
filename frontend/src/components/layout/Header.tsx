@@ -137,11 +137,15 @@ export const Header: React.FC = () => {
     }, 250);
   };
 
+  const [assignedStage, setAssignedStage] = React.useState<string | null>(null);
+
   React.useEffect(() => {
     const role = localStorage.getItem('userRole');
     const email = localStorage.getItem('userEmail');
+    const stage = localStorage.getItem('assignedStage');
     if (role) setUserRole(role);
     if (email) setUserEmail(email);
+    if (stage && stage.toUpperCase() !== 'ALL') setAssignedStage(stage);
   }, []);
 
   // Format the path to a nice title
@@ -384,7 +388,9 @@ export const Header: React.FC = () => {
             className="flex items-center gap-3 p-1.5 pl-2 sm:pl-3 rounded-xl hover:bg-slate-100/70 border border-transparent hover:border-slate-200/80 transition-all focus:outline-none cursor-pointer group text-right"
           >
             <div className="hidden md:block">
-              <p className="text-xs font-extrabold text-slate-800 leading-tight">{userRole}</p>
+              <p className="text-xs font-extrabold text-slate-800 leading-tight">
+                {userRole}{assignedStage ? ` (${assignedStage})` : ''}
+              </p>
               <p className="text-[11px] text-slate-400 font-medium leading-tight mt-0.5">{userEmail}</p>
             </div>
             <div className="w-9 h-9 rounded-full bg-blue-600 text-white font-extrabold text-xs shadow-sm flex items-center justify-center border-2 border-white ring-1 ring-blue-100 group-hover:bg-blue-700 group-hover:ring-blue-200 transition-all">
