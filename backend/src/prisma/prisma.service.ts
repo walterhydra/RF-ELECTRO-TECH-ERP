@@ -19,11 +19,20 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   async onModuleInit() {
     this.logger.log('Initializing PostgreSQL connection pool via Prisma...');
-    try {
-      await this.$connect();
-      this.logger.log('PostgreSQL connection established successfully.');
-    } catch {
-      // Prisma connects automatically on-demand on first API request
+    const maxRetries = 5;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await this.$connect();
+        this.logger.log('PostgreSQL connection established successfully.');
+        return;
+      } catch (err: any) {
+        this.logger.warn(`PostgreSQL connection attempt ${attempt}/${maxRetries} failed: ${err.message}`);
+        if (attempt === maxRetries) {
+          this.logger.error('Failed to establish PostgreSQL connection pool on startup.');
+        } else {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+      }
     }
   }
 
@@ -38,8 +47,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
    */
   async executeInTransaction<T>(fn: (prisma: PrismaClient) => Promise<T>): Promise<T> {
     return this.$transaction(fn, {
-      maxWait: 5000,
-      timeout: 10000,
+      maxWait: 15000,
+      timeout: 30000,
     });
   }
 }

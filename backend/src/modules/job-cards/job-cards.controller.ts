@@ -143,13 +143,24 @@ export class JobCardsController {
     return this.jobCardsService.splitJobCard(id, body, createdById);
   }
 
+  @Post('launch')
+  @Public()
+  @ApiOperation({ summary: 'Launch Job Card and assign initial Sub-Job Cards to Stage 1 (Root route)' })
+  @ApiResponse({ status: 201, description: 'Job Card launched successfully' })
+  async launchJobCardRoot(@Body() body: any, @Req() req: any) {
+    const user = this.resolveUser(req, body);
+    const targetId = body?.id || body?.cardId || body?.jobCardNo || body?.subJobCardNo || '';
+    return this.jobCardsService.launchJobCard(targetId, user, body);
+  }
+
   @Post(':id/launch')
   @Public()
   @ApiOperation({ summary: 'Launch Job Card and assign initial Sub-Job Cards to Stage 1' })
   @ApiResponse({ status: 201, description: 'Job Card launched successfully' })
   async launchJobCard(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     const user = this.resolveUser(req, body);
-    return this.jobCardsService.launchJobCard(id, user, body);
+    const targetId = id || body?.id || body?.cardId || body?.jobCardNo || body?.subJobCardNo || '';
+    return this.jobCardsService.launchJobCard(targetId, user, body);
   }
 
   @Patch(':id/status')

@@ -713,8 +713,28 @@ export default function JobCardsPage() {
   const [expandedRow, setExpandedRow] = useState<string | null>('jc-1');
 
   // RBAC Role State
-  const [userRole, setUserRole] = useState<'MASTER' | 'SUPER_USER' | 'NORMAL'>('MASTER');
-  const [assignedStage, setAssignedStage] = useState<string>('ALL');
+  const [userRole, setUserRole] = useState<'MASTER' | 'SUPER_USER' | 'NORMAL'>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('userRole') || '';
+      const storedStage = localStorage.getItem('assignedStage');
+      const upper = stored.toUpperCase();
+      const hasAssignedStage = Boolean(storedStage && storedStage.toUpperCase() !== 'ALL');
+      if (hasAssignedStage || upper.includes('OPERATOR') || upper === 'NORMAL' || upper === 'PROCESS_OPERATOR') {
+        return 'NORMAL';
+      }
+      const isSuper = upper.includes('SUPER') || upper.includes('MASTER') || (upper.includes('ADMIN') && !upper.includes('OPERATOR')) || upper.includes('PLANNER');
+      if (isSuper) return 'MASTER';
+      if (upper.includes('PROD') || upper.includes('MANAGER')) return 'SUPER_USER';
+      return 'NORMAL';
+    }
+    return 'MASTER';
+  });
+  const [assignedStage, setAssignedStage] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('assignedStage') || 'ALL';
+    }
+    return 'ALL';
+  });
 
   // Modals & Lightbox
   const [showGenerateModal, setShowGenerateModal] = useState(false);
@@ -802,26 +822,36 @@ export default function JobCardsPage() {
       }
       const upper = stored.toUpperCase();
       const hasAssignedStage = Boolean(storedStage && storedStage.toUpperCase() !== 'ALL');
-      const isSuper = upper.includes('SUPER') || upper.includes('MASTER') || (upper.includes('ADMIN') && !upper.includes('OPERATOR')) || upper.includes('PLANNER');
-      if (isSuper) {
-        setUserRole('MASTER');
-      } else if (hasAssignedStage || upper.includes('OPERATOR') || upper === 'NORMAL' || upper === 'PROCESS_OPERATOR') {
+      if (hasAssignedStage || upper.includes('OPERATOR') || upper === 'NORMAL' || upper === 'PROCESS_OPERATOR') {
         setUserRole('NORMAL');
-      } else if (upper.includes('PROD') || upper.includes('MANAGER')) {
-        setUserRole('SUPER_USER');
       } else {
-        setUserRole('MASTER');
+        const isSuper = upper.includes('SUPER') || upper.includes('MASTER') || (upper.includes('ADMIN') && !upper.includes('OPERATOR')) || upper.includes('PLANNER');
+        if (isSuper) {
+          setUserRole('MASTER');
+        } else if (upper.includes('PROD') || upper.includes('MANAGER')) {
+          setUserRole('SUPER_USER');
+        } else {
+          setUserRole('MASTER');
+        }
       }
     }
   }, []);
 
-  // Super Admin Check Helper (Always true for Super Admin / Master / Planner)
+  // Super Admin Check Helper (Always true for Super Admin / Master / Planner, strictly false for stage-assigned operators)
   const isSuperAdmin = React.useMemo(() => {
+    if (typeof window !== 'undefined') {
+      const storedStage = localStorage.getItem('assignedStage');
+      if (storedStage && storedStage.toUpperCase() !== 'ALL') return false;
+    }
+    if (assignedStage && assignedStage.toUpperCase() !== 'ALL') return false;
     const upper = (userRole || '').toUpperCase();
     const storedUpper = (typeof window !== 'undefined' ? localStorage.getItem('userRole') || '' : '').toUpperCase();
-    return upper.includes('SUPER') || upper.includes('MASTER') || upper.includes('ADMIN') || upper.includes('PLANNER') ||
-           storedUpper.includes('SUPER') || storedUpper.includes('MASTER') || storedUpper.includes('ADMIN') || storedUpper.includes('PLANNER');
-  }, [userRole]);
+    return (
+      (upper.includes('SUPER') || upper.includes('MASTER') || upper.includes('ADMIN') || upper.includes('PLANNER') ||
+       storedUpper.includes('SUPER') || storedUpper.includes('MASTER') || storedUpper.includes('ADMIN') || storedUpper.includes('PLANNER')) &&
+      !storedUpper.includes('OPERATOR')
+    );
+  }, [userRole, assignedStage]);
 
   // Toast Notification State (Replaces native browser alerts)
   const [toast, setToast] = useState<{ id: string; type: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -983,7 +1013,7 @@ export default function JobCardsPage() {
     prodPnlAreaSqm: 0,
     custPnlAreaSqm: 0,
     jobFlowSelection: 'PF-01',
-    autoLaunch: false,
+    autoLaunch: true,
       enablePreSplit: false,
       splitCount: 1,
       customSplits: [],
@@ -1031,7 +1061,7 @@ export default function JobCardsPage() {
       prodPnlAreaSqm: 0,
       custPnlAreaSqm: 0,
       jobFlowSelection: 'PF-01',
-      autoLaunch: false,
+      autoLaunch: true,
       enablePreSplit: false,
       splitCount: 1,
       customSplits: [],
@@ -1116,8 +1146,8 @@ export default function JobCardsPage() {
 
     try {
       const storedStageForQuery = (typeof window !== 'undefined' ? localStorage.getItem('assignedStage') || assignedStage : assignedStage) || '';
-      // Only pass stage query filter if user is strictly an operator, never for Super Admin / Master / Planner
-      const stageQueryParam = (!isSuperAdmin && storedStageForQuery && storedStageForQuery.toUpperCase() !== 'ALL')
+      // Pass stage query filter if user is strictly an operator or has an assigned stage
+      const stageQueryParam = (storedStageForQuery && storedStageForQuery.toUpperCase() !== 'ALL' && isOperatorUser)
         ? `?stage=${encodeURIComponent(storedStageForQuery)}`
         : '';
       const res = await fetch(`${targetUrl}/job-cards${stageQueryParam}`, {
@@ -1885,7 +1915,7 @@ export default function JobCardsPage() {
           userName: storedUserName,
         });
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const timeoutId = setTimeout(() => controller.abort(), 25000);
 
         let launchTarget = encodeURIComponent(cardId);
         let res = await fetch(`${getApiBaseUrl()}/job-cards/${launchTarget}/launch`, {
@@ -1898,7 +1928,7 @@ export default function JobCardsPage() {
 
         if (!res.ok && cardNo && cardNo !== cardId) {
           const fbCtrl = new AbortController();
-          const fbTimeout = setTimeout(() => fbCtrl.abort(), 3500);
+          const fbTimeout = setTimeout(() => fbCtrl.abort(), 25000);
           res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(cardNo)}/launch`, {
             method: 'POST',
             headers,
@@ -1906,6 +1936,25 @@ export default function JobCardsPage() {
             signal: fbCtrl.signal,
           });
           clearTimeout(fbTimeout);
+        }
+
+        if (!res.ok) {
+          const rootCtrl = new AbortController();
+          const rootTimeout = setTimeout(() => rootCtrl.abort(), 25000);
+          res = await fetch(`${getApiBaseUrl()}/job-cards/launch`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              id: cardId,
+              jobCardNo: cardNo,
+              subJobCardNo: targetJob?.subJobCardNo || cardNo,
+              userId: storedUserId,
+              userEmail: storedUserEmail,
+              userName: storedUserName,
+            }),
+            signal: rootCtrl.signal,
+          });
+          clearTimeout(rootTimeout);
         }
 
         if (res.ok) {
@@ -2331,7 +2380,7 @@ export default function JobCardsPage() {
         const targetSubNo = subCardNo;
         const primaryTarget = encodeURIComponent(cardId || targetSubNo);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const timeoutId = setTimeout(() => controller.abort(), 25000);
 
         let res = await fetch(`${getApiBaseUrl()}/job-cards/${primaryTarget}/move-stage`, {
           method: 'POST',
@@ -2356,7 +2405,7 @@ export default function JobCardsPage() {
 
         if (!res.ok && targetSubNo && targetSubNo !== cardId) {
           const fallbackCtrl = new AbortController();
-          const fallbackTimeout = setTimeout(() => fallbackCtrl.abort(), 15000);
+          const fallbackTimeout = setTimeout(() => fallbackCtrl.abort(), 25000);
           res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetSubNo)}/move-stage`, {
             method: 'POST',
             headers: {
@@ -2560,7 +2609,7 @@ export default function JobCardsPage() {
         }
         const primaryTarget = encodeURIComponent(targetSubId || targetSubNo);
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const timeoutId = setTimeout(() => controller.abort(), 25000);
 
         let res = await fetch(`${getApiBaseUrl()}/job-cards/${primaryTarget}/move-stage`, {
           method: 'POST',
@@ -2586,7 +2635,7 @@ export default function JobCardsPage() {
 
         if (!res.ok && targetSubNo && targetSubNo !== targetSubId) {
           const fallbackCtrl = new AbortController();
-          const fallbackTimeout = setTimeout(() => fallbackCtrl.abort(), 15000);
+          const fallbackTimeout = setTimeout(() => fallbackCtrl.abort(), 25000);
           res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(targetSubNo)}/move-stage`, {
             method: 'POST',
             headers: {
@@ -3127,8 +3176,12 @@ export default function JobCardsPage() {
   };
 
   const isOperatorUser = React.useMemo(() => {
-    if (isSuperAdmin) return false;
     if (assignedStage && assignedStage.toUpperCase() !== 'ALL') return true;
+    if (typeof window !== 'undefined') {
+      const storedStage = localStorage.getItem('assignedStage');
+      if (storedStage && storedStage.toUpperCase() !== 'ALL') return true;
+    }
+    if (isSuperAdmin) return false;
     const roleUpper = (userRole || '').toUpperCase();
     return roleUpper.includes('OPERATOR') || roleUpper === 'NORMAL' || roleUpper === 'PROCESS_OPERATOR';
   }, [isSuperAdmin, assignedStage, userRole]);
@@ -3150,14 +3203,22 @@ export default function JobCardsPage() {
     // 1. Strictly exclude 100% completed / dispatched jobs from WIP so they only appear in Completed & Dispatch Hub
     const activeOnly = jobCards.filter((jc) => !isCardCompleted(jc));
 
-    if (!isOperatorUser || !assignedStage || assignedStage === 'ALL') return activeOnly;
-    const targetSlug = normalizeStageSlug(assignedStage);
-    const targetIdx = normalizeStageIndex(assignedStage);
+    const effectiveAssignedStage = (assignedStage && assignedStage !== 'ALL')
+      ? assignedStage
+      : (typeof window !== 'undefined' ? localStorage.getItem('assignedStage') : null);
+
+    const isStageLocked = isOperatorUser && Boolean(effectiveAssignedStage && effectiveAssignedStage.toUpperCase() !== 'ALL');
+
+    if (!isStageLocked || !effectiveAssignedStage) return activeOnly;
+
+    const targetSlug = normalizeStageSlug(effectiveAssignedStage);
+    const targetIdx = normalizeStageIndex(effectiveAssignedStage);
+    const isShearingTarget = targetSlug === 'shearing' || targetSlug === '1shearing' || targetIdx === 0;
 
     return activeOnly.filter((jc) => {
-      const isCardUnlaunched = jc.status === 'UNLAUNCHED' || jc.status === 'CREATED';
+      const isCardUnlaunched = jc.status === 'UNLAUNCHED' || jc.status === 'CREATED' || (jc.status as string) === 'PENDING_LAUNCH';
       if (isCardUnlaunched) {
-        return targetSlug === 'shearing' || targetSlug === '1shearing' || targetIdx === 0;
+        return isShearingTarget;
       }
 
       const cardStageSlug = normalizeStageSlug(jc.currentStageName);
@@ -3165,14 +3226,15 @@ export default function JobCardsPage() {
         ? jc.currentStageIndex
         : normalizeStageIndex(jc.currentStageName);
 
-      // Match exact stage index or slug to prevent substring collision (e.g. PIT vs PIT-QC, PISM vs PISM-QC)
+      // Match exact stage index or slug to prevent substring collision
       if (cardStageIdx === targetIdx || cardStageSlug === targetSlug) {
         return true;
       }
-      // Only for un-flattened parent cards without subJobCardNo:
-      if (!jc.parentJobCardId && !jc.subJobCardNo && jc.subJobCards && Array.isArray(jc.subJobCards) && jc.subJobCards.length > 0) {
+
+      // If card has sub-lots:
+      if (jc.subJobCards && Array.isArray(jc.subJobCards) && jc.subJobCards.length > 0) {
         return jc.subJobCards.some((s: any) => {
-          const subStageName = s.currentStage?.name || jc.currentStageName || '';
+          const subStageName = s.currentStage?.name || '';
           const subSlug = normalizeStageSlug(subStageName);
           const subIdx = s.currentStage?.defaultOrder ? (s.currentStage.defaultOrder - 1) : normalizeStageIndex(subStageName);
           return subIdx === targetIdx || subSlug === targetSlug;
@@ -3507,27 +3569,29 @@ export default function JobCardsPage() {
             </span>
           </button>
 
-          <button
-            onClick={() => setActiveSectionTab('COMPLETED_DISPATCH')}
-            className={`w-full sm:w-auto px-2.5 sm:px-4 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 sm:gap-2 transition-all cursor-pointer ${
-              activeSectionTab === 'COMPLETED_DISPATCH'
-                ? 'bg-emerald-600 text-white shadow-xs ring-2 ring-emerald-600/20'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200/70 border border-slate-200'
-            }`}
-          >
-            <Truck className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span className="sm:hidden">Dispatch Hub</span>
-            <span className="hidden sm:inline">Completed & Dispatch Hub</span>
-            <span
-              className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] font-mono font-black ${
+          {!isOperatorUser && (
+            <button
+              onClick={() => setActiveSectionTab('COMPLETED_DISPATCH')}
+              className={`w-full sm:w-auto px-2.5 sm:px-4 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 sm:gap-2 transition-all cursor-pointer ${
                 activeSectionTab === 'COMPLETED_DISPATCH'
-                  ? 'bg-emerald-800/80 text-emerald-100'
-                  : 'bg-slate-200 text-slate-700'
+                  ? 'bg-emerald-600 text-white shadow-xs ring-2 ring-emerald-600/20'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200/70 border border-slate-200'
               }`}
             >
-              {totalCompletedCount}
-            </span>
-          </button>
+              <Truck className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span className="sm:hidden">Dispatch Hub</span>
+              <span className="hidden sm:inline">Completed & Dispatch Hub</span>
+              <span
+                className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] font-mono font-black ${
+                  activeSectionTab === 'COMPLETED_DISPATCH'
+                    ? 'bg-emerald-800/80 text-emerald-100'
+                    : 'bg-slate-200 text-slate-700'
+                }`}
+              >
+                {totalCompletedCount}
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -3895,16 +3959,18 @@ export default function JobCardsPage() {
             <span className="px-1.5 py-0.2 bg-slate-950/10 rounded font-mono text-[10px]">{inProgressCount}</span>
           </button>
 
-          <button
-            onClick={() => setActiveSectionTab('COMPLETED_DISPATCH')}
-            className="h-8 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
-            title="Switch to Completed & Dispatch Hub"
-          >
-            <span>COMPLETED & DISPATCH ➔</span>
-            <span className="px-1.5 py-0.2 bg-emerald-200 text-emerald-950 rounded font-mono text-[10px] font-black">
-              {totalCompletedCount}
-            </span>
-          </button>
+          {!isOperatorUser && (
+            <button
+              onClick={() => setActiveSectionTab('COMPLETED_DISPATCH')}
+              className="h-8 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
+              title="Switch to Completed & Dispatch Hub"
+            >
+              <span>COMPLETED & DISPATCH ➔</span>
+              <span className="px-1.5 py-0.2 bg-emerald-200 text-emerald-950 rounded font-mono text-[10px] font-black">
+                {totalCompletedCount}
+              </span>
+            </button>
+          )}
 
           <button
             onClick={() => setStatusRadio(statusRadio === 'Overdue' ? 'All' : 'Overdue')}
@@ -4159,7 +4225,7 @@ export default function JobCardsPage() {
                               : 'No job cards found in the system.'}
                           </p>
                           <div className="flex items-center gap-2 flex-wrap justify-center">
-                            {jobCards.length > 0 && (
+                            {jobCards.length > 0 && !isOperatorUser && (
                               <button
                                 type="button"
                                 onClick={() => {
@@ -5955,7 +6021,7 @@ export default function JobCardsPage() {
 
                           {(() => {
                             const sum = launchForm.customSplits.reduce((acc, curr) => acc + (Number(curr.qty) || 0), 0);
-                            const target = launchForm.prodPnlQty || 40;
+                            const target = Number(launchForm.totalPcbQty) || 160;
                             const isValid = sum === target;
                             return (
                               <div className={`p-3 rounded-md text-xs sm:text-sm font-bold flex items-center justify-between border ${isValid ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'}`}>

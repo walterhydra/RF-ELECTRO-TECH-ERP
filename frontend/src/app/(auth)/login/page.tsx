@@ -225,7 +225,28 @@ export default function LoginPage() {
       STORE_DISPATCH: 'Dispatch Manager',
       PROCESS_OPERATOR: 'Stage Operator',
     };
-    const roleName = roleMap[rawRole] || rawRole;
+    let roleName = roleMap[rawRole] || rawRole;
+
+    const isStageOperator = Boolean(assignedStage && assignedStage.toUpperCase() !== 'ALL');
+    if (isStageOperator) {
+      roleName = 'Stage Operator';
+    } else if (rawRole === 'QC_OFFICER') {
+      const emailLower = (userEmail || '').toLowerCase();
+      const nameLower = (userName || '').toLowerCase();
+      if (emailLower.includes('qc@') || nameLower.includes('officer') || nameLower.includes('head') || nameLower.includes('assurance')) {
+        roleName = 'Quality Head';
+      } else {
+        roleName = 'Quality Inspector';
+      }
+    } else if (rawRole === 'PRODUCTION_PLANNER') {
+      const emailLower = (userEmail || '').toLowerCase();
+      if (emailLower.includes('planner@')) {
+        roleName = 'Production Planner';
+      } else {
+        roleName = 'Production Manager';
+      }
+    }
+
     localStorage.setItem('userRole', roleName);
     localStorage.setItem('userEmail', userEmail);
     if (userId) {
@@ -249,7 +270,6 @@ export default function LoginPage() {
     }
 
     const isMobileScreen = typeof window !== 'undefined' && window.innerWidth < 768;
-    const isStageOperator = Boolean(assignedStage && assignedStage.toUpperCase() !== 'ALL');
 
     if (isMobileScreen || isStageOperator) {
       router.push('/job-cards');

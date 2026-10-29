@@ -37,6 +37,16 @@ import {
 
 export default function LiveProductionDashboardPage() {
   const router = useRouter();
+
+  // Redirect Stage Operators directly to Job Cards
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stage = localStorage.getItem('assignedStage');
+      if (stage && stage.toUpperCase() !== 'ALL') {
+        router.replace('/job-cards');
+      }
+    }
+  }, [router]);
   const [data, setData] = useState<LiveDashboardData>(fallbackDashboardData);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedShift, setSelectedShift] = useState<string>('A Shift');

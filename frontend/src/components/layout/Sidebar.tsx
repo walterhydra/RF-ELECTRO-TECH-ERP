@@ -60,31 +60,34 @@ export const Sidebar: React.FC = () => {
   }, [pathname]);
   
   const allNavItems = [
-    { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { label: assignedStage ? `Job Cards (${assignedStage.replace(/^\d+\.\s*/, '')})` : 'Job Cards & Split', href: '/job-cards', icon: Layers, roles: ['Super Admin', 'Production Manager', 'Stage Operator', 'PROCESS_OPERATOR', 'NORMAL', 'Quality Inspector', 'QC_OFFICER'] },
-    { label: 'Job Movement & Update', href: '/job-cards/movement', icon: Activity, roles: ['Super Admin', 'Production Manager', 'Stage Operator', 'PROCESS_OPERATOR', 'NORMAL', 'Quality Inspector'] },
-    { label: 'Floor Monitor', href: '/floor', icon: Activity, roles: ['Super Admin', 'Production Manager', 'Quality Inspector', 'Stage Operator', 'PROCESS_OPERATOR', 'NORMAL'] },
-    { label: 'Customer Master', href: '/customers', icon: Building2, roles: ['Super Admin', 'Production Manager'] },
-    { label: 'Product Master (Specs)', href: '/products', icon: Cpu, roles: ['Super Admin', 'Production Manager'] },
-    { label: 'Process Master', href: '/processes', icon: Settings2, roles: ['Super Admin', 'Production Manager'] },
-    { label: 'Customer POs', href: '/pos', icon: ShoppingCart, roles: ['Super Admin', 'Production Manager', 'Dispatch Manager'] },
-    { label: 'Production Reports', href: '/reports', icon: BarChart3, roles: ['Super Admin', 'Production Manager'] },
-    { label: 'Floor PWA Scanner', href: '/scan', icon: QrCode, roles: ['Super Admin', 'Quality Inspector', 'Production Manager', 'Stage Operator', 'PROCESS_OPERATOR', 'NORMAL'] },
-    { label: 'Rejection & Rework', href: '/rejections', icon: Activity, roles: ['Super Admin', 'Quality Inspector', 'Production Manager'] },
-    { label: 'Dispatch & Delivery', href: '/dispatches', icon: Truck, roles: ['Super Admin', 'Dispatch Manager'] },
-    { label: 'User & Stage Linkage', href: '/users', icon: Users, roles: ['Super Admin'] },
+    { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['Super Admin', 'SUPER_ADMIN', 'Production Manager', 'Production Planner', 'Quality Head', 'Quality Inspector', 'Dispatch Manager'] },
+    { label: assignedStage ? `Job Cards (${assignedStage.replace(/^\d+\.\s*/, '')})` : 'Job Cards & Split', href: '/job-cards', icon: Layers, roles: ['Super Admin', 'SUPER_ADMIN', 'Production Manager', 'Production Planner', 'Quality Head', 'Quality Inspector', 'Stage Operator', 'PROCESS_OPERATOR', 'NORMAL'] },
+    { label: 'Job Movement & Update', href: '/job-cards/movement', icon: Activity, roles: ['Super Admin', 'SUPER_ADMIN', 'Production Manager', 'Production Planner', 'Quality Head', 'Quality Inspector', 'Stage Operator', 'PROCESS_OPERATOR', 'NORMAL'] },
+    { label: 'Floor Monitor', href: '/floor', icon: Activity, roles: ['Super Admin', 'SUPER_ADMIN', 'Production Manager', 'Production Planner', 'Quality Head', 'Quality Inspector'] },
+    { label: 'Customer Master', href: '/customers', icon: Building2, roles: ['Super Admin', 'SUPER_ADMIN', 'Production Manager', 'Production Planner'] },
+    { label: 'Product Master (Specs)', href: '/products', icon: Cpu, roles: ['Super Admin', 'SUPER_ADMIN', 'Production Manager', 'Production Planner'] },
+    { label: 'Process Master', href: '/processes', icon: Settings2, roles: ['Super Admin', 'SUPER_ADMIN', 'Production Manager', 'Production Planner'] },
+    { label: 'Customer POs', href: '/pos', icon: ShoppingCart, roles: ['Super Admin', 'SUPER_ADMIN', 'Production Manager', 'Production Planner', 'Dispatch Manager'] },
+    { label: 'Production Reports', href: '/reports', icon: BarChart3, roles: ['Super Admin', 'SUPER_ADMIN', 'Production Manager', 'Production Planner', 'Quality Head', 'Quality Inspector'] },
+    { label: 'Floor PWA Scanner', href: '/scan', icon: QrCode, roles: ['Super Admin', 'SUPER_ADMIN', 'Quality Head', 'Quality Inspector', 'Production Manager', 'Production Planner', 'Stage Operator', 'PROCESS_OPERATOR', 'NORMAL', 'Dispatch Manager'] },
+    { label: 'Rejection & Rework', href: '/rejections', icon: Activity, roles: ['Super Admin', 'SUPER_ADMIN', 'Quality Head', 'Quality Inspector', 'Production Manager', 'Production Planner'] },
+    { label: 'Dispatch & Delivery', href: '/dispatches', icon: Truck, roles: ['Super Admin', 'SUPER_ADMIN', 'Dispatch Manager'] },
+    { label: 'User & Stage Linkage', href: '/users', icon: Users, roles: ['Super Admin', 'SUPER_ADMIN'] },
   ];
 
   const isSuperAdmin = userRole === 'Super Admin' || userRole === 'SUPER_ADMIN';
-  const isOperator = userRole.toLowerCase().includes('operator') || Boolean(assignedStage) || userRole === 'NORMAL' || userRole === 'PROCESS_OPERATOR';
+  const isOperator = userRole.toLowerCase().includes('operator') || Boolean(assignedStage && assignedStage.toUpperCase() !== 'ALL') || userRole === 'NORMAL' || userRole === 'PROCESS_OPERATOR';
 
   const navItems = allNavItems.filter(item => {
-    if (!item.roles || isSuperAdmin) return true;
-    if (isOperator && (item.roles.includes('Stage Operator') || item.roles.includes('PROCESS_OPERATOR') || item.roles.includes('NORMAL'))) {
-      return true;
+    if (isSuperAdmin) return true;
+    if (isOperator) {
+      return item.roles.some(r => r === 'Stage Operator' || r === 'PROCESS_OPERATOR' || r === 'NORMAL');
     }
-    const normalizedRole = userRole.toUpperCase().replace(/\s+/g, '_');
-    return item.roles.some(r => r === userRole || r.toUpperCase().replace(/\s+/g, '_') === normalizedRole);
+    const currentRoleUpper = userRole.toUpperCase().replace(/\s+/g, '_');
+    return item.roles.some(r => {
+      const rUpper = r.toUpperCase().replace(/\s+/g, '_');
+      return r === userRole || rUpper === currentRoleUpper || (userRole.includes('Quality') && r.includes('Quality')) || (userRole.includes('Production') && r.includes('Production'));
+    });
   });
 
   const displayedNavItems = navItems;

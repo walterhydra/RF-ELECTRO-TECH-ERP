@@ -326,11 +326,12 @@ export class JobCardsService {
     const hasAssignedStage = Boolean(userStageId || (userStageName && userStageName.toUpperCase() !== 'ALL'));
 
     const isSuperAdmin =
-      roleName.includes('SUPER') ||
-      roleName.includes('ADMIN') ||
-      roleName.includes('MASTER') ||
-      roleName.includes('PLANNER') ||
-      (!roleName && !queryStage);
+      !hasAssignedStage &&
+      (roleName.includes('SUPER') ||
+        roleName.includes('ADMIN') ||
+        roleName.includes('MASTER') ||
+        roleName.includes('PLANNER') ||
+        (!roleName && !queryStage));
 
     const isOperator =
       !isSuperAdmin &&
@@ -502,7 +503,7 @@ export class JobCardsService {
     if (!jobCard) {
       // Check if scanned code is a SubJobCard Number (e.g. 26-27-3781-A or 26-27-3781-1)
       const sub = await db.subJobCard.findFirst({
-        where: { OR: [{ id }, { subJobCardNo: id }] },
+        where: isUuid ? { OR: [{ id }, { subJobCardNo: id }] } : { subJobCardNo: id },
         include: {
           jobCard: {
             include: {
@@ -682,7 +683,7 @@ export class JobCardsService {
       }
 
       return id;
-    });
+    }, { maxWait: 15000, timeout: 30000 });
 
     return this.findOne(id);
   }
@@ -1353,8 +1354,18 @@ export class JobCardsService {
         }
       }
 
-      return jobCard;
-    });
+      const refreshed = await tx.jobCard.findUnique({
+        where: { id: jobCard.id },
+        include: {
+          customerPO: { include: { customer: true } },
+          product: true,
+          processFlowMaster: true,
+          subJobCards: { include: { currentStage: true }, orderBy: { subJobCardNo: 'asc' } },
+        },
+      });
+
+      return refreshed || jobCard;
+    }, { maxWait: 15000, timeout: 30000 });
 
     return createdJobCard;
   }
@@ -1395,7 +1406,7 @@ export class JobCardsService {
       jobCard = await this.findOne(id);
     } catch (e) {
       const existing = await this.prisma.jobCard.findFirst({
-        where: { OR: [{ id }, { jobCardNo: id }] },
+        where: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? { OR: [{ id }, { jobCardNo: id }] } : { jobCardNo: id },
         include: {
           customerPO: { include: { customer: true } },
           product: true,
@@ -1406,7 +1417,7 @@ export class JobCardsService {
       if (!existing) {
         // Fallback: check if id is a SubJobCard ID or SubJobCardNo
         const subCard = await this.prisma.subJobCard.findFirst({
-          where: { OR: [{ id }, { subJobCardNo: id }] },
+          where: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? { OR: [{ id }, { subJobCardNo: id }] } : { subJobCardNo: id },
           include: {
             jobCard: {
               include: {
@@ -1857,6 +1868,10 @@ export class JobCardsService {
         : [];
 
       let isAllowed = false;
+      if (!currentStage && !currentStageId) {
+        const isShearingOrAll = userAssignedStageName.includes('shear') || userAssignedStageName.includes('1.') || userAssignedStageName === 'all' || !userAssignedStageName;
+        if (isShearingOrAll) isAllowed = true;
+      }
       if (userAssignedStageId && currentStageId && userAssignedStageId === currentStageId) {
         isAllowed = true;
       }
@@ -1864,6 +1879,11 @@ export class JobCardsService {
         isAllowed = true;
       }
       if (userAssignedStageName && currentStageName && userAssignedStageName.includes(currentStageName)) {
+        isAllowed = true;
+      }
+      const cleanUserStg = userAssignedStageName.replace(/^\d+[\.\s\-]+/, '').trim();
+      const cleanCurrStg = currentStageName.replace(/^\d+[\.\s\-]+/, '').trim();
+      if (cleanUserStg && cleanCurrStg && (cleanCurrStg === cleanUserStg || cleanCurrStg.includes(cleanUserStg) || cleanUserStg.includes(cleanCurrStg))) {
         isAllowed = true;
       }
       if (allowedStages.length > 0 && (allowedStages.includes(currentStageId) || allowedStages.includes(currentStageName))) {
@@ -2152,7 +2172,7 @@ export class JobCardsService {
   async moveFull(id: string, body: { id?: string; cardId?: string; jobId?: string; jobCardNo?: string; subJobCardNo?: string; rejectPcbQty?: number; rejectQty?: number; remark?: string; remarkType?: string; status?: string } | any, user: any) {
     const cleanStr = (val?: string) => {
       const s = (val || '').trim();
-      return s.startsWith('jc-part-') || s.startsWith('init-') ? '' : s;
+      return s.startsWith('jc-') || s.startsWith('sub-') || s.startsWith('init-') ? '' : s;
     };
     const cardId = cleanStr(body?.cardId || body?.id || id);
     const subJobCardNo = cleanStr(body?.subJobCardNo || id);
@@ -2283,13 +2303,13 @@ export class JobCardsService {
       }
     }
 
-    // ENFORCE STAGE-WISE USER ACCESS RIGHT AT BACKEND / API LEVEL
-    this.validateUserStagePermission(effectiveUser, subCard.currentStage);
-
     let currentStage = subCard.currentStage;
     if (!currentStage && subCard.currentStageId) {
       currentStage = await this.prisma.processStage.findUnique({ where: { id: subCard.currentStageId } });
     }
+
+    // ENFORCE STAGE-WISE USER ACCESS RIGHT AT BACKEND / API LEVEL
+    this.validateUserStagePermission(effectiveUser, currentStage);
 
     // Pass the actual process flow steps to determine correct next stage
     const flowSteps = subCard.jobCard?.processFlowMaster?.steps || [];
@@ -2341,11 +2361,16 @@ export class JobCardsService {
       : `[${rType}] Full Job Movement to next stage${rejectPcb > 0 ? ` (${rejectPcb} PCBs Rejected)` : ''}`;
 
     return this.prisma.$transaction(async (tx) => {
+      let movementStageId = subCard.currentStageId || targetNextStageId;
+      if (!movementStageId) {
+        const firstStage = await tx.processStage.findFirst({ orderBy: { defaultOrder: 'asc' } });
+        movementStageId = firstStage?.id || '';
+      }
       // Create movement log
       await tx.stageMovementLog.create({
         data: {
           subJobCardId: subCard.id,
-          stageId: subCard.currentStageId || targetNextStageId || '',
+          stageId: movementStageId,
           qtyReceived: currentPcb,
           qtyProcessed: currentPcb,
           qtyForwarded: movedPcb,
@@ -2530,7 +2555,7 @@ export class JobCardsService {
         success: true,
         message: `Job Card moved successfully to next process stage.`,
       };
-    });
+    }, { maxWait: 15000, timeout: 30000 });
   }
 
   async movePartial(
@@ -2552,7 +2577,7 @@ export class JobCardsService {
   ) {
     const cleanStr = (val?: string) => {
       const s = (val || '').trim();
-      return s.startsWith('jc-part-') || s.startsWith('init-') ? '' : s;
+      return s.startsWith('jc-') || s.startsWith('sub-') || s.startsWith('init-') ? '' : s;
     };
     const cardId = cleanStr(body?.cardId || body?.id || id);
     const subJobCardNo = cleanStr(body?.subJobCardNo || id);
@@ -2677,9 +2702,6 @@ export class JobCardsService {
       }
     }
 
-    // ENFORCE STAGE-WISE USER ACCESS RIGHT AT BACKEND / API LEVEL
-    this.validateUserStagePermission(effectiveUser, subCard.currentStage);
-
     const qtyToMove = Number(body.qtyToMove);
     const masterPcbQty = Number(subCard.totalPcbQty || subCard.qty || 0);
 
@@ -2693,6 +2715,9 @@ export class JobCardsService {
     if (!currentStage && subCard.currentStageId) {
       currentStage = await this.prisma.processStage.findUnique({ where: { id: subCard.currentStageId } });
     }
+
+    // ENFORCE STAGE-WISE USER ACCESS RIGHT AT BACKEND / API LEVEL
+    this.validateUserStagePermission(effectiveUser, currentStage);
 
     // Pass the actual process flow steps to determine correct next stage
     const flowSteps = subCard.jobCard?.processFlowMaster?.steps || [];
@@ -2740,11 +2765,16 @@ export class JobCardsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      let partStageId = subCard.currentStageId || targetNextStageId;
+      if (!partStageId) {
+        const firstStage = await tx.processStage.findFirst({ orderBy: { defaultOrder: 'asc' } });
+        partStageId = firstStage?.id || '';
+      }
       // 1. Log partial movement
       await tx.stageMovementLog.create({
         data: {
           subJobCardId: subCard.id,
-          stageId: subCard.currentStageId || targetNextStageId || '',
+          stageId: partStageId,
           qtyReceived: masterPcbQty,
           qtyProcessed: masterPcbQty,
           qtyForwarded: qtyToMove,
@@ -2840,7 +2870,7 @@ export class JobCardsService {
       });
 
       return this.findOne(jobCardId);
-    });
+    }, { maxWait: 15000, timeout: 30000 });
   }
 }
 

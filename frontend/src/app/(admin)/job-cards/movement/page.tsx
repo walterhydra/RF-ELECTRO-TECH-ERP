@@ -465,7 +465,7 @@ export default function JobMovementUpdatePage() {
         const storedUserEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
         const storedUserName = typeof window !== 'undefined' ? localStorage.getItem('userName') : null;
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const timeoutId = setTimeout(() => controller.abort(), 25000);
         const targetEndpoint = encodeURIComponent(jobId && !jobId.startsWith('jc-part-') ? jobId : jobCardNo);
         let res = await fetchApi(`/job-cards/${targetEndpoint}/move-stage`, {
           method: 'POST',
@@ -677,8 +677,10 @@ export default function JobMovementUpdatePage() {
       .trim();
   };
 
+  const isStageLocked = (assignedStage && assignedStage.toUpperCase() !== 'ALL') || userRole === 'NORMAL';
+  const isShearingStage = assignedStage.includes('SHEARING') || assignedStage.includes('1.') || assignedStage.toLowerCase().includes('shearing');
+
   const filteredJobs = jobs.filter((j) => {
-    const isStageLocked = (assignedStage && assignedStage.toUpperCase() !== 'ALL') || userRole === 'NORMAL';
     if (isStageLocked) {
       const assignedSlug = normalizeStageSlug(assignedStage);
       const isUnlaunched = j.status === 'UNLAUNCHED';
@@ -769,45 +771,57 @@ export default function JobMovementUpdatePage() {
         </div>
 
         <div className="flex items-center gap-3 flex-wrap w-full sm:w-auto">
-          {/* Role selector */}
-          <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl text-xs">
-            <UserCheck className="w-4 h-4 text-emerald-400" />
-            <select
-              value={userRole}
-              onChange={(e: any) => setUserRole(e.target.value)}
-              className="bg-transparent font-bold text-white outline-none cursor-pointer text-xs"
-            >
-              <option value="MASTER">Master (Full Access)</option>
-              <option value="SUPER_USER">Super User</option>
-              <option value="NORMAL">Stage Operator</option>
-            </select>
-          </div>
+          {isStageLocked ? (
+            <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/40 px-3.5 py-1.5 rounded-xl text-xs shadow-xs">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              <span className="text-amber-400 font-black text-[10px] font-mono uppercase">LOCKED STAGE:</span>
+              <span className="font-bold text-amber-200 font-mono text-xs">{assignedStage}</span>
+            </div>
+          ) : (
+            <>
+              {/* Role selector */}
+              <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl text-xs">
+                <UserCheck className="w-4 h-4 text-emerald-400" />
+                <select
+                  value={userRole}
+                  onChange={(e: any) => setUserRole(e.target.value)}
+                  className="bg-transparent font-bold text-white outline-none cursor-pointer text-xs"
+                >
+                  <option value="MASTER">Master (Full Access)</option>
+                  <option value="SUPER_USER">Super User</option>
+                  <option value="NORMAL">Stage Operator</option>
+                </select>
+              </div>
 
-          {/* Stage selector */}
-          <div className="flex items-center gap-2 bg-slate-900 border border-amber-500/40 px-3 py-1.5 rounded-xl text-xs">
-            <span className="text-amber-400 font-black text-[10px] font-mono uppercase">STAGE:</span>
-            <select
-              value={assignedStage}
-              onChange={(e) => {
-                setAssignedStage(e.target.value);
-                if (typeof window !== 'undefined') localStorage.setItem('movement_filter_stage', e.target.value);
-              }}
-              className="bg-transparent font-bold text-amber-300 outline-none cursor-pointer text-xs font-mono"
-            >
-              {PF01_STAGES.map((stg) => (
-                <option key={stg} value={stg} className="bg-slate-900 text-white font-sans">
-                  {stg}
-                </option>
-              ))}
-            </select>
-          </div>
+              {/* Stage selector */}
+              <div className="flex items-center gap-2 bg-slate-900 border border-amber-500/40 px-3 py-1.5 rounded-xl text-xs">
+                <span className="text-amber-400 font-black text-[10px] font-mono uppercase">STAGE:</span>
+                <select
+                  value={assignedStage}
+                  onChange={(e) => {
+                    setAssignedStage(e.target.value);
+                    if (typeof window !== 'undefined') localStorage.setItem('movement_filter_stage', e.target.value);
+                  }}
+                  className="bg-transparent font-bold text-amber-300 outline-none cursor-pointer text-xs font-mono"
+                >
+                  {PF01_STAGES.map((stg) => (
+                    <option key={stg} value={stg} className="bg-slate-900 text-white font-sans">
+                      {stg}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
 
-          <Link
-            href="/job-cards/launch"
-            className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg transition-all"
-          >
-            + Launch New Job
-          </Link>
+          {(!isStageLocked || isShearingStage) && (
+            <Link
+              href="/job-cards/launch"
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg transition-all"
+            >
+              + Launch New Job
+            </Link>
+          )}
         </div>
       </div>
 
