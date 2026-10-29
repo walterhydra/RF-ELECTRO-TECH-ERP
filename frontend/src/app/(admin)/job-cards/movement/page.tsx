@@ -790,7 +790,7 @@ export default function JobMovementUpdatePage() {
               value={assignedStage}
               onChange={(e) => {
                 setAssignedStage(e.target.value);
-                if (typeof window !== 'undefined') localStorage.setItem('assignedStage', e.target.value);
+                if (typeof window !== 'undefined') localStorage.setItem('movement_filter_stage', e.target.value);
               }}
               className="bg-transparent font-bold text-amber-300 outline-none cursor-pointer text-xs font-mono"
             >

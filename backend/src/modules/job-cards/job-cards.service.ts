@@ -85,7 +85,7 @@ export class JobCardsService {
       });
 
       return jobCard;
-    });
+    }, { maxWait: 15000, timeout: 30000 });
   }
 
   async findAll(
@@ -325,18 +325,22 @@ export class JobCardsService {
     const userStageName = user?.assignedStageName || user?.assignedStage?.name || (typeof user?.assignedStage === 'string' ? user.assignedStage : null);
     const hasAssignedStage = Boolean(userStageId || (userStageName && userStageName.toUpperCase() !== 'ALL'));
 
-    const isSuperAdmin = !hasAssignedStage && (roleName.includes('SUPER') || roleName.includes('ADMIN') || roleName === 'MASTER' || (!roleName && !queryStage));
+    const isSuperAdmin =
+      roleName.includes('SUPER') ||
+      roleName.includes('ADMIN') ||
+      roleName.includes('MASTER') ||
+      roleName.includes('PLANNER') ||
+      (!roleName && !queryStage);
 
     const isOperator =
-      hasAssignedStage ||
-      (!isSuperAdmin && (
+      !isSuperAdmin &&
+      (hasAssignedStage ||
         roleName === 'NORMAL_USER' ||
         roleName === 'PROCESS_OPERATOR' ||
         roleName === 'NORMAL' ||
         roleName === 'OPERATOR' ||
         roleName.includes('OPERATOR') ||
-        roleName.includes('QC')
-      ));
+        roleName.includes('QC'));
 
     const targetStageId = !isExplicitAll
       ? (query?.stageId || query?.assignedStageId || (isOperator ? userStageId : null))
@@ -352,12 +356,16 @@ export class JobCardsService {
         const cardStageSlug = normalizeStageSlug(jc.currentStageName);
         const cardMatches = (targetStageId && jc.currentStageId === targetStageId) || (targetStageSlug && cardStageSlug === targetStageSlug);
 
+        const isShearingTarget = targetStageSlug === 'shearing' || targetStageSlug === '1shearing' || (targetStageSlug && targetStageSlug.includes('shear'));
+        const isCardUnlaunched = jc.status === 'CREATED' || jc.status === 'PENDING_LAUNCH';
+
         // If job card has sub-lots, check if any sub-lot is at this stage
         if (jc.subJobCards && Array.isArray(jc.subJobCards) && jc.subJobCards.length > 0) {
           const matchingSubs = jc.subJobCards.filter((s: any) => {
             if (targetStageId && s.currentStageId === targetStageId) return true;
             const subStageSlug = normalizeStageSlug(s.currentStage?.name || '');
             if (targetStageSlug && subStageSlug === targetStageSlug) return true;
+            if (isShearingTarget && (s.status === 'PENDING_LAUNCH' || !s.currentStageId)) return true;
             return false;
           });
 
@@ -380,6 +388,14 @@ export class JobCardsService {
               _matchedStage: true,
             };
           }
+        }
+
+        // If targeting Shearing stage, include unlaunched cards so operator can launch them
+        if (isShearingTarget && isCardUnlaunched) {
+          return {
+            ...jc,
+            _matchedStage: true,
+          };
         }
 
         // If no sub-lots, check if the parent job card itself is at this stage
@@ -1225,9 +1241,18 @@ export class JobCardsService {
 
       const existingJc = await tx.jobCard.findFirst({
         where: { jobCardNo },
+        include: {
+          customerPO: { include: { customer: true } },
+          product: true,
+          processFlowMaster: true,
+          subJobCards: { include: { currentStage: true } },
+        },
       });
       if (existingJc) {
-        return existingJc;
+        return {
+          ...existingJc,
+          alreadyExists: true,
+        };
       }
 
       const jobCard = await tx.jobCard.create({
@@ -1435,7 +1460,7 @@ export class JobCardsService {
 
       if (!jobCard.subJobCards || jobCard.subJobCards.length === 0) {
         // Auto-create 1 single sub-job card for the full quantity
-        const subJobCardNo = `${jobCard.jobCardNo}-1`;
+        const subJobCardNo = jobCard.jobCardNo; // Rule 2: Single-lot WIP No must remain identical to jobCardNo
         const qrCodeValue = `RFE-SJC-${subJobCardNo}-${Date.now().toString().slice(-4)}`;
 
         const createdSub = await tx.subJobCard.create({
@@ -1489,7 +1514,35 @@ export class JobCardsService {
         }
       }
 
-      const launchUserId = effectiveUser?.id || targetUserId || jobCard.createdById;
+      // Safe resolution of User ID for foreign-key constraints
+      let launchUserId: string | null = null;
+      if (effectiveUser?.id) {
+        launchUserId = effectiveUser.id;
+      }
+      if (!launchUserId && (targetUserId || targetEmail)) {
+        const found = await tx.user.findFirst({
+          where: {
+            OR: [
+              ...(targetUserId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId) ? [{ id: targetUserId }] : []),
+              ...(targetEmail ? [{ email: targetEmail }] : []),
+            ],
+          },
+          select: { id: true },
+        });
+        if (found) launchUserId = found.id;
+      }
+      if (!launchUserId && jobCard.createdById) {
+        const found = await tx.user.findUnique({
+          where: { id: jobCard.createdById },
+          select: { id: true },
+        });
+        if (found) launchUserId = found.id;
+      }
+      if (!launchUserId) {
+        const fallbackUser = await tx.user.findFirst({ select: { id: true } });
+        if (fallbackUser) launchUserId = fallbackUser.id;
+      }
+
       const operatorName = effectiveUser?.name || user?.name || 'Production Planner / Admin';
       const roleName = effectiveUser?.role?.name || effectiveUser?.role || user?.role?.name || user?.role || 'Admin';
 
@@ -1525,7 +1578,7 @@ export class JobCardsService {
       });
 
       return updated;
-    });
+    }, { maxWait: 15000, timeout: 30000 });
   }
 
   async updateStatus(id: string, status: JobCardStatus) {
@@ -1777,10 +1830,15 @@ export class JobCardsService {
   private validateUserStagePermission(user: any, currentStage: any) {
     if (!user) return; // If no auth context passed, bypass (or internal system call)
 
-    const roleName = String(user.roleName || user.role || user.role?.name || '').toUpperCase();
+    const roleName = String(user.roleName || user.role || user.role?.name || user.roleCode || '').toUpperCase();
     const isMasterOrSuper =
+      roleName.includes('MASTER') ||
+      roleName.includes('SUPER') ||
+      roleName.includes('ADMIN') ||
+      roleName.includes('PLANNER') ||
       roleName === 'MASTER' ||
       roleName === 'SUPER_ADMIN' ||
+      roleName === 'SUPER ADMIN' ||
       roleName === 'SUPER_USER' ||
       roleName === 'PRODUCTION_PLANNER';
 
@@ -1956,6 +2014,24 @@ export class JobCardsService {
     const currentStageName = String(currentStage?.name || '').trim();
     const currentCode = String(currentStage?.code || '').trim();
     const currentOrder = currentStage?.defaultOrder || 0;
+
+    // If card is unlaunched (no current stage yet), target stage is Stage 1 (1. SHEARING)
+    if (!currentStage && !currentStageName) {
+      const firstItem = defaultStageList[0];
+      const nextStage = await this.prisma.processStage.findFirst({
+        where: {
+          OR: [
+            { name: firstItem.name },
+            { code: firstItem.code },
+            { defaultOrder: 1 },
+          ],
+        },
+      });
+      return {
+        targetNextStageId: nextStage?.id || null,
+        isLastStage: false,
+      };
+    }
 
     let currIdx = -1;
 
@@ -2219,7 +2295,34 @@ export class JobCardsService {
     const flowSteps = subCard.jobCard?.processFlowMaster?.steps || [];
     const { targetNextStageId, isLastStage } = await this.getNextProcessStage(currentStage, flowSteps);
 
-    const userId = effectiveUser?.id || targetUserId || subCard.createdById;
+    // Safe resolution of User ID for foreign-key constraints
+    let userId: string | null = null;
+    if (effectiveUser?.id) {
+      userId = effectiveUser.id;
+    }
+    if (!userId && (targetUserId || targetEmail)) {
+      const found = await this.prisma.user.findFirst({
+        where: {
+          OR: [
+            ...(targetUserId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId) ? [{ id: targetUserId }] : []),
+            ...(targetEmail ? [{ email: targetEmail }] : []),
+          ],
+        },
+        select: { id: true },
+      });
+      if (found) userId = found.id;
+    }
+    if (!userId && subCard.createdById) {
+      const found = await this.prisma.user.findUnique({
+        where: { id: subCard.createdById },
+        select: { id: true },
+      });
+      if (found) userId = found.id;
+    }
+    if (!userId) {
+      const fallbackUser = await this.prisma.user.findFirst({ select: { id: true } });
+      if (fallbackUser) userId = fallbackUser.id;
+    }
     const rejectPcb = Math.max(0, Number(body.rejectPcbQty || body.rejectQty) || 0);
     const currentPcb = Number(subCard.totalPcbQty || subCard.qty || 0);
     const currentArea = subCard.custPnlAreaSqm || subCard.prodPnlAreaSqm || 0;
@@ -2607,7 +2710,34 @@ export class JobCardsService {
         : 0;
     const remainingQty = masterPcbQty - qtyToMove;
 
-    const userId = effectiveUser?.id || targetUserId || subCard.createdById;
+    // Safe resolution of User ID for foreign-key constraints
+    let userId: string | null = null;
+    if (effectiveUser?.id) {
+      userId = effectiveUser.id;
+    }
+    if (!userId && (targetUserId || targetEmail)) {
+      const found = await this.prisma.user.findFirst({
+        where: {
+          OR: [
+            ...(targetUserId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId) ? [{ id: targetUserId }] : []),
+            ...(targetEmail ? [{ email: targetEmail }] : []),
+          ],
+        },
+        select: { id: true },
+      });
+      if (found) userId = found.id;
+    }
+    if (!userId && subCard.createdById) {
+      const found = await this.prisma.user.findUnique({
+        where: { id: subCard.createdById },
+        select: { id: true },
+      });
+      if (found) userId = found.id;
+    }
+    if (!userId) {
+      const fallbackUser = await this.prisma.user.findFirst({ select: { id: true } });
+      if (fallbackUser) userId = fallbackUser.id;
+    }
 
     return this.prisma.$transaction(async (tx) => {
       // 1. Log partial movement

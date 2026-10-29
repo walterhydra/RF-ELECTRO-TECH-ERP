@@ -229,6 +229,7 @@ interface JobCard {
   };
   subJobCards: SubJobCard[];
   isNewlyCreated?: boolean;
+  isAlreadyExisting?: boolean;
   rejectedPcbQty?: number;
   rejectedAreaSqm?: number;
   rejectionLogs?: RejectionLog[];
@@ -752,6 +753,11 @@ export default function JobCardsPage() {
   // When set to true, next fetchBackendJobCards call bypasses local merge and trusts server directly
   const forceFreshOnNextPoll = useRef<boolean>(false);
 
+  // Existing Card Highlight & Alert Banner State (when submitting or loading an already existing card)
+  const [existingCardAlert, setExistingCardAlert] = useState<string | null>(null);
+  const [highlightedCardNo, setHighlightedCardNo] = useState<string | null>(null);
+  const pinnedJobCardNo = useRef<string | null>(null);
+
   // Available Products from Master for Live Specs & Auto-population
   const [availableProducts, setAvailableProducts] = useState<any[]>([]);
 
@@ -796,12 +802,10 @@ export default function JobCardsPage() {
       }
       const upper = stored.toUpperCase();
       const hasAssignedStage = Boolean(storedStage && storedStage.toUpperCase() !== 'ALL');
-      const isSuper = !hasAssignedStage && (upper.includes('SUPER') || (upper.includes('ADMIN') && !upper.includes('OPERATOR')));
-      if (hasAssignedStage) {
-        setUserRole('NORMAL');
-      } else if (isSuper) {
+      const isSuper = upper.includes('SUPER') || upper.includes('MASTER') || (upper.includes('ADMIN') && !upper.includes('OPERATOR')) || upper.includes('PLANNER');
+      if (isSuper) {
         setUserRole('MASTER');
-      } else if (upper.includes('OPERATOR') || upper === 'NORMAL' || upper === 'PROCESS_OPERATOR') {
+      } else if (hasAssignedStage || upper.includes('OPERATOR') || upper === 'NORMAL' || upper === 'PROCESS_OPERATOR') {
         setUserRole('NORMAL');
       } else if (upper.includes('PROD') || upper.includes('MANAGER')) {
         setUserRole('SUPER_USER');
@@ -811,11 +815,13 @@ export default function JobCardsPage() {
     }
   }, []);
 
-  // Super Admin Check Helper (Only true if full system access and not locked to a single stage)
+  // Super Admin Check Helper (Always true for Super Admin / Master / Planner)
   const isSuperAdmin = React.useMemo(() => {
-    const upper = userRole.toUpperCase();
-    return (upper.includes('SUPER') || upper.includes('MASTER') || upper.includes('ADMIN') || userRole === 'MASTER') && !userRole.includes('OPERATOR') && (!assignedStage || assignedStage === 'ALL');
-  }, [userRole, assignedStage]);
+    const upper = (userRole || '').toUpperCase();
+    const storedUpper = (typeof window !== 'undefined' ? localStorage.getItem('userRole') || '' : '').toUpperCase();
+    return upper.includes('SUPER') || upper.includes('MASTER') || upper.includes('ADMIN') || upper.includes('PLANNER') ||
+           storedUpper.includes('SUPER') || storedUpper.includes('MASTER') || storedUpper.includes('ADMIN') || storedUpper.includes('PLANNER');
+  }, [userRole]);
 
   // Toast Notification State (Replaces native browser alerts)
   const [toast, setToast] = useState<{ id: string; type: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -978,10 +984,10 @@ export default function JobCardsPage() {
     custPnlAreaSqm: 0,
     jobFlowSelection: 'PF-01',
     autoLaunch: false,
-    enablePreSplit: false,
-    splitCount: 1,
-    customSplits: [],
-    layers: 2,
+      enablePreSplit: false,
+      splitCount: 1,
+      customSplits: [],
+      layers: 2,
     thicknessMm: 1.6,
     copperWeight: '',
     surfaceFinish: '',
@@ -991,7 +997,23 @@ export default function JobCardsPage() {
 
   const handleOpenCreateModal = () => {
     setEditingCardId(null);
-    const nextNo = `26-27-${Math.floor(1000 + Math.random() * 9000)}`;
+    // Find next unused sequential number to prevent collision with existing cards
+    const existingNos = new Set(jobCards.map((j) => (j.jobCardNo || '').trim()));
+    let maxNum = 1000;
+    jobCards.forEach((j) => {
+      const m = j.jobCardNo?.match(/26-27-(\d+)/);
+      if (m) {
+        const val = parseInt(m[1], 10);
+        if (!isNaN(val) && val > maxNum) maxNum = val;
+      }
+    });
+    let nextCandidateNum = maxNum + 1;
+    let candidate = `26-27-${nextCandidateNum}`;
+    while (existingNos.has(candidate)) {
+      nextCandidateNum++;
+      candidate = `26-27-${nextCandidateNum}`;
+    }
+    const nextNo = candidate;
     const today = new Date().toISOString().split('T')[0];
     const nextWeek = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
     setLaunchForm({
@@ -1094,7 +1116,8 @@ export default function JobCardsPage() {
 
     try {
       const storedStageForQuery = (typeof window !== 'undefined' ? localStorage.getItem('assignedStage') || assignedStage : assignedStage) || '';
-      const stageQueryParam = (storedStageForQuery && storedStageForQuery.toUpperCase() !== 'ALL')
+      // Only pass stage query filter if user is strictly an operator, never for Super Admin / Master / Planner
+      const stageQueryParam = (!isSuperAdmin && storedStageForQuery && storedStageForQuery.toUpperCase() !== 'ALL')
         ? `?stage=${encodeURIComponent(storedStageForQuery)}`
         : '';
       const res = await fetch(`${targetUrl}/job-cards${stageQueryParam}`, {
@@ -1395,9 +1418,25 @@ export default function JobCardsPage() {
               (p) => p.id.startsWith('jc-part-') && inFlightMovements.current.has(p.id)
             );
 
-            const finalMerged = inFlightOptimisticLots.length > 0
+            let finalMerged = inFlightOptimisticLots.length > 0
               ? [...merged, ...inFlightOptimisticLots]
               : merged;
+
+            // If a card was pinned (e.g. user just created/looked up an already existing card),
+            // move it directly to index 0 so the user sees it at the top of the table immediately
+            if (pinnedJobCardNo.current) {
+              const pinnedNo = pinnedJobCardNo.current;
+              const pinnedIdx = finalMerged.findIndex(
+                (c) => c.jobCardNo === pinnedNo || c.subJobCardNo === pinnedNo
+              );
+              const isActuallyExisting = Boolean(existingCardAlert && existingCardAlert === pinnedNo);
+              if (pinnedIdx > 0) {
+                const [pinnedItem] = finalMerged.splice(pinnedIdx, 1);
+                finalMerged = [{ ...pinnedItem, isAlreadyExisting: isActuallyExisting }, ...finalMerged];
+              } else if (pinnedIdx === 0) {
+                finalMerged[0] = { ...finalMerged[0], isAlreadyExisting: isActuallyExisting };
+              }
+            }
 
             saveJobCardsToStorage(finalMerged);
             return finalMerged;
@@ -1786,7 +1825,7 @@ export default function JobCardsPage() {
   // Launch Existing Unlaunched Job Card
   const handleLaunchExistingJobCard = async (jobCardId: string) => {
     const isShearingOp = normalizeStageIndex(assignedStage) === 0;
-    if (userRole === 'NORMAL' && !isShearingOp) {
+    if (!isSuperAdmin && userRole === 'NORMAL' && !isShearingOp) {
       showToast('Permission Denied: Only Shearing Operators or Management can launch Job Cards into Stage 1.', 'error');
       return;
     }
@@ -1860,7 +1899,7 @@ export default function JobCardsPage() {
         if (!res.ok && cardNo && cardNo !== cardId) {
           const fbCtrl = new AbortController();
           const fbTimeout = setTimeout(() => fbCtrl.abort(), 3500);
-          await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(cardNo)}/launch`, {
+          res = await fetch(`${getApiBaseUrl()}/job-cards/${encodeURIComponent(cardNo)}/launch`, {
             method: 'POST',
             headers,
             body: launchPayload,
@@ -1868,8 +1907,22 @@ export default function JobCardsPage() {
           });
           clearTimeout(fbTimeout);
         }
+
+        if (res.ok) {
+          inFlightMovements.current.delete(cardId);
+          inFlightMovements.current.delete(cardNo);
+          forceFreshOnNextPoll.current = true;
+          await fetchBackendJobCards();
+        } else {
+          let errorMsg = `Launch rejected (${res.status})`;
+          try {
+            const errData = await res.json();
+            if (errData?.message) errorMsg = typeof errData.message === 'string' ? errData.message : JSON.stringify(errData.message);
+          } catch {}
+          showToast(`Launch Error: ${errorMsg}`, 'error');
+        }
       } catch (err) {
-        console.warn('Backend launch sync in background skipped or offline');
+        console.warn('Backend launch sync in background skipped or offline', err);
       }
     })();
   };
@@ -1991,9 +2044,25 @@ export default function JobCardsPage() {
           body: JSON.stringify(updatedJobCard),
         });
 
-        setJobCards((prev) => prev.map((j, idx) => (idx === existingIndex ? updatedJobCard : j)));
-        saveJobCardsToStorage(jobCards.map((j, idx) => (idx === existingIndex ? updatedJobCard : j)));
-        showToast(`Job Card ${jcNo} updated successfully!`, 'success');
+        pinnedJobCardNo.current = jcNo;
+        setHighlightedCardNo(jcNo);
+        if (!editingCardId) {
+          setExistingCardAlert(jcNo);
+        }
+        setStatusRadio('All');
+        setGlobalSearch('');
+        setShowColFilters(false);
+        setCurrentPage(1);
+        setJobCards((prev) => {
+          const rest = prev.filter((_, idx) => idx !== existingIndex);
+          return [{ ...updatedJobCard, isAlreadyExisting: !editingCardId }, ...rest];
+        });
+        saveJobCardsToStorage([{ ...updatedJobCard, isAlreadyExisting: !editingCardId }, ...jobCards.filter((_, idx) => idx !== existingIndex)]);
+        if (!editingCardId) {
+          showToast(`⚠️ Job Card #${jcNo} already exists! Showing existing card at the top.`, 'info');
+        } else {
+          showToast(`Job Card ${jcNo} updated successfully!`, 'success');
+        }
         setShowGenerateModal(false);
         setEditingCardId(null);
         await fetchBackendJobCards();
@@ -2111,6 +2180,25 @@ export default function JobCardsPage() {
         newJobCard.id = createdData.id;
       }
 
+      const isAlreadyExisted = Boolean((createdData as any)?.alreadyExists);
+
+      if (isAlreadyExisted) {
+        pinnedJobCardNo.current = jcNo;
+        setHighlightedCardNo(jcNo);
+        setExistingCardAlert(jcNo);
+        setStatusRadio('All');
+        setGlobalSearch('');
+        setShowColFilters(false);
+        setCurrentPage(1);
+        setShowGenerateModal(false);
+        setEditingCardId(null);
+        await fetchBackendJobCards();
+        showToast(`⚠️ Job Card #${jcNo} ALREADY EXISTS in database! Loaded and showing existing card at the top.`, 'info');
+        return;
+      }
+
+      pinnedJobCardNo.current = jcNo;
+      setCurrentPage(1);
       setJobCards((prev) => [newJobCard, ...prev]);
       saveJobCardsToStorage([newJobCard, ...jobCards]);
       setStatusRadio('All');
@@ -2292,10 +2380,25 @@ export default function JobCardsPage() {
         }
 
         if (res.ok) {
+          inFlightMovements.current.delete(cardId);
+          inFlightMovements.current.delete(subCardNo);
+          inFlightMovements.current.delete(cardNo);
+          forceFreshOnNextPoll.current = true;
+          await fetchBackendJobCards();
+        } else {
+          inFlightMovements.current.delete(cardId);
+          inFlightMovements.current.delete(subCardNo);
+          inFlightMovements.current.delete(cardNo);
+          let errorMsg = `Move failed (${res.status})`;
+          try {
+            const errData = await res.json();
+            if (errData?.message) errorMsg = typeof errData.message === 'string' ? errData.message : JSON.stringify(errData.message);
+          } catch {}
+          showToast(`Stage Move Error: ${errorMsg}`, 'error');
           await fetchBackendJobCards();
         }
       } catch (err: any) {
-        console.warn('Backend stage move sync in background skipped or offline');
+        console.warn('Backend stage move sync in background skipped or offline', err);
       }
     })();
   };
@@ -2517,12 +2620,19 @@ export default function JobCardsPage() {
           inFlightMovements.current.delete(targetSubId);
           inFlightMovements.current.delete(targetSubNo);
           inFlightMovements.current.delete(jobCardNo);
+          let errorMsg = `Move failed (${res.status})`;
+          try {
+            const errData = await res.json();
+            if (errData?.message) errorMsg = typeof errData.message === 'string' ? errData.message : JSON.stringify(errData.message);
+          } catch {}
+          showToast(`Stage Move Error: ${errorMsg}`, 'error');
+          await fetchBackendJobCards();
         }
       } catch (err: any) {
         inFlightMovements.current.delete(targetSubId);
         inFlightMovements.current.delete(targetSubNo);
         inFlightMovements.current.delete(jobCardNo);
-        console.warn('Backend stage move sync in background skipped or offline');
+        console.warn('Backend stage move sync in background skipped or offline', err);
       }
     })();
   };
@@ -3017,12 +3127,11 @@ export default function JobCardsPage() {
   };
 
   const isOperatorUser = React.useMemo(() => {
+    if (isSuperAdmin) return false;
     if (assignedStage && assignedStage.toUpperCase() !== 'ALL') return true;
     const roleUpper = (userRole || '').toUpperCase();
-    const isSuperOrAdmin = roleUpper.includes('SUPER') || (roleUpper.includes('ADMIN') && !roleUpper.includes('OPERATOR'));
-    if (isSuperOrAdmin) return false;
     return roleUpper.includes('OPERATOR') || roleUpper === 'NORMAL' || roleUpper === 'PROCESS_OPERATOR';
-  }, [userRole, assignedStage]);
+  }, [isSuperAdmin, assignedStage, userRole]);
 
   // Helper to identify 100% completed or dispatched job cards
   const isCardCompleted = useCallback((jc: JobCard) => {
@@ -3837,6 +3946,40 @@ export default function JobCardsPage() {
 
       </div>
 
+      {/* Existing Card Alert Banner */}
+      {existingCardAlert && (
+        <div className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-4 flex items-center justify-between text-slate-900 shadow-sm animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-800 flex items-center justify-center shrink-0 font-bold border border-amber-400/40">
+              <AlertTriangle className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <p className="font-black text-sm text-slate-900 flex items-center gap-2">
+                <span>Job Card #{existingCardAlert} already exists in database!</span>
+                <span className="px-2 py-0.5 bg-amber-500 text-slate-950 text-[10px] font-black rounded uppercase tracking-wider">
+                  ALREADY EXISTS
+                </span>
+              </p>
+              <p className="text-xs text-slate-600 mt-0.5 font-medium">
+                Ye Job Card pehle se database mein maujood tha. Usko sabse upar (Page 1 Top) load karke show kar diya gaya hai.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setExistingCardAlert(null);
+              setHighlightedCardNo(null);
+              pinnedJobCardNo.current = null;
+            }}
+            className="px-3 py-1.5 rounded-lg bg-amber-200/70 hover:bg-amber-300 text-amber-950 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+          >
+            <X className="w-4 h-4" />
+            <span>Dismiss</span>
+          </button>
+        </div>
+      )}
+
       {/* 4. FOURTH ROW: PRODUCTION JOBS (WIP) DATA TABLE */}
       <div className="border border-slate-300/80 rounded-2xl overflow-hidden shadow-xs bg-white">
         {/* Desktop Table View (100% Unaltered) */}
@@ -4067,12 +4210,18 @@ export default function JobCardsPage() {
                   const stageIndex = jc.currentStageIndex !== undefined && jc.currentStageIndex >= 0 ? jc.currentStageIndex : normalizeStageIndex(jc.currentStageName);
                   const progressPct = isUnlaunched ? 0 : isCompleted ? 100 : Math.round(((stageIndex + 1) / PF01_STAGES.length) * 100);
                   const isNewTagVisible = isUnlaunched;
+                  const isExistingTagVisible = Boolean(
+                    jc.isAlreadyExisting ||
+                    (highlightedCardNo && (jc.jobCardNo === highlightedCardNo || jc.subJobCardNo === highlightedCardNo))
+                  );
 
                   return (
                     <tr
                       key={jc.id}
                       className={`hover:bg-amber-50/50 transition-colors ${
-                        isNewTagVisible
+                        isExistingTagVisible
+                          ? 'bg-amber-50/90 border-l-4 border-l-amber-500 font-medium'
+                          : isNewTagVisible
                           ? 'bg-emerald-50/80 border-l-4 border-l-emerald-500 font-medium'
                           : idx % 2 === 0
                           ? 'bg-white'
@@ -4107,11 +4256,15 @@ export default function JobCardsPage() {
                             </button>
                           )}
                           <span>{jc.subJobCardNo || jc.jobCardNo}</span>
-                          {isNewTagVisible && (
+                          {isExistingTagVisible ? (
+                            <span className="px-1.5 py-0.5 bg-amber-500 text-slate-950 font-black text-[9px] rounded uppercase tracking-wider animate-pulse shrink-0 border border-amber-600 shadow-2xs">
+                              ⚠️ ALREADY EXISTS
+                            </span>
+                          ) : isNewTagVisible ? (
                             <span className="px-1.5 py-0.5 bg-emerald-600 text-white font-black text-[9px] rounded uppercase tracking-wider animate-pulse shrink-0 shadow-2xs">
                               NEW
                             </span>
-                          )}
+                          ) : null}
                           {jc.subJobCards && jc.subJobCards.length > 1 && (
                             <span className="text-[9px] font-mono px-1.5 py-0.5 bg-blue-50 text-blue-700 font-bold rounded border border-blue-200">
                               Lot {(jc.subJobCards.findIndex((s) => s.id === jc.id) >= 0 ? jc.subJobCards.findIndex((s) => s.id === jc.id) + 1 : idx + 1)}/{jc.subJobCards.length}
@@ -4327,6 +4480,10 @@ export default function JobCardsPage() {
               const stageIndex = jc.currentStageIndex !== undefined && jc.currentStageIndex >= 0 ? jc.currentStageIndex : normalizeStageIndex(jc.currentStageName);
               const progressPct = isUnlaunched ? 0 : isCompleted ? 100 : Math.round(((stageIndex + 1) / PF01_STAGES.length) * 100);
               const isNewTagVisible = isUnlaunched;
+              const isExistingTagVisible = Boolean(
+                jc.isAlreadyExisting ||
+                (highlightedCardNo && (jc.jobCardNo === highlightedCardNo || jc.subJobCardNo === highlightedCardNo))
+              );
               const overdue = isCardOverdue(jc);
               const displayArea = jc.custPnlAreaSqm ? jc.custPnlAreaSqm.toFixed(2) : (jc.prodPnlAreaSqm ? jc.prodPnlAreaSqm.toFixed(2) : '0.00');
               const displayPendingQty = jc.totalPcbQty || (jc.custPnlQty && jc.custPnlQty > 50 ? jc.custPnlQty : (jc.prodPnlQty ? Math.round(jc.prodPnlQty * 4) : 160));
@@ -4335,11 +4492,15 @@ export default function JobCardsPage() {
               return (
                 <div 
                   key={`mobile-${jc.id}`}
-                  className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden transition-all font-quicksand"
+                  className={`bg-white rounded-2xl border shadow-xs overflow-hidden transition-all font-quicksand ${
+                    isExistingTagVisible ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-slate-200/90'
+                  }`}
                 >
                   {/* Top Status Accent Bar */}
                   <div className={`h-1 w-full ${
-                    overdue 
+                    isExistingTagVisible
+                      ? 'bg-amber-500'
+                      : overdue 
                       ? 'bg-rose-500' 
                       : isCompleted 
                       ? 'bg-emerald-500' 
@@ -4355,11 +4516,15 @@ export default function JobCardsPage() {
                         <span className="font-mono font-black text-[15px] sm:text-base text-amber-950 bg-amber-100/90 border border-amber-300/90 px-2 py-0.5 rounded-lg shadow-2xs tracking-tight truncate">
                           {jc.subJobCardNo || jc.jobCardNo}
                         </span>
-                        {isNewTagVisible && (
+                        {isExistingTagVisible ? (
+                          <span className="px-1.5 py-0.5 bg-amber-500 text-slate-950 font-black text-[9px] rounded uppercase tracking-wider shrink-0 border border-amber-600 shadow-2xs animate-pulse">
+                            ⚠️ ALREADY EXISTS
+                          </span>
+                        ) : isNewTagVisible ? (
                           <span className="px-1.5 py-0.5 bg-emerald-600 text-white font-bold text-[9px] rounded uppercase tracking-wider shrink-0">
                             NEW
                           </span>
-                        )}
+                        ) : null}
                         {jc.subJobCards && jc.subJobCards.length > 1 && (
                           <span className="text-[10px] font-bold px-1.5 py-0.2 bg-blue-50 text-blue-700 rounded border border-blue-200/70 shrink-0">
                             Lot {(jc.subJobCards.findIndex((s) => s.id === jc.id) >= 0 ? jc.subJobCards.findIndex((s) => s.id === jc.id) + 1 : idx + 1)}/{jc.subJobCards.length}
@@ -5160,9 +5325,19 @@ export default function JobCardsPage() {
                         required
                         value={launchForm.jobCardNo}
                         onChange={(e) => setLaunchForm({ ...launchForm, jobCardNo: e.target.value })}
-                        className="w-full h-11 bg-white border border-slate-300 rounded-md px-4 py-2.5 text-sm font-mono font-bold text-slate-900 focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900"
+                        className={`w-full h-11 bg-white border rounded-md px-4 py-2.5 text-sm font-mono font-bold text-slate-900 focus:outline-none focus:ring-1 ${
+                          !editingCardId && launchForm.jobCardNo && jobCards.some((j) => (j.jobCardNo || '').trim().toLowerCase() === launchForm.jobCardNo.trim().toLowerCase())
+                            ? 'border-amber-500 focus:border-amber-600 focus:ring-amber-500 bg-amber-50/20'
+                            : 'border-slate-300 focus:border-slate-900 focus:ring-slate-900'
+                        }`}
                         placeholder="26-27-1731"
                       />
+                      {!editingCardId && launchForm.jobCardNo && jobCards.some((j) => (j.jobCardNo || '').trim().toLowerCase() === launchForm.jobCardNo.trim().toLowerCase()) && (
+                        <div className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-800 bg-amber-50 border border-amber-300 rounded-md px-2.5 py-1.5 font-medium animate-in fade-in">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                          <span><strong>Already Exists:</strong> Ye Job Card pehle se DB mein hai. Launch karne par ye sabse upar show ho jayega.</span>
+                        </div>
+                      )}
                     </div>
 
                     <div>
