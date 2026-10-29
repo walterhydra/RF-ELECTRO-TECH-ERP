@@ -258,7 +258,7 @@ export default function FloatingCalculator() {
   };
 
   return (
-    <div ref={calcRef} className="fixed bottom-5 right-5 z-[9999999] select-none font-sans">
+    <div ref={calcRef} className={`fixed bottom-5 right-5 ${isOpen ? 'z-[9999999]' : 'z-40'} select-none font-sans`}>
       {/* ── PROFESSIONAL CLEAN CALCULATOR POPUP ── */}
       {isOpen && (
         <div className="absolute bottom-16 right-0 w-[290px] sm:w-[310px] bg-white/95 backdrop-blur-xl border border-slate-200/90 rounded-3xl p-4 shadow-[0_25px_60px_-15px_rgba(15,23,42,0.3)] text-slate-800 animate-in fade-in zoom-in-95 duration-150 z-[9999999]">

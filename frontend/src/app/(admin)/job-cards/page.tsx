@@ -5278,76 +5278,130 @@ export default function JobCardsPage() {
       {/* MODAL 1: ADD NEW JOB CARD (Clean Professional Enterprise Design) */}
       {showGenerateModal && (
         <Portal>
-          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-3 sm:p-6 overflow-y-auto font-quicksand">
-            <div className="bg-white border border-slate-300 rounded-lg w-full max-w-6xl xl:max-w-7xl shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900 flex flex-col max-h-[92vh] overflow-hidden my-auto font-quicksand">
+          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-2 sm:p-6 overflow-y-auto font-quicksand">
+            <div className="bg-white border border-slate-300 rounded-lg w-full max-w-6xl xl:max-w-7xl shadow-2xl animate-in fade-in zoom-in-95 duration-200 text-slate-900 flex flex-col max-h-[96vh] sm:max-h-[92vh] overflow-hidden my-auto font-quicksand">
               
               {/* Header */}
-              <div className="flex items-center justify-between px-7 py-5 sm:py-5.5 border-b border-slate-800 bg-slate-900 text-white shrink-0">
-                <div className="flex items-center gap-4 sm:gap-5">
-                  <div className="h-11 sm:h-12 flex items-center shrink-0">
-                    <img
-                      src="/Assets/logo-1.png"
-                      alt="RF Electro Tech"
-                      className="h-10 sm:h-11 max-h-12 w-auto object-contain"
-                    />
-                  </div>
-                  <div className="h-9 sm:h-10 w-px bg-slate-700 hidden sm:block shrink-0" />
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
-                      <h3 className="font-bold text-white text-xl sm:text-2xl tracking-tight font-quicksand">
-                        {editingCardId ? 'Edit Job Card Parameters' : 'Create New Job Card'}
-                      </h3>
-                      <span className="font-mono text-xs sm:text-sm px-3 py-0.5 rounded-md bg-slate-800 text-slate-100 border border-slate-700 font-bold shadow-xs">
+              <div className="px-3.5 py-3 sm:px-7 sm:py-5 border-b border-slate-800 bg-slate-900 text-white shrink-0">
+                {/* A. Mobile Header (< sm) */}
+                <div className="sm:hidden flex flex-col gap-2 w-full">
+                  {/* Top Row: Logo + Badge + Action Buttons */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <img
+                        src="/Assets/logo-1.png"
+                        alt="RF Electro Tech"
+                        className="h-7 w-auto object-contain shrink-0"
+                      />
+                      <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-800 text-amber-400 border border-slate-700 font-bold truncate">
                         #{launchForm.jobCardNo || 'DRAFT'}
                       </span>
                     </div>
-                    <p className="text-xs sm:text-sm text-slate-400 mt-1 font-medium font-quicksand">
-                      RF Electro Tech (India) Pvt. Ltd. • IPC-A-600 Route Traveler Control
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (typeof window !== 'undefined') {
+                            window.dispatchEvent(new CustomEvent('toggle-calculator'));
+                          }
+                        }}
+                        className="w-8 h-8 rounded-lg text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 flex items-center justify-center transition-all cursor-pointer border border-slate-700 shadow-xs active:scale-90"
+                        title="Open Calculator"
+                      >
+                        <Calculator className="w-4 h-4 text-amber-400" />
+                      </button>
+                      <button 
+                        type="button"
+                        disabled={isSubmittingLaunch}
+                        onClick={() => setShowGenerateModal(false)} 
+                        className="w-8 h-8 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer text-lg font-bold disabled:opacity-40 active:scale-90 shrink-0"
+                        title="Close modal"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Bottom Row: Title & Subtitle */}
+                  <div>
+                    <h3 className="font-bold text-white text-base tracking-tight font-quicksand leading-tight">
+                      {editingCardId ? 'Edit Job Card Parameters' : 'Create New Job Card'}
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5 font-medium font-quicksand truncate">
+                      RF Electro Tech (India) Pvt. Ltd. • Traveler Control
                     </p>
                   </div>
                 </div>
-                
-                <div className="flex items-center gap-2.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (typeof window !== 'undefined') {
-                        window.dispatchEvent(new CustomEvent('toggle-calculator'));
-                      }
-                    }}
-                    className="h-10 px-3.5 rounded-lg text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 flex items-center gap-2 transition-all cursor-pointer text-xs font-bold border border-slate-700 shadow-sm"
-                    title="Open Calculator"
-                  >
-                    <Calculator className="w-4 h-4 text-amber-400" />
-                    <span className="hidden sm:inline font-quicksand">Calculator</span>
-                  </button>
 
-                  <button 
-                    type="button"
-                    disabled={isSubmittingLaunch}
-                    onClick={() => setShowGenerateModal(false)} 
-                    className="w-10 h-10 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer text-xl font-bold disabled:opacity-40 shrink-0"
-                    title="Close modal"
-                  >
-                    ✕
-                  </button>
+                {/* B. Desktop Header (>= sm) - 100% UNTOUCHED */}
+                <div className="hidden sm:flex items-center justify-between w-full">
+                  <div className="flex items-center gap-4 sm:gap-5">
+                    <div className="h-11 sm:h-12 flex items-center shrink-0">
+                      <img
+                        src="/Assets/logo-1.png"
+                        alt="RF Electro Tech"
+                        className="h-10 sm:h-11 max-h-12 w-auto object-contain"
+                      />
+                    </div>
+                    <div className="h-9 sm:h-10 w-px bg-slate-700 hidden sm:block shrink-0" />
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+                        <h3 className="font-bold text-white text-xl sm:text-2xl tracking-tight font-quicksand">
+                          {editingCardId ? 'Edit Job Card Parameters' : 'Create New Job Card'}
+                        </h3>
+                        <span className="font-mono text-xs sm:text-sm px-3 py-0.5 rounded-md bg-slate-800 text-slate-100 border border-slate-700 font-bold shadow-xs">
+                          #{launchForm.jobCardNo || 'DRAFT'}
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-sm text-slate-400 mt-1 font-medium font-quicksand">
+                        RF Electro Tech (India) Pvt. Ltd. • IPC-A-600 Route Traveler Control
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (typeof window !== 'undefined') {
+                          window.dispatchEvent(new CustomEvent('toggle-calculator'));
+                        }
+                      }}
+                      className="h-10 px-3.5 rounded-lg text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 flex items-center gap-2 transition-all cursor-pointer text-xs font-bold border border-slate-700 shadow-sm"
+                      title="Open Calculator"
+                    >
+                      <Calculator className="w-4 h-4 text-amber-400" />
+                      <span className="hidden sm:inline font-quicksand">Calculator</span>
+                    </button>
+
+                    <button 
+                      type="button"
+                      disabled={isSubmittingLaunch}
+                      onClick={() => setShowGenerateModal(false)} 
+                      className="w-10 h-10 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer text-xl font-bold disabled:opacity-40 shrink-0"
+                      title="Close modal"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
               </div>
 
               {/* Form Body */}
-              <form onSubmit={handleLaunchJobCard} className="flex-1 overflow-y-auto p-7 sm:p-8 space-y-8 text-sm custom-scrollbar bg-white font-quicksand">
+              <form onSubmit={handleLaunchJobCard} className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6 sm:space-y-8 text-sm custom-scrollbar bg-white font-quicksand">
                 
                 {/* 1. Order Identification & Schedule */}
-                <div className="space-y-5">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-2.5">
+                <div className="space-y-4 sm:space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3 border-b border-slate-200 pb-2.5">
                     <div className="flex items-center gap-2.5">
                       <span className="w-6 h-6 rounded bg-slate-900 text-white font-mono text-xs font-bold flex items-center justify-center shrink-0">1</span>
-                      <h4 className="font-bold text-slate-900 text-sm uppercase tracking-wider whitespace-nowrap">
+                      <h4 className="font-bold text-slate-900 text-xs sm:text-sm uppercase tracking-wider">
                         Order Identification & Schedule
                       </h4>
                     </div>
                     {availableProducts.length > 0 && (
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
                         <span className="text-xs text-slate-600 font-semibold whitespace-nowrap">Load from Product Master:</span>
                         <select
                           onChange={(e) => {
@@ -5367,7 +5421,7 @@ export default function JobCardsPage() {
                               }));
                             }
                           }}
-                          className="text-xs sm:text-sm bg-slate-50 hover:bg-slate-100 border border-slate-300 text-slate-800 rounded-md px-3 py-1.5 font-semibold focus:outline-none focus:border-slate-900 cursor-pointer transition-colors max-w-xs"
+                          className="w-full sm:w-auto text-xs sm:text-sm bg-slate-50 hover:bg-slate-100 border border-slate-300 text-slate-800 rounded-md px-3 py-1.5 font-semibold focus:outline-none focus:border-slate-900 cursor-pointer transition-colors max-w-full sm:max-w-xs"
                           defaultValue=""
                         >
                           <option value="" disabled>Load from Product Master...</option>
@@ -5381,7 +5435,7 @@ export default function JobCardsPage() {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-5 sm:gap-y-6 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4 sm:gap-y-6 pt-1">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
                         Job Card No. <span className="text-rose-500">*</span>
@@ -5477,21 +5531,21 @@ export default function JobCardsPage() {
                 </div>
 
                 {/* 2. Physical Job Card Verification */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                <div className="space-y-3.5 sm:space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2.5 border-b border-slate-200 pb-2.5">
                     <div className="flex items-center gap-2.5">
                       <span className="w-6 h-6 rounded bg-slate-900 text-white font-mono text-xs font-bold flex items-center justify-center shrink-0">2</span>
-                      <h4 className="font-bold text-slate-900 text-sm uppercase tracking-wider whitespace-nowrap flex items-center gap-1.5">
+                      <h4 className="font-bold text-slate-900 text-xs sm:text-sm uppercase tracking-wider flex items-center gap-1.5">
                         <span>Physical Job Card Photo Verification</span>
                         <span className="text-rose-500 font-bold">*</span>
                       </h4>
                     </div>
                     {launchForm.photoUrl ? (
-                      <span className="text-xs sm:text-sm text-emerald-700 font-bold flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Hard Copy Attached
+                      <span className="text-xs sm:text-sm text-emerald-700 font-bold flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded w-fit">
+                        <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" /> Hard Copy Attached
                       </span>
                     ) : (
-                      <span className="text-xs sm:text-sm text-slate-500 font-medium">
+                      <span className="text-[11px] sm:text-sm text-slate-500 font-medium">
                         Required for shopfloor release
                       </span>
                     )}
@@ -5514,7 +5568,7 @@ export default function JobCardsPage() {
                   />
 
                   {launchForm.photoUrl ? (
-                    <div className="border border-slate-200 rounded-md p-4 bg-slate-50 flex items-center justify-between gap-4">
+                    <div className="border border-slate-200 rounded-md p-3 sm:p-4 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                       <div className="flex items-center gap-3.5 min-w-0">
                         <div 
                           onClick={() => setPhotoLightbox(launchForm.photoUrl)}
@@ -5531,42 +5585,42 @@ export default function JobCardsPage() {
                           </div>
                         </div>
                         <div className="min-w-0">
-                          <p className="font-bold text-slate-900 text-sm">Original Physical Job Card Document Verified</p>
-                          <p className="text-xs text-slate-500 truncate mt-0.5 font-medium">
+                          <p className="font-bold text-slate-900 text-xs sm:text-sm">Original Physical Job Card Document Verified</p>
+                          <p className="text-[11px] sm:text-xs text-slate-500 truncate mt-0.5 font-medium">
                             {launchForm.photoUrl.startsWith('data:') ? 'Image uploaded from device (Compressed Base64)' : launchForm.photoUrl}
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2.5 shrink-0">
+                      <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 w-full sm:w-auto">
                         <button
                           type="button"
                           onClick={() => setPhotoLightbox(launchForm.photoUrl)}
-                          className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded text-xs sm:text-sm font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
+                          className="flex-1 sm:flex-none justify-center px-3 py-1.5 sm:px-3.5 sm:py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded text-xs sm:text-sm font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
                         >
-                          <Eye className="w-4 h-4" />
+                          <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           <span>Inspect</span>
                         </button>
                         <label
                           htmlFor="jobCardPhotoFileInput"
-                          className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded text-xs sm:text-sm font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
+                          className="flex-1 sm:flex-none justify-center px-3 py-1.5 sm:px-3.5 sm:py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded text-xs sm:text-sm font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
                         >
-                          <Upload className="w-4 h-4" />
+                          <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           <span>Replace</span>
                         </label>
                         <button
                           type="button"
                           onClick={() => setLaunchForm((prev) => ({ ...prev, photoUrl: '' }))}
-                          className="px-3.5 py-2 bg-white hover:bg-rose-50 text-rose-600 border border-slate-300 hover:border-rose-300 rounded text-xs sm:text-sm font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
+                          className="flex-1 sm:flex-none justify-center px-3 py-1.5 sm:px-3.5 sm:py-2 bg-white hover:bg-rose-50 text-rose-600 border border-slate-300 hover:border-rose-300 rounded text-xs sm:text-sm font-semibold transition-colors cursor-pointer flex items-center gap-1.5"
                         >
-                          <X className="w-4 h-4" />
+                          <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           <span>Remove</span>
                         </button>
                       </div>
                     </div>
                   ) : (
                     <div 
-                      className="border border-dashed border-slate-300 hover:border-slate-500 rounded-md p-5 bg-slate-50 transition-colors space-y-3.5"
+                      className="border border-dashed border-slate-300 hover:border-slate-500 rounded-md p-4 sm:p-5 bg-slate-50 transition-colors space-y-3 sm:space-y-3.5"
                       onDragOver={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -5598,22 +5652,22 @@ export default function JobCardsPage() {
                     >
                       <label
                         htmlFor="jobCardPhotoFileInput"
-                        className="flex flex-col sm:flex-row items-center justify-center gap-3.5 cursor-pointer py-2 group"
+                        className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-3.5 cursor-pointer py-2 group"
                       >
-                        <div className="w-10 h-10 rounded-full bg-slate-200 group-hover:bg-slate-900 group-hover:text-white text-slate-700 flex items-center justify-center transition-colors shrink-0">
-                          <Upload className="w-5 h-5" />
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-200 group-hover:bg-slate-900 group-hover:text-white text-slate-700 flex items-center justify-center transition-colors shrink-0">
+                          <Upload className="w-4 h-4 sm:w-5 sm:h-5" />
                         </div>
                         <div className="text-center sm:text-left">
-                          <span className="block text-sm font-bold text-slate-800">
+                          <span className="block text-xs sm:text-sm font-bold text-slate-800">
                             Click to upload original job card photo, or drag and drop here
                           </span>
-                          <span className="block text-xs text-slate-500 font-normal mt-0.5">
+                          <span className="block text-[11px] sm:text-xs text-slate-500 font-normal mt-0.5">
                             Supports PNG, JPG, WEBP • Clipboard paste (Ctrl+V) supported
                           </span>
                         </div>
                       </label>
 
-                      <div className="flex items-center gap-2.5 pt-2 border-t border-slate-200">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2.5 pt-2 border-t border-slate-200">
                         <span className="text-xs text-slate-600 shrink-0 font-semibold">Or paste image URL:</span>
                         <input
                           type="text"
@@ -5626,7 +5680,7 @@ export default function JobCardsPage() {
                             }
                             setLaunchForm((prev) => ({ ...prev, photoUrl: val }));
                           }}
-                          className="flex-1 bg-white border border-slate-300 rounded px-3 py-1.5 text-xs sm:text-sm text-slate-800 focus:outline-none focus:border-slate-900 font-mono"
+                          className="w-full sm:flex-1 bg-white border border-slate-300 rounded px-3 py-1.5 text-xs sm:text-sm text-slate-800 focus:outline-none focus:border-slate-900 font-mono"
                           placeholder="https://example.com/jobcard-photo.jpg"
                         />
                       </div>
@@ -5635,17 +5689,17 @@ export default function JobCardsPage() {
                 </div>
 
                 {/* 3. Technical Specifications */}
-                <div className="space-y-5">
+                <div className="space-y-4 sm:space-y-5">
                   <div className="border-b border-slate-200 pb-2.5">
                     <div className="flex items-center gap-2.5">
                       <span className="w-6 h-6 rounded bg-slate-900 text-white font-mono text-xs font-bold flex items-center justify-center shrink-0">3</span>
-                      <h4 className="font-bold text-slate-900 text-sm uppercase tracking-wider whitespace-nowrap">
+                      <h4 className="font-bold text-slate-900 text-xs sm:text-sm uppercase tracking-wider">
                         Technical Specifications (IPC-A-600 Standard)
                       </h4>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-5 sm:gap-y-6 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4 sm:gap-y-6 pt-1">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
                         Layers <span className="text-rose-500">*</span>
@@ -5756,17 +5810,17 @@ export default function JobCardsPage() {
                 </div>
 
                 {/* 4. Production Quantities & Flow Route */}
-                <div className="space-y-5">
+                <div className="space-y-4 sm:space-y-5">
                   <div className="border-b border-slate-200 pb-2.5">
                     <div className="flex items-center gap-2.5">
                       <span className="w-6 h-6 rounded bg-slate-900 text-white font-mono text-xs font-bold flex items-center justify-center shrink-0">4</span>
-                      <h4 className="font-bold text-slate-900 text-sm uppercase tracking-wider whitespace-nowrap">
+                      <h4 className="font-bold text-slate-900 text-xs sm:text-sm uppercase tracking-wider">
                         Production Quantities & Flow Route
                       </h4>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-5 sm:gap-y-6 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4 sm:gap-y-6 pt-1">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">
                         Priority <span className="text-rose-500">*</span>
@@ -5851,11 +5905,11 @@ export default function JobCardsPage() {
                 </div>
 
                 {/* 5. Floor Release & Lot Options */}
-                <div className="space-y-4 pt-2">
+                <div className="space-y-3.5 sm:space-y-4 pt-2">
                   <div className="border-b border-slate-200 pb-2.5">
                     <div className="flex items-center gap-2.5">
                       <span className="w-6 h-6 rounded bg-slate-900 text-white font-mono text-xs font-bold flex items-center justify-center shrink-0">5</span>
-                      <h4 className="font-bold text-slate-900 text-sm uppercase tracking-wider whitespace-nowrap">
+                      <h4 className="font-bold text-slate-900 text-xs sm:text-sm uppercase tracking-wider">
                         Floor Release & Traveler Options
                       </h4>
                     </div>
@@ -5863,7 +5917,7 @@ export default function JobCardsPage() {
 
                   <div className="space-y-3">
                     {/* Direct Launch Checkbox */}
-                    <label className="flex items-start gap-3.5 p-4 border border-slate-200 rounded-md hover:bg-slate-50 transition-colors cursor-pointer bg-white">
+                    <label className="flex items-start gap-3.5 p-3.5 sm:p-4 border border-slate-200 rounded-md hover:bg-slate-50 transition-colors cursor-pointer bg-white">
                       <input
                         type="checkbox"
                         id="autoLaunch"
@@ -5872,17 +5926,17 @@ export default function JobCardsPage() {
                         className="w-5 h-5 mt-0.5 text-slate-900 rounded border-slate-300 focus:ring-slate-900 cursor-pointer accent-slate-900 shrink-0"
                       />
                       <div>
-                        <span className="font-bold text-slate-900 text-sm block">
+                        <span className="font-bold text-slate-900 text-xs sm:text-sm block">
                           Immediately dispatch traveler to Stage 1 Production (1. SHEARING)
                         </span>
-                        <span className="text-slate-500 text-xs block mt-0.5 font-medium">
+                        <span className="text-slate-500 text-[11px] sm:text-xs block mt-0.5 font-medium">
                           Marks job card as IN_PROGRESS and makes it available to the cutting floor right away.
                         </span>
                       </div>
                     </label>
 
                     {/* Pre-Launch Sub-Job Card Split Checkbox */}
-                    <div className="border border-slate-200 rounded-md p-4 bg-white space-y-3.5">
+                    <div className="border border-slate-200 rounded-md p-3.5 sm:p-4 bg-white space-y-3.5">
                       <label className="flex items-start gap-3.5 cursor-pointer">
                         <input
                           type="checkbox"
@@ -5902,23 +5956,23 @@ export default function JobCardsPage() {
                                 : [],
                             });
                           }}
-                          className="w-4.5 h-4.5 mt-0.5 text-slate-900 rounded border-slate-300 focus:ring-slate-900 cursor-pointer accent-slate-900"
+                          className="w-4.5 h-4.5 mt-0.5 text-slate-900 rounded border-slate-300 focus:ring-slate-900 cursor-pointer accent-slate-900 shrink-0"
                         />
                         <div>
-                          <span className="font-bold text-slate-900 text-sm block">
+                          <span className="font-bold text-slate-900 text-xs sm:text-sm block">
                             Pre-launch lot splitting (divide volume into multiple travelers)
                           </span>
-                          <span className="text-slate-500 text-xs block mt-0.5 font-medium">
+                          <span className="text-slate-500 text-[11px] sm:text-xs block mt-0.5 font-medium">
                             Split the job card into sub-lots (-1, -2, etc.) prior to releasing to the shop floor.
                           </span>
                         </div>
                       </label>
 
                       {launchForm.enablePreSplit && (
-                        <div className="pt-3 border-t border-slate-200 space-y-3.5 pl-8">
-                          <div className="flex flex-wrap items-center justify-between gap-2.5">
+                        <div className="pt-3 border-t border-slate-200 space-y-3.5 pl-0 sm:pl-8">
+                          <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-2.5">
                             <span className="text-xs sm:text-sm text-slate-700 font-bold">Sub-Lot Allocation:</span>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -5932,7 +5986,7 @@ export default function JobCardsPage() {
                                     ],
                                   });
                                 }}
-                                className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-semibold rounded border border-slate-300 cursor-pointer transition-colors"
+                                className="px-2.5 py-1 sm:px-3 sm:py-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-semibold rounded border border-slate-300 cursor-pointer transition-colors"
                               >
                                 50/50 Split
                               </button>
@@ -5952,7 +6006,7 @@ export default function JobCardsPage() {
                                     ],
                                   });
                                 }}
-                                className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-semibold rounded border border-slate-300 cursor-pointer transition-colors"
+                                className="px-2.5 py-1 sm:px-3 sm:py-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-semibold rounded border border-slate-300 cursor-pointer transition-colors"
                               >
                                 Split in 4
                               </button>
@@ -5968,16 +6022,16 @@ export default function JobCardsPage() {
                                     ],
                                   });
                                 }}
-                                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold rounded cursor-pointer transition-colors"
+                                className="px-2.5 py-1 sm:px-3 sm:py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold rounded cursor-pointer transition-colors"
                               >
                                 + Add Lot
                               </button>
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
                             {launchForm.customSplits.map((item, idx) => (
-                              <div key={idx} className="flex items-center gap-2.5 bg-slate-50 p-2.5 rounded border border-slate-200">
+                              <div key={idx} className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-2.5 bg-slate-50 p-2 sm:p-2.5 rounded border border-slate-200">
                                 <span className="text-xs font-mono font-bold text-slate-500 w-6">#{idx + 1}</span>
                                 <input
                                   type="text"
@@ -6041,10 +6095,10 @@ export default function JobCardsPage() {
               </form>
 
               {/* Footer Actions */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-7 py-4 sm:py-5 bg-slate-50 border-t border-slate-200 shrink-0 font-quicksand">
-                <div className="text-xs sm:text-sm text-slate-600 font-medium">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 sm:px-7 sm:py-5 bg-slate-50 border-t border-slate-200 shrink-0 font-quicksand">
+                <div className="text-xs sm:text-sm text-slate-600 font-medium text-center sm:text-left">
                   {isSubmittingLaunch ? (
-                    <span className="flex items-center gap-2 text-slate-700">
+                    <span className="flex items-center gap-2 text-slate-700 justify-center sm:justify-start">
                       <RefreshCw className="w-4 h-4 animate-spin" />
                       <span>{editingCardId ? 'Saving changes to database...' : 'Creating job card and generating traveler...'}</span>
                     </span>
@@ -6053,12 +6107,12 @@ export default function JobCardsPage() {
                   )}
                 </div>
 
-                <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                <div className="flex items-center gap-2.5 sm:gap-3 w-full sm:w-auto justify-end">
                   <button
                     type="button"
                     disabled={isSubmittingLaunch}
                     onClick={() => setShowGenerateModal(false)}
-                    className="px-5 py-2.5 rounded-md border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs sm:text-sm transition-colors cursor-pointer disabled:opacity-40"
+                    className="flex-1 sm:flex-none justify-center px-4 py-2.5 sm:px-5 sm:py-2.5 rounded-md border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs sm:text-sm transition-colors cursor-pointer disabled:opacity-40 text-center"
                   >
                     Cancel
                   </button>
@@ -6067,7 +6121,7 @@ export default function JobCardsPage() {
                     type="button"
                     disabled={isSubmittingLaunch}
                     onClick={(e) => handleLaunchJobCard(e as any)}
-                    className="px-7 py-2.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm shadow-sm transition-colors flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-75 disabled:cursor-not-allowed"
+                    className="flex-1 sm:flex-none justify-center px-4 py-2.5 sm:px-7 sm:py-2.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm shadow-sm transition-colors flex items-center gap-2 cursor-pointer active:scale-95 disabled:opacity-75 disabled:cursor-not-allowed text-center"
                   >
                     {isSubmittingLaunch ? (
                       <RefreshCw className="w-4 h-4 text-white animate-spin" />
@@ -7536,97 +7590,188 @@ export default function JobCardsPage() {
       {historyModalJob && (
         <Portal>
           <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-2 sm:p-4 overflow-hidden font-quicksand text-slate-900">
-            <div className="bg-white border border-slate-300 rounded-lg sm:rounded-xl w-full max-w-6xl xl:max-w-7xl h-[92vh] max-h-[94vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-150 overflow-hidden font-quicksand">
+            <div className="bg-white border border-slate-300 rounded-lg sm:rounded-xl w-full max-w-6xl xl:max-w-7xl h-[96vh] sm:h-[92vh] max-h-[98vh] sm:max-h-[94vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-150 overflow-hidden font-quicksand">
 
               {/* ── Modal Top Header (Exact Match with New Job Card Enterprise Theme) ── */}
-              <div className="flex items-center justify-between px-7 py-5 sm:py-5.5 bg-slate-900 text-white shrink-0 border-b border-slate-800 font-quicksand">
-                <div className="flex items-center gap-4 sm:gap-5 min-w-0">
-                  <div className="h-11 sm:h-12 flex items-center shrink-0">
-                    <img
-                      src="/Assets/logo-1.png"
-                      alt="RF Electro Tech"
-                      className="h-10 sm:h-11 max-h-12 w-auto object-contain"
-                    />
-                  </div>
-                  <div className="h-9 sm:h-10 w-px bg-slate-700 hidden sm:block shrink-0" />
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
-                      <h3 className="font-bold text-white text-xl sm:text-2xl tracking-tight font-quicksand">
-                        Stage Movement & Live History
-                      </h3>
-                      <span className="font-mono text-xs sm:text-sm px-3 py-0.5 rounded-md bg-slate-800 text-slate-100 border border-slate-700 font-bold shadow-xs">
+              <div className="px-3.5 py-3 sm:px-7 sm:py-5 bg-slate-900 text-white shrink-0 border-b border-slate-800 font-quicksand">
+                {/* A. Mobile Header (< sm) */}
+                <div className="sm:hidden flex flex-col gap-2.5 w-full">
+                  {/* Top Row: Logo + Badge + Action Buttons (Refresh + Close) */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <img
+                        src="/Assets/logo-1.png"
+                        alt="RF Electro Tech"
+                        className="h-7 w-auto object-contain shrink-0"
+                      />
+                      <span className="font-mono text-xs px-2 py-0.5 rounded bg-slate-800 text-amber-400 border border-slate-700 font-bold truncate">
                         #{historyModalJob.jobCardNo}
                       </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => fetchJobCardHistory(historyModalJob)}
+                        disabled={isHistoryLoading}
+                        className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 flex items-center justify-center transition-all cursor-pointer disabled:opacity-50 shadow-xs active:scale-90"
+                        title="Reload live movement data"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isHistoryLoading ? 'animate-spin text-blue-400' : 'text-slate-300'}`} />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => { setHistoryModalJob(null); setHistoryLogs([]); setHistorySearchQuery(''); }}
+                        className="w-8 h-8 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer text-lg font-bold active:scale-90 shrink-0"
+                        title="Close modal"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Middle Row: Title & Subtitle / Badges */}
+                  <div className="space-y-1">
+                    <h3 className="font-bold text-white text-base tracking-tight font-quicksand leading-tight">
+                      Stage Movement & Live History
+                    </h3>
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       {historyModalJob.customerCode && (
-                        <span className="font-mono text-xs px-2.5 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700 font-semibold">
+                        <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-semibold">
                           {historyModalJob.customerCode}
                         </span>
                       )}
                       {historyModalJob.customerPartNo && (
-                        <span className="font-mono text-xs px-2.5 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700 font-semibold">
+                        <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-semibold truncate max-w-[180px]">
                           Part: {historyModalJob.customerPartNo}
                         </span>
                       )}
+                      <span className="text-[11px] text-slate-400 font-medium font-quicksand truncate">
+                        • Traceability Audit Ledger
+                      </span>
                     </div>
-                    <p className="text-xs sm:text-sm text-slate-400 mt-1 font-medium font-quicksand">
-                      RF Electro Tech (India) Pvt. Ltd. • Live Shopfloor Movement & Traceability Audit Ledger
-                    </p>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-                  {/* View Mode Toggle: Timeline vs Table */}
-                  <div className="bg-slate-800 p-1 rounded-lg border border-slate-700 flex items-center gap-1">
+                  {/* Bottom Row: View Mode Toggle (Timeline vs Table) */}
+                  <div className="grid grid-cols-2 bg-slate-800 p-1 rounded-lg border border-slate-700 w-full text-xs font-bold font-quicksand gap-1">
                     <button
                       type="button"
                       onClick={() => setHistoryViewMode('timeline')}
-                      className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      className={`py-1.5 px-3 rounded-md transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 ${
                         historyViewMode === 'timeline'
                           ? 'bg-slate-700 text-white shadow-sm'
                           : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
-                      <Clock className="w-4 h-4 text-amber-400" />
+                      <Clock className="w-3.5 h-3.5 text-amber-400" />
                       <span>Timeline</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setHistoryViewMode('table')}
-                      className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      className={`py-1.5 px-3 rounded-md transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 ${
                         historyViewMode === 'table'
                           ? 'bg-slate-700 text-white shadow-sm'
                           : 'text-slate-400 hover:text-slate-200'
                       }`}
                     >
-                      <Layers className="w-4 h-4 text-blue-400" />
+                      <Layers className="w-3.5 h-3.5 text-blue-400" />
                       <span>Table</span>
                     </button>
                   </div>
+                </div>
 
-                  <button
-                    type="button"
-                    onClick={() => fetchJobCardHistory(historyModalJob)}
-                    disabled={isHistoryLoading}
-                    className="h-10 px-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs sm:text-sm font-bold rounded-lg border border-slate-700 flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50 shadow-sm"
-                    title="Reload live movement data from server"
-                  >
-                    <RefreshCw className={`w-4 h-4 ${isHistoryLoading ? 'animate-spin text-blue-400' : 'text-slate-300'}`} />
-                    <span className="hidden sm:inline">{isHistoryLoading ? 'Syncing...' : 'Refresh'}</span>
-                  </button>
+                {/* B. Desktop Header (>= sm) - 100% UNTOUCHED */}
+                <div className="hidden sm:flex items-center justify-between w-full">
+                  <div className="flex items-center gap-4 sm:gap-5 min-w-0">
+                    <div className="h-11 sm:h-12 flex items-center shrink-0">
+                      <img
+                        src="/Assets/logo-1.png"
+                        alt="RF Electro Tech"
+                        className="h-10 sm:h-11 max-h-12 w-auto object-contain"
+                      />
+                    </div>
+                    <div className="h-9 sm:h-10 w-px bg-slate-700 hidden sm:block shrink-0" />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+                        <h3 className="font-bold text-white text-xl sm:text-2xl tracking-tight font-quicksand">
+                          Stage Movement & Live History
+                        </h3>
+                        <span className="font-mono text-xs sm:text-sm px-3 py-0.5 rounded-md bg-slate-800 text-slate-100 border border-slate-700 font-bold shadow-xs">
+                          #{historyModalJob.jobCardNo}
+                        </span>
+                        {historyModalJob.customerCode && (
+                          <span className="font-mono text-xs px-2.5 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700 font-semibold">
+                            {historyModalJob.customerCode}
+                          </span>
+                        )}
+                        {historyModalJob.customerPartNo && (
+                          <span className="font-mono text-xs px-2.5 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700 font-semibold">
+                            Part: {historyModalJob.customerPartNo}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs sm:text-sm text-slate-400 mt-1 font-medium font-quicksand">
+                        RF Electro Tech (India) Pvt. Ltd. • Live Shopfloor Movement & Traceability Audit Ledger
+                      </p>
+                    </div>
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => { setHistoryModalJob(null); setHistoryLogs([]); setHistorySearchQuery(''); }}
-                    className="w-10 h-10 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer text-xl font-bold shrink-0"
-                    title="Close modal"
-                  >
-                    ✕
-                  </button>
+                  <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+                    {/* View Mode Toggle: Timeline vs Table */}
+                    <div className="bg-slate-800 p-1 rounded-lg border border-slate-700 flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setHistoryViewMode('timeline')}
+                        className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          historyViewMode === 'timeline'
+                            ? 'bg-slate-700 text-white shadow-sm'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        <Clock className="w-4 h-4 text-amber-400" />
+                        <span>Timeline</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setHistoryViewMode('table')}
+                        className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          historyViewMode === 'table'
+                            ? 'bg-slate-700 text-white shadow-sm'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        <Layers className="w-4 h-4 text-blue-400" />
+                        <span>Table</span>
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => fetchJobCardHistory(historyModalJob)}
+                      disabled={isHistoryLoading}
+                      className="h-10 px-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs sm:text-sm font-bold rounded-lg border border-slate-700 flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50 shadow-sm"
+                      title="Reload live movement data from server"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${isHistoryLoading ? 'animate-spin text-blue-400' : 'text-slate-300'}`} />
+                      <span className="hidden sm:inline">{isHistoryLoading ? 'Syncing...' : 'Refresh'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => { setHistoryModalJob(null); setHistoryLogs([]); setHistorySearchQuery(''); }}
+                      className="w-10 h-10 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer text-xl font-bold shrink-0"
+                      title="Close modal"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 </div>
               </div>
 
               {/* ── Summary & Metrics Bar (Clean, Unified 4-Card Strip) ── */}
-              <div className="px-7 py-4 bg-slate-50 border-b border-slate-200 shrink-0 font-quicksand">
+              <div className="px-3.5 py-3 sm:px-7 sm:py-4 bg-slate-50 border-b border-slate-200 shrink-0 font-quicksand">
                 {(() => {
                   const defectLogs = historyLogs.filter((l: any) => (Number(l.qtyRejected) || 0) > 0 || String(l.remarkType || '').toUpperCase().includes('REJECT'));
                   const totalScrapQty = defectLogs.reduce((acc: number, l: any) => acc + (Number(l.qtyRejected) || 0), 0) || (historyModalJob.rejectedPcbQty || 0);
@@ -7638,24 +7783,24 @@ export default function JobCardsPage() {
                   const isUnlaunched = historyModalJob.status === 'UNLAUNCHED';
 
                   return (
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 text-xs sm:text-sm">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 text-xs sm:text-sm">
                       {/* 1. Active Stage Card */}
-                      <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 sm:p-4 shadow-2xs hover:shadow-xs transition-shadow">
+                      <div className="bg-white border border-slate-200/90 rounded-xl p-3 sm:p-4 shadow-2xs hover:shadow-xs transition-shadow">
                         <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider block font-mono">Current Stage</span>
-                        <div className="font-bold text-slate-900 text-sm sm:text-base truncate mt-0.5" title={activeStage}>
+                        <div className="font-bold text-slate-900 text-xs sm:text-base truncate mt-0.5" title={activeStage}>
                           {activeStage}
                         </div>
                         <div className="flex items-center gap-1.5 mt-1.5">
                           {isCompleted ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Finished
+                            <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60">
+                              <CheckCircle2 className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-emerald-600" /> Finished
                             </span>
                           ) : isUnlaunched ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60">
-                              <Clock className="w-3.5 h-3.5 text-amber-500" /> Pending Launch
+                            <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60">
+                              <Clock className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-amber-500" /> Pending Launch
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200/60">
+                            <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200/60">
                               <span className="relative flex h-2 w-2">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
@@ -7667,36 +7812,36 @@ export default function JobCardsPage() {
                       </div>
 
                       {/* 2. Total Volume Card */}
-                      <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 sm:p-4 shadow-2xs hover:shadow-xs transition-shadow">
+                      <div className="bg-white border border-slate-200/90 rounded-xl p-3 sm:p-4 shadow-2xs hover:shadow-xs transition-shadow">
                         <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider block font-mono">Lot Quantity</span>
                         <div className="flex items-baseline gap-1 mt-0.5">
-                          <strong className="text-xl sm:text-2xl font-black text-slate-900 font-mono">{totalBatchQty}</strong>
+                          <strong className="text-lg sm:text-2xl font-black text-slate-900 font-mono">{totalBatchQty}</strong>
                           <span className="text-xs text-slate-500 font-semibold">PCBs</span>
                         </div>
-                        <span className="text-xs text-slate-500 block mt-1 font-mono font-medium">
+                        <span className="text-[11px] sm:text-xs text-slate-500 block mt-1 font-mono font-medium">
                           Area: {Number(historyModalJob.custPnlAreaSqm || historyModalJob.prodPnlAreaSqm || 0).toFixed(2)} m²
                         </span>
                       </div>
 
                       {/* 3. Quality & Yield Card */}
-                      <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 sm:p-4 shadow-2xs hover:shadow-xs transition-shadow">
+                      <div className="bg-white border border-slate-200/90 rounded-xl p-3 sm:p-4 shadow-2xs hover:shadow-xs transition-shadow">
                         <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider block font-mono">Quality & Yield</span>
                         <div className="flex items-baseline gap-1 mt-0.5">
-                          <strong className="text-xl sm:text-2xl font-black text-emerald-700 font-mono">{goodQty}</strong>
+                          <strong className="text-lg sm:text-2xl font-black text-emerald-700 font-mono">{goodQty}</strong>
                           <span className="text-xs text-slate-500 font-semibold">Good ({yieldPercent}%)</span>
                         </div>
-                        <span className={`text-xs block mt-1 font-semibold ${totalScrapQty > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
+                        <span className={`text-[11px] sm:text-xs block mt-1 font-semibold ${totalScrapQty > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
                           {totalScrapQty > 0 ? `⚠️ ${totalScrapQty} Scrap Logged` : '✓ Zero Scrap Logged'}
                         </span>
                       </div>
 
                       {/* 4. Process Flow & Specs Card */}
-                      <div className="bg-white border border-slate-200/90 rounded-xl p-3.5 sm:p-4 shadow-2xs hover:shadow-xs transition-shadow">
+                      <div className="bg-white border border-slate-200/90 rounded-xl p-3 sm:p-4 shadow-2xs hover:shadow-xs transition-shadow">
                         <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider block font-mono">Process Flow</span>
-                        <div className="font-bold text-slate-800 text-sm sm:text-base truncate mt-0.5">
+                        <div className="font-bold text-slate-800 text-xs sm:text-base truncate mt-0.5">
                           {(historyModalJob as any).processFlowMaster?.name || historyModalJob.jobFlowSelection || 'PF-01 (Standard)'}
                         </div>
-                        <span className="text-xs text-slate-500 block mt-1 font-medium truncate">
+                        <span className="text-[11px] sm:text-xs text-slate-500 block mt-1 font-medium truncate">
                           {historyModalJob.product?.layers ? `${historyModalJob.product.layers} Layers` : '2 Layers'} • {historyModalJob.product?.surfaceFinish || 'HASL'}
                         </span>
                       </div>
@@ -7706,8 +7851,8 @@ export default function JobCardsPage() {
               </div>
 
               {/* ── Toolbar: Search & Filters (Clean Fixed Spacing, No Overlap) ── */}
-              <div className="px-7 py-3.5 bg-white border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 font-quicksand">
-                <div className="flex items-center gap-3 flex-1 max-w-lg">
+              <div className="px-3.5 py-3 sm:px-7 sm:py-3.5 bg-white border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 shrink-0 font-quicksand">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 flex-1 max-w-lg">
                   <div className="relative flex-1">
                     <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
@@ -7715,7 +7860,7 @@ export default function JobCardsPage() {
                       value={historySearchQuery}
                       onChange={(e) => setHistorySearchQuery(e.target.value)}
                       placeholder="Search stage, operator, remark..."
-                      className="w-full h-10 pl-11 pr-8 bg-slate-50 border border-slate-300 rounded-lg text-xs sm:text-sm placeholder:text-slate-400 text-slate-900 focus:outline-none focus:border-slate-900 focus:bg-white transition-all font-medium"
+                      className="w-full h-9 sm:h-10 pl-11 pr-8 bg-slate-50 border border-slate-300 rounded-lg text-xs sm:text-sm placeholder:text-slate-400 text-slate-900 focus:outline-none focus:border-slate-900 focus:bg-white transition-all font-medium"
                     />
                     {historySearchQuery && (
                       <button
@@ -7729,7 +7874,7 @@ export default function JobCardsPage() {
                   <select
                     value={historyFilterType}
                     onChange={(e) => setHistoryFilterType(e.target.value as any)}
-                    className="h-10 px-3.5 bg-slate-50 border border-slate-300 rounded-lg text-xs sm:text-sm text-slate-800 focus:outline-none focus:border-slate-900 cursor-pointer shrink-0 font-bold"
+                    className="w-full sm:w-auto h-9 sm:h-10 px-3 bg-slate-50 border border-slate-300 rounded-lg text-xs sm:text-sm text-slate-800 focus:outline-none focus:border-slate-900 cursor-pointer shrink-0 font-bold"
                   >
                     <option value="ALL">All Events</option>
                     <option value="FORWARD">Stage Movements Only</option>
@@ -7764,7 +7909,7 @@ export default function JobCardsPage() {
                         document.body.removeChild(link);
                         URL.revokeObjectURL(blobUrl);
                       }}
-                      className="h-10 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs sm:text-sm flex items-center gap-2 border border-slate-800 cursor-pointer transition-colors shadow-xs"
+                      className="w-full sm:w-auto h-9 sm:h-10 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs sm:text-sm flex items-center justify-center gap-2 border border-slate-800 cursor-pointer transition-colors shadow-xs"
                       title="Export live history as CSV"
                     >
                       <Download className="w-4 h-4 text-slate-300" />
@@ -8006,7 +8151,7 @@ export default function JobCardsPage() {
 
                   // ── VIEW 2: CLEAN TABLE VIEW (Full Width & Spacious) ──
                   return (
-                    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xs font-quicksand">
+                    <div className="bg-white border border-slate-200 rounded-xl overflow-x-auto shadow-2xs font-quicksand">
                       <table className="w-full text-left border-collapse text-xs sm:text-sm">
                         <thead className="bg-slate-100 text-slate-700 border-b border-slate-200 font-mono text-[11px] uppercase tracking-wider font-bold">
                           <tr>
@@ -8098,15 +8243,15 @@ export default function JobCardsPage() {
               </div>
 
               {/* ── Modal Footer ── */}
-              <div className="flex items-center justify-between px-7 py-4 border-t border-slate-200 bg-slate-50 shrink-0 font-quicksand">
-                <span className="text-slate-600 text-xs sm:text-sm font-medium flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span>Live shopfloor ledger • <strong>{historyLogs.length}</strong> verified database records</span>
+              <div className="flex items-center justify-between px-3.5 py-3 sm:px-7 sm:py-4 border-t border-slate-200 bg-slate-50 shrink-0 font-quicksand">
+                <span className="text-slate-600 text-xs sm:text-sm font-medium flex items-center gap-1.5 sm:gap-2 truncate">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                  <span className="truncate">Live ledger • <strong>{historyLogs.length}</strong> records</span>
                 </span>
                 <button
                   type="button"
                   onClick={() => { setHistoryModalJob(null); setHistoryLogs([]); setHistorySearchQuery(''); }}
-                  className="h-10 px-6 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs sm:text-sm transition-colors cursor-pointer shadow-sm"
+                  className="h-9 px-4 sm:h-10 sm:px-6 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-xs sm:text-sm transition-colors cursor-pointer shadow-sm shrink-0"
                 >
                   Close
                 </button>
