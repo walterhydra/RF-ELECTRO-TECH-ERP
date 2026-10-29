@@ -4027,7 +4027,7 @@ export default function JobCardsPage() {
                 </span>
               </p>
               <p className="text-xs text-slate-600 mt-0.5 font-medium">
-                Ye Job Card pehle se database mein maujood tha. Usko sabse upar (Page 1 Top) load karke show kar diya gaya hai.
+                This Job Card already exists in the database. It has been loaded and displayed at the top of Page 1.
               </p>
             </div>
           </div>
@@ -5401,7 +5401,7 @@ export default function JobCardsPage() {
                       {!editingCardId && launchForm.jobCardNo && jobCards.some((j) => (j.jobCardNo || '').trim().toLowerCase() === launchForm.jobCardNo.trim().toLowerCase()) && (
                         <div className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-800 bg-amber-50 border border-amber-300 rounded-md px-2.5 py-1.5 font-medium animate-in fade-in">
                           <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                          <span><strong>Already Exists:</strong> Ye Job Card pehle se DB mein hai. Launch karne par ye sabse upar show ho jayega.</span>
+                          <span><strong>Already Exists:</strong> This Job Card already exists in the database. Submitting will display and highlight it at the top.</span>
                         </div>
                       )}
                     </div>

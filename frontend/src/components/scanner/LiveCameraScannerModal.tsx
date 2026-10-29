@@ -740,10 +740,10 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
                     <div className="text-[10px] text-slate-400 bg-slate-950/90 p-2.5 rounded-xl border border-slate-800 text-left max-w-xs space-y-1">
                       <p className="text-slate-300 font-bold flex items-center gap-1">
                         <Lock className="w-3 h-3 text-amber-400" />
-                        <span>Chrome Settings se unblock kaise karein:</span>
+                        <span>How to unblock in Chrome Settings:</span>
                       </p>
-                      <p>1. Chrome mein upar <strong>⋮ (3 dots) ➔ Settings ➔ Site settings ➔ Camera</strong> par jayein.</p>
-                      <p>2. <strong>rf-electrotech.vercel.app</strong> ko <strong>"Allow"</strong> karein.</p>
+                      <p>1. In Chrome, go to <strong>⋮ (3 dots) ➔ Settings ➔ Site settings ➔ Camera</strong>.</p>
+                      <p>2. Set <strong>this site</strong> to <strong>"Allow"</strong>.</p>
                     </div>
 
                   </div>
