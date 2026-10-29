@@ -312,8 +312,10 @@ export class SubJobCardsService {
       roleName === 'PRODUCTION_PLANNER' ||
       roleName === 'admin' ||
       roleName === 'production_manager';
+    const hasAssignedStage = Boolean(user?.assignedStageId && user?.assignedStageId !== 'ALL');
+    const isRestrictedStageUser = (isOperator || hasAssignedStage) && !isAdminOrPlanner;
 
-    if (isOperator && subCard.currentStageId && user?.assignedStageId !== subCard.currentStageId) {
+    if (isRestrictedStageUser && subCard.currentStageId && user?.assignedStageId !== subCard.currentStageId) {
       throw new HttpException(
         {
           statusCode: 403,

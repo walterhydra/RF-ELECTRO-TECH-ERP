@@ -19,6 +19,7 @@ import {
   History,
   ChevronDown,
   ChevronUp,
+  Lock,
 } from 'lucide-react';
 
 const API = getApiBaseUrl();
@@ -89,6 +90,40 @@ export default function StageUpdatePage() {
   const [pendingWorkReason, setPendingWorkReason] = useState('Drilling & Hole Check Pending');
   const [customPendingReason, setCustomPendingReason] = useState('');
 
+  // Operator Stage Scoping state
+  const [userRole, setUserRole] = useState('');
+  const [assignedStage, setAssignedStage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setUserRole(localStorage.getItem('userRole') || '');
+    const stage = localStorage.getItem('assignedStage');
+    if (stage && stage.toUpperCase() !== 'ALL') {
+      setAssignedStage(stage);
+    }
+  }, []);
+
+  const isSuperAdmin =
+    userRole === 'Super Admin' ||
+    userRole === 'SUPER_ADMIN' ||
+    userRole === 'Production Planner' ||
+    userRole === 'PRODUCTION_PLANNER';
+
+  const isOperator =
+    userRole.toLowerCase().includes('operator') ||
+    Boolean(assignedStage && assignedStage.toUpperCase() !== 'ALL') ||
+    userRole === 'NORMAL' ||
+    userRole === 'PROCESS_OPERATOR';
+
+  const stageMatches = React.useMemo(() => {
+    if (isSuperAdmin || !isOperator || !assignedStage) return true;
+    if (!stageInfo?.currentStage?.name) return true;
+
+    const norm = (s: string) => s.toLowerCase().replace(/^\d+\.\s*/, '').replace(/[^a-z0-9]/g, '');
+    const cleanAssigned = norm(assignedStage);
+    const cleanCurrent = norm(stageInfo.currentStage.name);
+    return cleanAssigned === cleanCurrent;
+  }, [isSuperAdmin, isOperator, assignedStage, stageInfo]);
+
   const loadStageInfo = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -129,12 +164,14 @@ export default function StageUpdatePage() {
   // Validation logic
   const totalOut = qtyForwarded + qtyRejected + qtyHold;
   const isValid =
+    stageMatches &&
     qtyReceived > 0 &&
     qtyProcessed <= qtyReceived &&
     totalOut <= qtyProcessed &&
     (qtyRejected === 0 || rejectionReason.trim().length > 0);
 
   const validationIssues: string[] = [];
+  if (!stageMatches) validationIssues.push(`Stage Mismatch: You are assigned to ${assignedStage}, not ${stageInfo?.currentStage?.name}`);
   if (qtyProcessed > qtyReceived) validationIssues.push('Processed cannot exceed received');
   if (totalOut > qtyProcessed) validationIssues.push('Forward + Reject + Hold cannot exceed processed');
   if (qtyRejected > 0 && !rejectionReason.trim()) validationIssues.push('Rejection reason is mandatory');
@@ -282,8 +319,33 @@ export default function StageUpdatePage() {
         </div>
       )}
 
+      {/* Stage Restriction Warning */}
+      {!stageMatches && (
+        <div className="bg-amber-500/10 border-2 border-amber-500/40 rounded-2xl p-5 text-center space-y-3 text-amber-200">
+          <div className="flex items-center justify-center gap-2 font-bold font-mono text-sm text-amber-400">
+            <Lock className="w-5 h-5 text-amber-400" />
+            <span>STAGE RESTRICTED</span>
+          </div>
+          <p className="text-xs text-slate-300">
+            You are logged in as <strong>{assignedStage}</strong>, but this lot is currently at <strong>{stageInfo?.currentStage?.name}</strong>.
+          </p>
+          <p className="text-[11px] text-slate-400">
+            Only operators assigned to {stageInfo?.currentStage?.name} or Production Admins can move this lot.
+          </p>
+          <div className="pt-2">
+            <Link
+              href="/job-cards"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs hover:bg-amber-400 transition-colors shadow-sm"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back to My Stage Job Cards</span>
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Movement Form */}
-      {!success && (
+      {!success && stageMatches && (
         <form onSubmit={handleSubmit} className="bg-white border border-slate-200 rounded-xl p-4 space-y-6 shadow-sm">
           <h3 className="text-xs font-mono font-bold text-slate-500 border-b border-slate-200 pb-2">
             QUANTITY MOVEMENT & INTEGRITY CHECK

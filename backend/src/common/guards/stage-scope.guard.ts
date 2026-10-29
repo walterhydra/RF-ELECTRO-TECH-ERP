@@ -11,19 +11,25 @@ export class StageScopeGuard implements CanActivate {
       throw new ForbiddenException('Authentication required');
     }
 
-    // Admins, Planners, and Engineers can bypass stage-level restrictions
+    // Super Admins always bypass stage-level restrictions
+    if (user.role === RoleCode.SUPER_ADMIN || user.roleName === RoleCode.SUPER_ADMIN) {
+      return true;
+    }
+
+    const hasAssignedStage = Boolean(user.assignedStageId && user.assignedStageId !== 'ALL');
+
+    // Planners, Engineers, and unassigned QC Officers can bypass stage-level restrictions
     if (
-      user.role === RoleCode.SUPER_ADMIN ||
-      user.roleName === RoleCode.SUPER_ADMIN ||
-      user.roleName === RoleCode.PRODUCTION_PLANNER ||
-      user.roleName === RoleCode.PRODUCT_ENGINEER ||
-      user.roleName === RoleCode.QC_OFFICER
+      !hasAssignedStage &&
+      (user.roleName === RoleCode.PRODUCTION_PLANNER ||
+        user.roleName === RoleCode.PRODUCT_ENGINEER ||
+        user.roleName === RoleCode.QC_OFFICER)
     ) {
       return true;
     }
 
-    // If Process Operator, ensure they have an assignedStageId matching the request body/param
-    if (user.roleName === RoleCode.PROCESS_OPERATOR) {
+    // If Process Operator or any stage-assigned user, ensure target stage matches
+    if (user.roleName === RoleCode.PROCESS_OPERATOR || hasAssignedStage) {
       const targetStageId = request.body?.stageId || request.params?.stageId || request.query?.stageId;
       if (targetStageId && user.assignedStageId !== targetStageId) {
         throw new ForbiddenException('You are only authorized to log movements for your assigned process stage.');

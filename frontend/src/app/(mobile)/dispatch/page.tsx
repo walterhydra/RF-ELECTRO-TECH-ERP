@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { PackageCheck, Truck, ArrowLeft, RefreshCw, FileText, CheckCircle2, ChevronRight, Loader2 } from 'lucide-react';
 import { fetchApi } from '@/lib/utils';
 
 export default function MobileDispatchPage() {
+  const router = useRouter();
   const [dispatches, setDispatches] = useState<any[]>([]);
   const [readyJobCards, setReadyJobCards] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,8 +34,21 @@ export default function MobileDispatchPage() {
   };
 
   useEffect(() => {
+    const assignedStage = typeof window !== 'undefined' ? localStorage.getItem('assignedStage') : null;
+    const userRole = typeof window !== 'undefined' ? (localStorage.getItem('userRole') || '') : '';
+    const isOperator =
+      Boolean(assignedStage && assignedStage.toUpperCase() !== 'ALL') ||
+      userRole.toLowerCase().includes('operator') ||
+      userRole === 'NORMAL' ||
+      userRole === 'PROCESS_OPERATOR';
+
+    if (isOperator) {
+      router.replace('/job-cards');
+      return;
+    }
+
     loadData();
-  }, []);
+  }, [router]);
 
   return (
     <div className="space-y-4 p-4 max-w-lg mx-auto font-sans text-slate-100 pb-16">
