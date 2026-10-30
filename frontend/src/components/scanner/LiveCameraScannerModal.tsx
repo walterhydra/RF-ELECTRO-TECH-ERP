@@ -119,7 +119,6 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [hasTorch, setHasTorch] = useState(false);
   const [isTorchOn, setIsTorchOn] = useState(false);
-  const [manualCode, setManualCode] = useState('');
 
   const scannerRef = useRef<any>(null);
   const isScanningActiveRef = useRef(false);
@@ -171,7 +170,6 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
       setDetectedCode(null);
       setErrorMessage(null);
       setIsTorchOn(false);
-      setManualCode('');
     } else {
       stopScanner();
       setIsLocked(false);
@@ -312,323 +310,321 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
     setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
   };
 
-  // Manual fallback submit
-  const handleManualSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!manualCode.trim()) return;
-    handleDecoded(manualCode.trim());
-  };
-
   if (!isOpen) return null;
 
   return (
     <Portal>
-      <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[999999] flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
+      {/* Frosted Glass Backdrop Blur (Soft semi-transparent overlay so background blurs beautifully) */}
+      <div 
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+        className="fixed inset-0 bg-slate-950/50 backdrop-blur-md z-[999999] flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200"
+      >
         
-        {/* Modal Dialog Container */}
-        <div className={`relative w-full ${
-          mode === 'select' ? 'max-w-sm' : 'max-w-md'
-        } bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] transition-all duration-200`}>
-          
-          {/* =============================================================== */}
-          {/* SCREEN 1: PRE-SCAN SELECTION (JUST 2 CIRCLES)                   */}
-          {/* =============================================================== */}
-          {mode === 'select' && (
-            <div className="p-6 sm:p-8 flex flex-col items-center justify-center text-center space-y-5 animate-in fade-in duration-150">
-              
-              {/* Top row with Close button */}
-              <div className="w-full flex items-center justify-between pb-2 border-b border-slate-800/80">
-                <span className="text-xs font-mono font-bold tracking-wider text-slate-400 uppercase">
+        {/* =============================================================== */}
+        {/* SCREEN 1: PRE-SCAN SELECTION (LIGHT THEME MATCHED 2 CIRCLES)   */}
+        {/* =============================================================== */}
+        {mode === 'select' && (
+          <div className="relative w-full max-w-sm bg-white border border-slate-200/90 rounded-3xl shadow-2xl overflow-hidden flex flex-col p-6 sm:p-7 animate-in fade-in zoom-in-95 duration-150 font-sans">
+            
+            {/* Top Row: Title + Close Button */}
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-200/80 flex items-center justify-center text-blue-600">
+                  <Scan className="w-4 h-4" />
+                </div>
+                <span className="text-xs font-black font-mono tracking-wider text-slate-800 uppercase">
                   Select Scanner
                 </span>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-700 flex items-center justify-center transition-colors cursor-pointer"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* The 2 Big Clean Circles (Theme Matched) */}
+            <div className="flex items-center justify-center gap-8 sm:gap-10 py-6">
+              
+              {/* CIRCLE 1: QR CODE */}
+              <button
+                type="button"
+                onClick={() => setMode('qr')}
+                className="group flex flex-col items-center gap-2.5 transition-transform active:scale-95 cursor-pointer focus:outline-none"
+              >
+                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-blue-50 border-2 border-blue-400/60 group-hover:border-blue-600 group-hover:bg-blue-100/70 shadow-lg shadow-blue-500/10 flex items-center justify-center text-blue-600 transition-all">
+                  <QrCode className="w-11 h-11 sm:w-12 sm:h-12 stroke-[1.8]" />
+                </div>
+                <span className="text-xs sm:text-sm font-black font-mono text-slate-800 group-hover:text-blue-600 transition-colors">
+                  QR Code
+                </span>
+              </button>
+
+              {/* CIRCLE 2: BAR CODE */}
+              <button
+                type="button"
+                onClick={() => setMode('barcode')}
+                className="group flex flex-col items-center gap-2.5 transition-transform active:scale-95 cursor-pointer focus:outline-none"
+              >
+                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-amber-50 border-2 border-amber-400/60 group-hover:border-amber-600 group-hover:bg-amber-100/70 shadow-lg shadow-amber-500/10 flex items-center justify-center text-amber-600 transition-all">
+                  <Barcode className="w-11 h-11 sm:w-12 sm:h-12 stroke-[1.8]" />
+                </div>
+                <span className="text-xs sm:text-sm font-black font-mono text-slate-800 group-hover:text-amber-600 transition-colors">
+                  Bar Code
+                </span>
+              </button>
+
+            </div>
+
+          </div>
+        )}
+
+        {/* =============================================================== */}
+        {/* SCREEN 2: ACTIVE LIVE CAMERA VIEWFINDER (QR OR BARCODE)         */}
+        {/* =============================================================== */}
+        {mode !== 'select' && (
+          <div className="relative w-full max-w-md bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-150">
+            
+            {/* Top Control Bar */}
+            <div className="flex items-center justify-between px-3.5 py-2.5 bg-slate-900/90 border-b border-slate-800 shrink-0">
+              
+              {/* Back to 2 Circles Button */}
+              <button
+                type="button"
+                onClick={() => setMode('select')}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-mono font-bold cursor-pointer transition-all border border-slate-700 active:scale-95"
+                title="Back to options"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back</span>
+              </button>
+
+              {/* Current Active Mode Badge */}
+              <div className="flex items-center gap-1.5">
+                <span className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 ${
+                  mode === 'qr'
+                    ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                    : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                }`}>
+                  {mode === 'qr' ? (
+                    <>
+                      <QrCode className="w-3.5 h-3.5 text-blue-400" />
+                      <span>QR Code</span>
+                    </>
+                  ) : (
+                    <>
+                      <Barcode className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Bar Code</span>
+                    </>
+                  )}
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                </span>
+              </div>
+
+              {/* Right Action Icons (Torch, Flip, Close) */}
+              <div className="flex items-center gap-1">
+                {/* Torch toggle */}
+                {hasTorch && (
+                  <button
+                    type="button"
+                    onClick={toggleTorch}
+                    className={`p-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      isTorchOn 
+                        ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20' 
+                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                    }`}
+                    title="Toggle Flashlight"
+                  >
+                    <Flashlight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+
+                {/* Camera flip */}
+                <button
+                  type="button"
+                  onClick={toggleFacingMode}
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer transition-all"
+                  title="Switch Camera (Front/Back)"
+                >
+                  <FlipHorizontal className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Close */}
                 <button
                   type="button"
                   onClick={onClose}
-                  className="p-1.5 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white cursor-pointer transition-all"
-                  title="Close"
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white cursor-pointer transition-all ml-0.5"
+                  title="Close Scanner"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
-              </div>
-
-              {/* The 2 Big Minimal Circles */}
-              <div className="flex items-center justify-center gap-8 sm:gap-10 py-5">
-                
-                {/* CIRCLE 1: QR CODE */}
-                <button
-                  type="button"
-                  onClick={() => setMode('qr')}
-                  className="group flex flex-col items-center gap-3 transition-transform active:scale-90 cursor-pointer focus:outline-none"
-                >
-                  <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-blue-500/10 border-2 border-blue-500/40 group-hover:border-blue-400 group-hover:bg-blue-500/20 group-hover:shadow-[0_0_25px_rgba(59,130,246,0.35)] flex items-center justify-center text-blue-400 group-hover:text-blue-300 transition-all shadow-lg">
-                    <QrCode className="w-11 h-11 sm:w-12 sm:h-12 stroke-[1.8]" />
-                  </div>
-                  <span className="text-sm font-bold font-mono text-slate-200 group-hover:text-blue-400 transition-colors">
-                    QR Code
-                  </span>
-                </button>
-
-                {/* CIRCLE 2: BAR CODE */}
-                <button
-                  type="button"
-                  onClick={() => setMode('barcode')}
-                  className="group flex flex-col items-center gap-3 transition-transform active:scale-90 cursor-pointer focus:outline-none"
-                >
-                  <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-amber-500/10 border-2 border-amber-500/40 group-hover:border-amber-400 group-hover:bg-amber-500/20 group-hover:shadow-[0_0_25px_rgba(245,158,11,0.35)] flex items-center justify-center text-amber-400 group-hover:text-amber-300 transition-all shadow-lg">
-                    <Barcode className="w-11 h-11 sm:w-12 sm:h-12 stroke-[1.8]" />
-                  </div>
-                  <span className="text-sm font-bold font-mono text-slate-200 group-hover:text-amber-400 transition-colors">
-                    Bar Code
-                  </span>
-                </button>
-
               </div>
 
             </div>
-          )}
 
-          {/* =============================================================== */}
-          {/* SCREEN 2: ACTIVE LIVE CAMERA VIEWFINDER (QR OR BARCODE)         */}
-          {/* =============================================================== */}
-          {mode !== 'select' && (
-            <>
-              {/* Top Control Bar */}
-              <div className="flex items-center justify-between px-3.5 py-2.5 bg-slate-900/90 border-b border-slate-800 shrink-0">
-                
-                {/* Back to 2 Circles Button */}
-                <button
-                  type="button"
-                  onClick={() => setMode('select')}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-mono font-bold cursor-pointer transition-all border border-slate-700 active:scale-95"
-                  title="Back to options"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Back</span>
-                </button>
+            {/* Camera Viewport & HUD Overlay */}
+            <div className="relative w-full aspect-square bg-black overflow-hidden flex items-center justify-center">
+              
+              {/* Live WebRTC Camera Stream Container */}
+              <div
+                id={viewportId.current}
+                className="w-full h-full object-cover [&>video]:w-full [&>video]:h-full [&>video]:object-cover"
+              />
 
-                {/* Current Active Mode Badge */}
-                <div className="flex items-center gap-1.5">
-                  <span className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 ${
-                    mode === 'qr'
-                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
-                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                  }`}>
-                    {mode === 'qr' ? (
-                      <>
-                        <QrCode className="w-3.5 h-3.5 text-blue-400" />
-                        <span>QR Code</span>
-                      </>
-                    ) : (
-                      <>
-                        <Barcode className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Bar Code</span>
-                      </>
-                    )}
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  </span>
+              {/* Starting Spinner */}
+              {isStarting && (
+                <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center space-y-3 z-10">
+                  <RefreshCw className={`w-8 h-8 animate-spin ${mode === 'qr' ? 'text-blue-400' : 'text-amber-400'}`} />
+                  <p className={`text-xs font-mono font-bold ${mode === 'qr' ? 'text-blue-300' : 'text-amber-300'}`}>
+                    Starting {mode === 'qr' ? 'QR Code' : 'Bar Code'} Scanner...
+                  </p>
                 </div>
+              )}
 
-                {/* Right Action Icons (Torch, Flip, Close) */}
-                <div className="flex items-center gap-1">
-                  {/* Torch toggle */}
-                  {hasTorch && (
+              {/* Error Overlay */}
+              {errorMessage && (
+                <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center space-y-3 z-20">
+                  <AlertCircle className="w-10 h-10 text-rose-500" />
+                  <p className="text-xs font-bold text-rose-300">{errorMessage}</p>
+                  <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={toggleTorch}
-                      className={`p-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        isTorchOn 
-                          ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20' 
-                          : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                      }`}
-                      title="Toggle Flashlight"
+                      onClick={() => setFacingMode((p) => (p === 'environment' ? 'user' : 'environment'))}
+                      className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold border border-slate-700 cursor-pointer"
                     >
-                      <Flashlight className="w-3.5 h-3.5" />
+                      Try Other Camera
                     </button>
-                  )}
-
-                  {/* Camera flip */}
-                  <button
-                    type="button"
-                    onClick={toggleFacingMode}
-                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 cursor-pointer transition-all"
-                    title="Switch Camera (Front/Back)"
-                  >
-                    <FlipHorizontal className="w-3.5 h-3.5" />
-                  </button>
-
-                  {/* Close */}
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white cursor-pointer transition-all ml-0.5"
-                    title="Close Scanner"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setMode('select')}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold cursor-pointer"
+                    >
+                      Back
+                    </button>
+                  </div>
                 </div>
+              )}
 
-              </div>
-
-              {/* Camera Viewport & HUD Overlay */}
-              <div className="relative w-full aspect-square bg-black overflow-hidden flex items-center justify-center">
-                
-                {/* Live WebRTC Camera Stream Container */}
-                <div
-                  id={viewportId.current}
-                  className="w-full h-full object-cover [&>video]:w-full [&>video]:h-full [&>video]:object-cover"
-                />
-
-                {/* Starting Spinner */}
-                {isStarting && (
-                  <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center space-y-3 z-10">
-                    <RefreshCw className={`w-8 h-8 animate-spin ${mode === 'qr' ? 'text-blue-400' : 'text-amber-400'}`} />
-                    <p className={`text-xs font-mono font-bold ${mode === 'qr' ? 'text-blue-300' : 'text-amber-300'}`}>
-                      Starting {mode === 'qr' ? 'QR Code' : 'Bar Code'} Scanner...
-                    </p>
-                  </div>
-                )}
-
-                {/* Error Overlay */}
-                {errorMessage && (
-                  <div className="absolute inset-0 bg-slate-950/95 flex flex-col items-center justify-center p-6 text-center space-y-3 z-20">
-                    <AlertCircle className="w-10 h-10 text-rose-500" />
-                    <p className="text-xs font-bold text-rose-300">{errorMessage}</p>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setFacingMode((p) => (p === 'environment' ? 'user' : 'environment'))}
-                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold border border-slate-700 cursor-pointer"
-                      >
-                        Try Other Camera
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setMode('select')}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold cursor-pointer"
-                      >
-                        Back
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* High-Tech HUD Viewfinder Reticle */}
-                {!isStarting && !errorMessage && (
-                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
+              {/* High-Tech HUD Viewfinder Reticle */}
+              {!isStarting && !errorMessage && (
+                <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
+                  
+                  {/* Center Target Box: Square for QR, Horizontal Rectangle for Barcode */}
+                  <div className={`relative transition-all duration-200 ${
+                    mode === 'qr' 
+                      ? 'w-64 h-64 sm:w-72 sm:h-72' 
+                      : 'w-72 h-36 sm:w-80 sm:h-40'
+                  } ${isLocked ? 'scale-105' : ''}`}>
                     
-                    {/* Center Target Box: Square for QR, Horizontal Rectangle for Barcode */}
-                    <div className={`relative transition-all duration-200 ${
-                      mode === 'qr' 
-                        ? 'w-64 h-64 sm:w-72 sm:h-72' 
-                        : 'w-72 h-36 sm:w-80 sm:h-40'
-                    } ${isLocked ? 'scale-105' : ''}`}>
-                      
-                      {/* Corner Target Brackets */}
-                      <div className={`absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 rounded-tl-xl transition-colors duration-200 ${
-                        isLocked 
-                          ? 'border-emerald-400 shadow-[0_0_15px_#10b981]' 
-                          : mode === 'qr'
-                            ? 'border-blue-400 shadow-[0_0_12px_#38bdf8]'
-                            : 'border-amber-400 shadow-[0_0_12px_#f59e0b]'
-                      }`} />
-                      <div className={`absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 rounded-tr-xl transition-colors duration-200 ${
-                        isLocked 
-                          ? 'border-emerald-400 shadow-[0_0_15px_#10b981]' 
-                          : mode === 'qr'
-                            ? 'border-blue-400 shadow-[0_0_12px_#38bdf8]'
-                            : 'border-amber-400 shadow-[0_0_12px_#f59e0b]'
-                      }`} />
-                      <div className={`absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 rounded-bl-xl transition-colors duration-200 ${
-                        isLocked 
-                          ? 'border-emerald-400 shadow-[0_0_15px_#10b981]' 
-                          : mode === 'qr'
-                            ? 'border-blue-400 shadow-[0_0_12px_#38bdf8]'
-                            : 'border-amber-400 shadow-[0_0_12px_#f59e0b]'
-                      }`} />
-                      <div className={`absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 rounded-br-xl transition-colors duration-200 ${
-                        isLocked 
-                          ? 'border-emerald-400 shadow-[0_0_15px_#10b981]' 
-                          : mode === 'qr'
-                            ? 'border-blue-400 shadow-[0_0_12px_#38bdf8]'
-                            : 'border-amber-400 shadow-[0_0_12px_#f59e0b]'
-                      }`} />
+                    {/* Corner Target Brackets */}
+                    <div className={`absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 rounded-tl-xl transition-colors duration-200 ${
+                      isLocked 
+                        ? 'border-emerald-400 shadow-[0_0_15px_#10b981]' 
+                        : mode === 'qr'
+                          ? 'border-blue-400 shadow-[0_0_12px_#38bdf8]'
+                          : 'border-amber-400 shadow-[0_0_12px_#f59e0b]'
+                    }`} />
+                    <div className={`absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 rounded-tr-xl transition-colors duration-200 ${
+                      isLocked 
+                        ? 'border-emerald-400 shadow-[0_0_15px_#10b981]' 
+                        : mode === 'qr'
+                          ? 'border-blue-400 shadow-[0_0_12px_#38bdf8]'
+                          : 'border-amber-400 shadow-[0_0_12px_#f59e0b]'
+                    }`} />
+                    <div className={`absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 rounded-bl-xl transition-colors duration-200 ${
+                      isLocked 
+                        ? 'border-emerald-400 shadow-[0_0_15px_#10b981]' 
+                        : mode === 'qr'
+                          ? 'border-blue-400 shadow-[0_0_12px_#38bdf8]'
+                          : 'border-amber-400 shadow-[0_0_12px_#f59e0b]'
+                    }`} />
+                    <div className={`absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 rounded-br-xl transition-colors duration-200 ${
+                      isLocked 
+                        ? 'border-emerald-400 shadow-[0_0_15px_#10b981]' 
+                        : mode === 'qr'
+                          ? 'border-blue-400 shadow-[0_0_12px_#38bdf8]'
+                          : 'border-amber-400 shadow-[0_0_12px_#f59e0b]'
+                    }`} />
 
-                      {/* Animated Laser Scanning Beam */}
-                      {!isLocked ? (
-                        <div 
-                          className={`absolute left-3 right-3 h-0.5 shadow-lg ${
-                            mode === 'qr'
-                              ? 'bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_14px_#38bdf8]'
-                              : 'bg-gradient-to-r from-transparent via-amber-400 to-transparent shadow-[0_0_14px_#f59e0b]'
-                          }`}
-                          style={{
-                            animation: 'rfLaserScan 2s ease-in-out infinite'
-                          }}
-                        />
-                      ) : (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="h-0.5 w-full bg-emerald-400 shadow-[0_0_20px_#10b981]" />
+                    {/* Animated Laser Scanning Beam */}
+                    {!isLocked ? (
+                      <div 
+                        className={`absolute left-3 right-3 h-0.5 shadow-lg ${
+                          mode === 'qr'
+                            ? 'bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_14px_#38bdf8]'
+                            : 'bg-gradient-to-r from-transparent via-amber-400 to-transparent shadow-[0_0_14px_#f59e0b]'
+                        }`}
+                        style={{
+                          animation: 'rfLaserScan 2s ease-in-out infinite'
+                        }}
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="h-0.5 w-full bg-emerald-400 shadow-[0_0_20px_#10b981]" />
+                      </div>
+                    )}
+
+                    {/* Code Locked Success Banner */}
+                    {isLocked && detectedCode && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 rounded-2xl p-4 text-center space-y-2 animate-in zoom-in-95 duration-150">
+                        <div className="w-12 h-12 rounded-full bg-emerald-500/20 border-2 border-emerald-400 text-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                          <CheckCircle2 className="w-7 h-7 stroke-[2.5]" />
                         </div>
-                      )}
-
-                      {/* Code Locked Success Banner */}
-                      {isLocked && detectedCode && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 rounded-2xl p-4 text-center space-y-2 animate-in zoom-in-95 duration-150">
-                          <div className="w-12 h-12 rounded-full bg-emerald-500/20 border-2 border-emerald-400 text-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-500/30">
-                            <CheckCircle2 className="w-7 h-7 stroke-[2.5]" />
-                          </div>
-                          <div>
-                            <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300 font-bold block">
-                              CODE DETECTED
-                            </span>
-                            <span className="text-base font-black text-white font-mono tracking-tight block">
-                              {detectedCode}
-                            </span>
-                          </div>
+                        <div>
+                          <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-300 font-bold block">
+                            CODE DETECTED
+                          </span>
+                          <span className="text-base font-black text-white font-mono tracking-tight block">
+                            {detectedCode}
+                          </span>
                         </div>
-                      )}
-
-                    </div>
-
-                    {/* Subtitle / Tip Pill */}
-                    {!isLocked && (
-                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1 bg-slate-900/85 backdrop-blur-md rounded-full border border-slate-700 text-[10.5px] font-mono text-slate-300 flex items-center gap-1.5 shadow-lg whitespace-nowrap">
-                        <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${mode === 'qr' ? 'bg-cyan-400' : 'bg-amber-400'}`} />
-                        <span>
-                          {mode === 'qr'
-                            ? 'Align QR Code inside square frame'
-                            : 'Align Barcode across the laser beam'}
-                        </span>
                       </div>
                     )}
 
                   </div>
-                )}
 
-              </div>
+                  {/* Subtitle / Tip Pill */}
+                  {!isLocked && (
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1 bg-slate-900/85 backdrop-blur-md rounded-full border border-slate-700 text-[10.5px] font-mono text-slate-300 flex items-center gap-1.5 shadow-lg whitespace-nowrap">
+                      <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${mode === 'qr' ? 'bg-cyan-400' : 'bg-amber-400'}`} />
+                      <span>
+                        {mode === 'qr'
+                          ? 'Align QR Code inside square frame'
+                          : 'Align Barcode across the laser beam'}
+                      </span>
+                    </div>
+                  )}
 
-              {/* Bottom Quick Switch */}
-              <div className="p-3 bg-slate-900 border-t border-slate-800 flex items-center justify-between shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setMode(mode === 'qr' ? 'barcode' : 'qr')}
-                  className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-300 hover:text-white transition-colors cursor-pointer bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700"
-                >
-                  <RefreshCw className="w-3 h-3 text-amber-400" />
-                  <span>Switch to {mode === 'qr' ? 'Bar Code' : 'QR Code'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode('select')}
-                  className="text-xs font-mono text-slate-400 hover:text-slate-200 cursor-pointer"
-                >
-                  Change Mode
-                </button>
-              </div>
-            </>
-          )}
+                </div>
+              )}
 
-        </div>
+            </div>
+
+            {/* Bottom Quick Switch */}
+            <div className="p-3 bg-slate-900 border-t border-slate-800 flex items-center justify-between shrink-0">
+              <button
+                type="button"
+                onClick={() => setMode(mode === 'qr' ? 'barcode' : 'qr')}
+                className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-300 hover:text-white transition-colors cursor-pointer bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700"
+              >
+                <RefreshCw className="w-3 h-3 text-amber-400" />
+                <span>Switch to {mode === 'qr' ? 'Bar Code' : 'QR Code'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('select')}
+                className="text-xs font-mono text-slate-400 hover:text-slate-200 cursor-pointer"
+              >
+                Change Mode
+              </button>
+            </div>
+          </div>
+        )}
 
       </div>
 
