@@ -26,7 +26,10 @@ import {
   Camera,
   Zap,
   QrCode,
-  Barcode
+  Barcode,
+  Split,
+  X,
+  ImageIcon
 } from 'lucide-react';
 import { Portal } from '@/components/ui/Portal';
 import { getApiBaseUrl, fetchApi } from '@/lib/utils';
@@ -750,42 +753,44 @@ export default function JobMovementUpdatePage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 sm:p-6 space-y-6 font-sans">
+    <div className="min-h-screen bg-slate-950 text-slate-100 p-3 sm:p-6 space-y-4 sm:space-y-6 font-sans">
       
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 border-b border-slate-800 pb-3 sm:pb-4">
+        <div className="flex items-center gap-2.5 sm:gap-3">
           <Link
             href="/job-cards"
-            className="p-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-2xl border border-slate-800 transition-all cursor-pointer"
+            className="p-2 sm:p-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl sm:rounded-2xl border border-slate-800 transition-all cursor-pointer shrink-0"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
           </Link>
           <div>
-            <h1 className="text-xl font-black text-white flex items-center gap-2">
-              <Layers className="w-5 h-5 text-amber-400" />
-              Job Update & Movement Center
+            <h1 className="text-lg sm:text-xl font-black text-white flex items-center gap-2 tracking-tight">
+              <Layers className="w-5 h-5 text-amber-400 shrink-0" />
+              <span>Job Movement & Update</span>
             </h1>
-            <p className="text-xs text-slate-400 font-mono">Live PCB Production Floor Monitoring & Stage Movement</p>
+            <p className="text-[11px] sm:text-xs text-slate-400 font-mono">Live PCB Production Floor Monitoring & Stage Movement</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap w-full sm:w-auto">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap w-full sm:w-auto">
           {isStageLocked ? (
-            <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/40 px-3.5 py-1.5 rounded-xl text-xs shadow-xs">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              <span className="text-amber-400 font-black text-[10px] font-mono uppercase">LOCKED STAGE:</span>
-              <span className="font-bold text-amber-200 font-mono text-xs">{assignedStage}</span>
+            <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/40 px-3 py-1.5 rounded-xl text-xs shadow-xs w-full sm:w-auto justify-between sm:justify-start">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                <span className="text-amber-400 font-black text-[10px] font-mono uppercase">LOCKED STAGE:</span>
+              </div>
+              <span className="font-bold text-amber-200 font-mono text-xs truncate">{assignedStage}</span>
             </div>
           ) : (
-            <>
+            <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
               {/* Role selector */}
-              <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl text-xs">
-                <UserCheck className="w-4 h-4 text-emerald-400" />
+              <div className="flex-1 sm:flex-none flex items-center gap-1.5 sm:gap-2 bg-slate-900 border border-slate-800 px-2.5 py-1.5 rounded-xl text-xs">
+                <UserCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                 <select
                   value={userRole}
                   onChange={(e: any) => setUserRole(e.target.value)}
-                  className="bg-transparent font-bold text-white outline-none cursor-pointer text-xs"
+                  className="bg-transparent font-bold text-white outline-none cursor-pointer text-xs w-full sm:w-auto"
                 >
                   <option value="MASTER">Master (Full Access)</option>
                   <option value="SUPER_USER">Super User</option>
@@ -794,15 +799,15 @@ export default function JobMovementUpdatePage() {
               </div>
 
               {/* Stage selector */}
-              <div className="flex items-center gap-2 bg-slate-900 border border-amber-500/40 px-3 py-1.5 rounded-xl text-xs">
-                <span className="text-amber-400 font-black text-[10px] font-mono uppercase">STAGE:</span>
+              <div className="flex-1 sm:flex-none flex items-center gap-1.5 sm:gap-2 bg-slate-900 border border-amber-500/40 px-2.5 py-1.5 rounded-xl text-xs">
+                <span className="text-amber-400 font-black text-[10px] font-mono uppercase shrink-0">STAGE:</span>
                 <select
                   value={assignedStage}
                   onChange={(e) => {
                     setAssignedStage(e.target.value);
                     if (typeof window !== 'undefined') localStorage.setItem('movement_filter_stage', e.target.value);
                   }}
-                  className="bg-transparent font-bold text-amber-300 outline-none cursor-pointer text-xs font-mono"
+                  className="bg-transparent font-bold text-amber-300 outline-none cursor-pointer text-xs font-mono w-full sm:w-auto truncate"
                 >
                   {PF01_STAGES.map((stg) => (
                     <option key={stg} value={stg} className="bg-slate-900 text-white font-sans">
@@ -811,13 +816,13 @@ export default function JobMovementUpdatePage() {
                   ))}
                 </select>
               </div>
-            </>
+            </div>
           )}
 
           {(!isStageLocked || isShearingStage) && (
             <Link
               href="/job-cards/launch"
-              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg transition-all"
+              className="w-full sm:w-auto px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg transition-all text-center justify-center flex items-center gap-1 active:scale-95"
             >
               + Launch New Job
             </Link>
@@ -841,31 +846,31 @@ export default function JobMovementUpdatePage() {
       )}
 
       {/* Barcode & Mobile Camera Scanner Box (Faster Job Movement on Floor) */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/40 border-2 border-amber-500/40 p-4 sm:p-5 rounded-3xl space-y-3 shadow-2xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/40 border-2 border-amber-500/40 p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl space-y-3 shadow-2xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           <label className="text-xs font-black text-amber-400 flex items-center gap-2 uppercase tracking-wider font-mono">
-            <Scan className="w-5 h-5 text-amber-400 animate-pulse" />
-            <span>BARCODE & MOBILE CAMERA SCANNER (QR & CODE128 READY)</span>
+            <Scan className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 animate-pulse shrink-0" />
+            <span>BARCODE & CAMERA SCANNER (QR & CODE128)</span>
           </label>
           
           <button
             type="button"
             onClick={() => setIsCameraScannerOpen(true)}
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white font-black text-xs rounded-xl shadow-md shadow-blue-500/20 active:scale-95 transition-all cursor-pointer border border-blue-400/30 self-start sm:self-auto"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-3.5 py-2 sm:py-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white font-black text-xs rounded-xl shadow-md shadow-blue-500/20 active:scale-95 transition-all cursor-pointer border border-blue-400/30"
           >
-            <Camera className="w-4 h-4 text-amber-300 animate-pulse" />
+            <Camera className="w-4 h-4 text-amber-300 animate-pulse shrink-0" />
             <span>📷 OPEN MOBILE CAMERA SCANNER</span>
           </button>
         </div>
 
-        <form onSubmit={handleBarcodeSubmit} className="flex gap-2">
+        <form onSubmit={handleBarcodeSubmit} className="flex flex-col sm:flex-row gap-2">
           <div className="relative flex-1">
             <input
               type="text"
               value={barcodeInput}
               onChange={(e) => setBarcodeInput(e.target.value)}
-              placeholder="Scan Barcode / QR Code or type Job Card No (e.g. 26-27-3781)..."
-              className="w-full bg-slate-950 border border-slate-700 rounded-2xl pl-4 pr-10 py-3 text-sm font-mono font-bold text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 shadow-inner"
+              placeholder="Scan Barcode / QR Code or enter Job Card No..."
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl sm:rounded-2xl pl-3.5 pr-10 py-2.5 sm:py-3 text-xs sm:text-sm font-mono font-bold text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 shadow-inner"
             />
             <button
               type="button"
@@ -878,13 +883,59 @@ export default function JobMovementUpdatePage() {
           </div>
           <button
             type="submit"
-            className="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-2xl shadow-lg flex items-center gap-2 cursor-pointer shrink-0 active:scale-95 transition-all"
+            className="w-full sm:w-auto px-6 py-2.5 sm:py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl sm:rounded-2xl shadow-lg flex items-center justify-center gap-2 cursor-pointer shrink-0 active:scale-95 transition-all"
           >
-            <Zap className="w-4 h-4 fill-current text-slate-950" />
+            <Zap className="w-4 h-4 fill-current text-slate-950 shrink-0" />
             <span>FIND & MOVE</span>
           </button>
         </form>
       </div>
+
+      {/* Multi-Lot Candidates Selection Box (If Split Lots exist) */}
+      {multiLotCandidates.length > 0 && (
+        <div className="bg-amber-950/40 border-2 border-amber-500/60 p-3.5 sm:p-4 rounded-2xl space-y-3 animate-in fade-in duration-200">
+          <div className="flex items-center justify-between gap-2 border-b border-amber-500/30 pb-2">
+            <div className="flex items-center gap-2 text-amber-300 font-black text-xs uppercase font-mono">
+              <Split className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>Multiple Lots Match ({multiLotCandidates.length}): Select Lot to Advance</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMultiLotCandidates([])}
+              className="text-xs text-slate-400 hover:text-white px-2 py-0.5 rounded bg-slate-900 border border-slate-700 cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+            {multiLotCandidates.map((cand) => (
+              <div
+                key={cand.id}
+                onClick={() => handleSelectCandidateLot(cand)}
+                className="p-3 bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-amber-400 rounded-xl cursor-pointer transition-all flex items-center justify-between gap-2 active:scale-98 shadow-sm group"
+              >
+                <div className="min-w-0">
+                  <div className="font-mono font-black text-amber-400 text-sm group-hover:text-amber-300 truncate">
+                    {cand.jobCardNo}
+                  </div>
+                  <div className="text-[11px] text-slate-400 font-medium truncate mt-0.5">
+                    Stage: <strong className="text-slate-200">{cand.currentStageName}</strong>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className="font-mono text-xs font-black text-emerald-400 block">
+                    {cand.totalPcbQty || 160} PCBs
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/40 mt-1">
+                    Select ➔
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Global Search Bar */}
       <div className="flex items-center gap-3 bg-slate-900 border border-slate-800 p-2 rounded-2xl">
@@ -918,28 +969,28 @@ export default function JobMovementUpdatePage() {
             return (
               <div
                 key={j.id}
-                className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 hover:border-slate-700 transition-all shadow-xl flex flex-col justify-between"
+                className="bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-5 space-y-3.5 sm:space-y-4 hover:border-slate-700 transition-all shadow-xl flex flex-col justify-between"
               >
                 {/* Header Row: Job No & Priority */}
-                <div className="flex items-start justify-between gap-2 border-b border-slate-800/80 pb-3">
-                  <div>
+                <div className="flex items-start justify-between gap-2 border-b border-slate-800/80 pb-2.5 sm:pb-3">
+                  <div className="min-w-0">
                     <span className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-wider block">JOB NUMBER</span>
-                    <h3 className="text-base font-black text-amber-400 font-mono tracking-tight">{j.jobCardNo}</h3>
+                    <h3 className="text-base font-black text-amber-400 font-mono tracking-tight truncate">{j.jobCardNo}</h3>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
                     {overdue ? (
-                      <span className="px-2.5 py-1 bg-rose-500/20 text-rose-400 font-black text-[10px] rounded-lg border border-rose-500/30 font-mono flex items-center gap-1">
+                      <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-rose-500/20 text-rose-400 font-black text-[10px] rounded-lg border border-rose-500/30 font-mono flex items-center gap-1">
                         <AlertCircle className="w-3 h-3 animate-pulse" /> OVERDUE
                       </span>
                     ) : (
-                      <span className="px-2.5 py-1 bg-emerald-500/20 text-emerald-400 font-black text-[10px] rounded-lg border border-emerald-500/30 font-mono flex items-center gap-1">
+                      <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-emerald-500/20 text-emerald-400 font-black text-[10px] rounded-lg border border-emerald-500/30 font-mono flex items-center gap-1">
                         <Clock className="w-3 h-3" /> ON SCHEDULE
                       </span>
                     )}
 
                     <span
-                      className={`px-2.5 py-1 text-[10px] font-black rounded-lg uppercase tracking-wider font-mono ${
+                      className={`px-2 py-0.5 sm:px-2.5 sm:py-1 text-[10px] font-black rounded-lg uppercase tracking-wider font-mono ${
                         j.priority === 'MOST URGENT'
                           ? 'bg-rose-500 text-white'
                           : j.priority === 'HIGH'
@@ -953,14 +1004,14 @@ export default function JobMovementUpdatePage() {
                 </div>
 
                 {/* Main Specs Grid */}
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div>
+                <div className="grid grid-cols-2 gap-2.5 sm:gap-3 text-xs">
+                  <div className="min-w-0">
                     <span className="text-[10px] text-slate-500 uppercase font-mono font-bold block">PART CODE / PRODUCT</span>
                     <span className="font-mono font-bold text-white block truncate" title={j.rfePartCode}>{j.rfePartCode}</span>
                     <span className="text-[11px] text-slate-400 truncate block">{j.customerPartNo}</span>
                   </div>
 
-                  <div>
+                  <div className="min-w-0">
                     <span className="text-[10px] text-slate-500 uppercase font-mono font-bold block">CUSTOMER</span>
                     <span className="font-bold text-slate-200 block truncate">{j.customerCode}</span>
                   </div>
@@ -982,17 +1033,17 @@ export default function JobMovementUpdatePage() {
                     </span>
                   </div>
 
-                  <div>
+                  <div className="min-w-0">
                     <span className="text-[10px] text-slate-500 uppercase font-mono font-bold block">CURRENT STAGE</span>
                     <span className="font-black text-blue-400 font-mono truncate block">{j.currentStageName}</span>
                   </div>
                 </div>
 
                 {/* Progress Stepper Bar */}
-                <div className="bg-slate-950/80 border border-slate-800 p-3 rounded-2xl space-y-1.5">
+                <div className="bg-slate-950/80 border border-slate-800 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl space-y-1.5">
                   <div className="flex justify-between text-[11px] font-mono font-bold">
-                    <span className="text-slate-400">Progress: Stage {stageIndex + 1} of {PF01_STAGES.length}</span>
-                    <span className="text-amber-400">{progressPct}%</span>
+                    <span className="text-slate-400 truncate mr-2">Progress: Stage {stageIndex + 1} of {PF01_STAGES.length}</span>
+                    <span className="text-amber-400 shrink-0">{progressPct}%</span>
                   </div>
                   <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
                     <div
@@ -1003,29 +1054,29 @@ export default function JobMovementUpdatePage() {
                 </div>
 
                 {/* Action Controls */}
-                <div className="pt-2 flex items-center gap-2">
+                <div className="pt-1 sm:pt-2 flex items-center gap-2">
                   <button
                     onClick={() => setSelectedJob(j)}
-                    className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                    className="flex-1 py-2.5 px-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-98 min-h-[40px]"
                   >
-                    <Eye className="w-4 h-4 text-blue-400" />
-                    <span>View & Move Stage</span>
+                    <Eye className="w-4 h-4 text-blue-400 shrink-0" />
+                    <span className="text-[11px] sm:text-xs truncate">View & Move Stage</span>
                   </button>
 
                   {j.currentStageName.includes('PACKING') || stageIndex === PF01_STAGES.length - 1 ? (
                     <button
                       onClick={() => handleJobDispatch(j.id)}
-                      className="py-2.5 px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-lg transition-all cursor-pointer shrink-0 animate-pulse"
+                      className="py-2.5 px-3.5 sm:px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-lg transition-all cursor-pointer shrink-0 animate-pulse min-h-[40px]"
                     >
-                      <span>🚚 Job Dispatch</span>
+                      <span>🚚 Dispatch</span>
                     </button>
                   ) : (
                     <button
                       onClick={() => handleAdvanceStage(j.id)}
-                      className="py-2.5 px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1 shadow-md transition-all cursor-pointer shrink-0"
+                      className="py-2.5 px-3.5 sm:px-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1 shadow-md transition-all cursor-pointer shrink-0 active:scale-98 min-h-[40px]"
                     >
-                      <span>Next Stage</span>
-                      <ChevronRight className="w-4 h-4" />
+                      <span className="text-[11px] sm:text-xs">Next Stage</span>
+                      <ChevronRight className="w-4 h-4 shrink-0" />
                     </button>
                   )}
                 </div>
@@ -1039,348 +1090,374 @@ export default function JobMovementUpdatePage() {
       {/* View & Stage Movement Modal with Options A, B, C */}
       {selectedJob && (
         <Portal>
-          <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[9999] flex items-center justify-center p-4 overflow-y-auto">
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-xl w-full p-6 space-y-4 shadow-2xl text-slate-100 relative my-auto">
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[9999] flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl max-w-xl w-full max-h-[94vh] sm:max-h-[90vh] flex flex-col shadow-2xl text-slate-100 relative my-auto overflow-hidden">
               
-              {/* Header */}
-              <div className="flex justify-between items-start border-b border-slate-800 pb-3">
-                <div>
-                  <span className="text-[10px] font-mono text-slate-400 font-bold uppercase">JOB SELECTION & STAGE MOVEMENT</span>
-                  <h3 className="text-lg font-black text-amber-400 font-mono flex items-center gap-2">
-                    <span>{selectedJob.jobCardNo}</span>
-                    <span className="text-xs px-2 py-0.5 bg-slate-800 text-slate-300 font-normal rounded-md border border-slate-700">
+              {/* Sticky Header */}
+              <div className="flex items-center justify-between gap-3 shrink-0 p-3.5 sm:p-4 border-b border-slate-800 bg-slate-950/80">
+                <div className="min-w-0">
+                  <span className="text-[10px] font-mono text-slate-400 font-bold uppercase tracking-wider block truncate">
+                    JOB SELECTION & STAGE MOVEMENT
+                  </span>
+                  <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                    <h3 className="text-base sm:text-lg font-black text-amber-400 font-mono tracking-tight truncate">
+                      {selectedJob.jobCardNo}
+                    </h3>
+                    <span className="text-[11px] px-2 py-0.5 bg-slate-800 text-slate-200 font-semibold rounded-md border border-slate-700 truncate max-w-[200px]">
                       Stage: {selectedJob.currentStageName}
                     </span>
-                  </h3>
-                </div>
-                <button onClick={() => setSelectedJob(null)} className="text-slate-400 hover:text-white font-bold p-1">✕</button>
-              </div>
-
-              {/* Movement Options Tabs: A, B, C */}
-              <div className="flex bg-slate-950 p-1 rounded-2xl border border-slate-800 text-xs">
-                <button
-                  onClick={() => setMovementTab('VIEW')}
-                  className={`flex-1 py-2 px-3 rounded-xl font-extrabold transition-all ${
-                    movementTab === 'VIEW' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  A. Job Card View
-                </button>
-                <button
-                  onClick={() => setMovementTab('FULL')}
-                  className={`flex-1 py-2 px-3 rounded-xl font-extrabold transition-all ${
-                    movementTab === 'FULL' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  B. Full Movement
-                </button>
-                <button
-                  onClick={() => setMovementTab('PARTIAL')}
-                  className={`flex-1 py-2 px-3 rounded-xl font-extrabold transition-all ${
-                    movementTab === 'PARTIAL' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  C. Uncompleted / Split
-                </button>
-              </div>
-
-              {/* TAB A: JOB CARD VIEW */}
-              {movementTab === 'VIEW' && (
-                <div className="space-y-4 text-xs">
-                  {selectedJob.photoUrl && (
-                    <div className="bg-slate-950 border border-slate-800 p-3 rounded-2xl flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={selectedJob.photoUrl}
-                          alt="Job Card Original Photo"
-                          className="w-14 h-14 rounded-xl object-cover border border-slate-700 shadow-md cursor-pointer"
-                          onClick={() => setPhotoLightbox(selectedJob.photoUrl || null)}
-                        />
-                        <div>
-                          <p className="font-extrabold text-white text-xs">Original Physical Job Card Photo</p>
-                          <p className="text-[10px] text-slate-400">Uploaded during Job Launching</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => setPhotoLightbox(selectedJob.photoUrl || null)}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs flex items-center gap-1"
-                      >
-                        <Eye className="w-3.5 h-3.5" /> View Photo
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2 text-xs font-sans">
-                    <div className="flex justify-between border-b border-slate-800/60 pb-1.5">
-                      <span className="text-slate-400">Job Card No:</span>
-                      <strong className="font-mono text-amber-400 text-sm">{selectedJob.jobCardNo}</strong>
-                    </div>
-                    <div className="flex justify-between border-b border-slate-800/60 pb-1.5">
-                      <span className="text-slate-400">Current Stage:</span>
-                      <strong className="font-mono text-blue-400 font-bold">{selectedJob.currentStageName}</strong>
-                    </div>
-                    <div className="flex justify-between border-b border-slate-800/60 pb-1.5">
-                      <span className="text-slate-400">Customer Part No:</span>
-                      <strong className="text-white font-medium">{selectedJob.customerPartNo}</strong>
-                    </div>
-                    <div className="flex justify-between border-b border-slate-800/60 pb-1.5">
-                      <span className="text-slate-400">R.F.E. Part Code:</span>
-                      <strong className="font-mono text-amber-300">{selectedJob.rfePartCode}</strong>
-                    </div>
-                    <div className="flex justify-between border-b border-slate-800/60 pb-1.5">
-                      <span className="text-slate-400">Customer Code:</span>
-                      <strong className="text-slate-200">{selectedJob.customerCode}</strong>
-                    </div>
-                    <div className="flex justify-between border-b border-slate-800/60 pb-1.5">
-                      <span className="text-slate-400">Priority:</span>
-                      <span className="font-mono font-bold text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">{selectedJob.priority}</span>
-                    </div>
-                    <div className="flex justify-between border-b border-slate-800/60 pb-1.5">
-                      <span className="text-slate-400">Target Delivery Date:</span>
-                      <strong className="font-mono text-slate-200">{selectedJob.targetDate}</strong>
-                    </div>
-                    <div className="flex justify-between border-b border-slate-800/60 pb-1.5">
-                      <span className="text-slate-400">Total PCB Quantity:</span>
-                      <strong className="font-mono text-emerald-400 font-bold">{selectedJob.totalPcbQty || (selectedJob.prodPnlQty ? selectedJob.prodPnlQty * 4 : 160)} PCBs</strong>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-400">Production WIP Area:</span>
-                      <strong className="font-mono text-emerald-400 font-bold">{selectedJob.prodPnlAreaSqm} Sqm</strong>
-                    </div>
                   </div>
                 </div>
-              )}
-
-              {/* TAB B: FULL MOVEMENT */}
-              {movementTab === 'FULL' && (() => {
-                const currentPcbQty = selectedJob.totalPcbQty || 160;
-                const currentArea = selectedJob.prodPnlAreaSqm || 45;
-                const sqmPerPcb = currentPcbQty > 0 ? currentArea / currentPcbQty : 0;
-
-                const parsedRejection = typeof rejectedPcbQtyInput === 'number'
-                  ? rejectedPcbQtyInput
-                  : (parseInt(String(rejectedPcbQtyInput), 10) || 0);
-
-                const actualRejected = Math.min(Math.max(0, parsedRejection), currentPcbQty);
-                const forwardedPcbQty = Math.max(0, currentPcbQty - actualRejected);
-                const nextStageSqm = Number((forwardedPcbQty * sqmPerPcb).toFixed(2));
-                const isPackingStage = selectedJob.currentStageName.includes('PACKING') || selectedJob.currentStageIndex === PF01_STAGES.length - 1;
-
-                return (
-                  <div className="space-y-4 text-xs font-sans">
-                    <div className="bg-blue-950/70 border border-blue-800/80 p-4 rounded-2xl text-blue-200 space-y-2">
-                      <p className="font-bold text-white text-xs">Full Job Movement Confirmation</p>
-                      <p className="text-xs leading-relaxed text-blue-100">
-                        Move Job Card No. <strong className="text-amber-300 font-mono">{selectedJob.jobCardNo}</strong> to the next process.
-                      </p>
-                      <div className="mt-2 text-xs font-extrabold text-blue-300 bg-slate-950 px-3 py-1.5 rounded-xl border border-blue-800 inline-block font-mono">
-                        Current Stage: {selectedJob.currentStageName} ➔ Next Stage: {PF01_STAGES[selectedJob.currentStageIndex + 1] || '20. PACKING (COMPLETED)'}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3 bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
-                      <div>
-                        <label className="block text-xs font-bold text-rose-400 mb-1">Rejection PCB Quantity (if any):</label>
-                        <input
-                          type="number"
-                          min={0}
-                          max={currentPcbQty}
-                          value={rejectedPcbQtyInput}
-                          onChange={(e) => {
-                            const raw = e.target.value;
-                            if (raw === '') {
-                              setRejectedPcbQtyInput('');
-                            } else {
-                              const val = parseInt(raw, 10);
-                              setRejectedPcbQtyInput(isNaN(val) ? 0 : Math.min(Math.max(0, val), currentPcbQty));
-                            }
-                          }}
-                          className="w-full bg-slate-900 border border-rose-600/50 rounded-xl px-3 py-2 text-xs font-bold text-rose-300 font-mono focus:outline-none focus:border-rose-400"
-                          placeholder="0"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1">Movement Category *</label>
-                        <select
-                          value={remarkCategory}
-                          onChange={(e) => setRemarkCategory(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-amber-400"
-                        >
-                          <option value="Clear Movement">Clear Movement (No issues)</option>
-                          <option value="Rejection">Rejection</option>
-                          <option value="Rework">Rework</option>
-                          <option value="Process issue">Process issue</option>
-                          <option value="Other relevant movement remarks">Other relevant movement remarks</option>
-                        </select>
-                      </div>
-
-                      <div className="col-span-2">
-                        <label className="block text-xs font-bold text-slate-300 mb-1">
-                          {actualRejected > 0 ? 'Mandatory Rejection Remark *' : 'Remarks Details (Optional)'}
-                        </label>
-                        <textarea
-                          rows={2}
-                          value={rejectionReasonInput}
-                          onChange={(e) => setRejectionReasonInput(e.target.value)}
-                          placeholder={actualRejected > 0 ? 'Specify rejection defect, cause, or operator notes...' : 'Enter optional stage movement remarks...'}
-                          className={`w-full bg-slate-900 border rounded-xl p-2.5 text-xs text-white focus:outline-none ${
-                            actualRejected > 0 ? 'border-rose-500 focus:border-rose-400' : 'border-slate-700 focus:border-amber-400'
-                          }`}
-                        />
-                      </div>
-
-                      {/* Live Calculation Preview */}
-                      <div className="col-span-2 bg-slate-900/90 border border-slate-800 p-3 rounded-xl flex items-center justify-between text-[11px] font-mono">
-                        <div>
-                          <span className="text-slate-400 block">Forwarded to Next Stage:</span>
-                          <span className="text-emerald-400 font-black text-sm">{forwardedPcbQty} PCBs</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block">Next Stage Area:</span>
-                          <span className="text-emerald-300 font-black text-sm">{nextStageSqm} Sqm</span>
-                        </div>
-                        <div>
-                          <span className="text-slate-400 block">Deducted Rejections:</span>
-                          <span className={`${actualRejected > 0 ? 'text-rose-400 font-black' : 'text-slate-500'} text-sm`}>{actualRejected} PCBs</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {isPackingStage ? (
-                      <button
-                        onClick={() => handleJobDispatch(selectedJob.id)}
-                        className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        <span>🚚 CONFIRM JOB DISPATCH & COMPLETE ({forwardedPcbQty} PCBs)</span>
-                      </button>
-                    ) : (
-                      <button
-                        onClick={handleFullJobMovement}
-                        className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
-                        <span>CONFIRM FULL MOVEMENT ({forwardedPcbQty} PCBs ➔ Next Stage)</span>
-                      </button>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {/* TAB C: UNCOMPLETED / SPLIT MOVEMENT */}
-              {movementTab === 'PARTIAL' && (() => {
-                const masterPcb = selectedJob.totalPcbQty || selectedJob.custPnlQty || 160;
-                const parsedMoveQty = typeof partialQty === 'number' ? partialQty : (parseInt(String(partialQty), 10) || 0);
-                const movedPcb = parsedMoveQty > 0 ? Math.min(parsedMoveQty, masterPcb - 1) : 0;
-                const remPcb = Math.max(0, masterPcb - movedPcb);
-
-                return (
-                  <div className="space-y-4 text-xs font-sans">
-                    <div className="bg-amber-950/40 border border-amber-800/80 p-3.5 rounded-2xl text-amber-200 space-y-1">
-                      <p className="font-extrabold text-amber-300">Uncompleted / Partial Job Movement (PCB Split)</p>
-                      <p className="text-[11px] text-amber-200/80">Move partial PCB quantity forward while maintaining balance PCBs at current stage with exact pending work reason.</p>
-                    </div>
-
-                    <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="block text-xs font-bold text-slate-300">Quantity Ready to Move Forward (PCBs):</label>
-                          <span className="text-xs font-bold text-amber-300 font-mono bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                            = {movedPcb} PCBs
-                          </span>
-                        </div>
-                        <input
-                          type="number"
-                          min={1}
-                          max={masterPcb - 1}
-                          value={partialQty}
-                          onChange={(e) => {
-                            const raw = e.target.value;
-                            if (raw === '') {
-                              setPartialQty('');
-                            } else {
-                              const parsed = parseInt(raw, 10);
-                              setPartialQty(isNaN(parsed) ? '' : Math.min(parsed, masterPcb - 1));
-                            }
-                          }}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-amber-300 font-mono"
-                          placeholder={`Enter PCBs (1 to ${masterPcb - 1})`}
-                        />
-                        {parsedMoveQty >= masterPcb && (
-                          <p className="text-[11px] text-rose-400 font-bold mt-1">
-                            ⚠ Quantity cannot exceed {masterPcb - 1} PCBs (Total Lot: {masterPcb} PCBs).
-                          </p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-amber-300 mb-1">Pending Work Reason:</label>
-                        <select
-                          value={pendingWorkReason}
-                          onChange={(e) => setPendingWorkReason(e.target.value)}
-                          className="w-full bg-slate-900 border border-amber-600/60 rounded-xl px-3 py-2 text-xs font-bold text-slate-100 focus:outline-none focus:border-amber-400"
-                        >
-                          <option value="Drilling & Hole Check Pending">Drilling & Hole Check Pending</option>
-                          <option value="Solder Mask Touch-Up Required">Solder Mask Touch-Up Required</option>
-                          <option value="Legend Reprint Pending">Legend Reprint Pending</option>
-                          <option value="V-Cut / Edge Chamfer Pending">V-Cut / Edge Chamfer Pending</option>
-                          <option value="FQC AI Re-Inspection Required">FQC AI Re-Inspection Required</option>
-                          <option value="Copper Plating Thickness Check Pending">Copper Plating Thickness Check Pending</option>
-                          <option value="Etching / Track Touch-up Pending">Etching / Track Touch-up Pending</option>
-                          <option value="Other / Custom Pending Reason">Other / Custom Pending Reason</option>
-                        </select>
-                      </div>
-
-                      {pendingWorkReason === 'Other / Custom Pending Reason' && (
-                        <div>
-                          <label className="block text-xs font-bold text-slate-300 mb-1">Specify Custom Pending Reason:</label>
-                          <input
-                            type="text"
-                            placeholder="e.g. Special Gold Finger Plating Inspection Pending"
-                            value={customPendingReason}
-                            onChange={(e) => setCustomPendingReason(e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200"
-                          />
-                        </div>
-                      )}
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-300 mb-1">Incomplete Movement Remarks / Work Notes:</label>
-                        <textarea
-                          rows={2}
-                          placeholder="Enter specific details regarding pending work, lot condition, or operator remarks..."
-                          value={remarksText}
-                          onChange={(e) => setRemarksText(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 text-[11px]">
-                        <div className="bg-emerald-950/50 border border-emerald-800/80 p-3 rounded-xl text-emerald-300">
-                          <div className="font-bold">Next Stage: {PF01_STAGES[selectedJob.currentStageIndex + 1]}</div>
-                          <div className="text-xs font-extrabold text-emerald-400 mt-1">{movedPcb} PCBs Moved</div>
-                        </div>
-                        <div className="bg-amber-950/50 border border-amber-800/80 p-3 rounded-xl text-amber-300">
-                          <div className="font-bold">Stays at: {selectedJob.currentStageName}</div>
-                          <div className="text-xs font-extrabold text-amber-400 mt-1">{remPcb} PCBs Balance</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={handlePartialJobMovement}
-                      className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg cursor-pointer"
-                    >
-                      CONFIRM PARTIAL MOVEMENT ({movedPcb} PCBs Forward • {remPcb} PCBs Balance)
-                    </button>
-                  </div>
-                );
-              })()}
-
-              <div className="pt-2 flex justify-end">
                 <button
                   onClick={() => setSelectedJob(null)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl"
+                  className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center shrink-0 cursor-pointer transition-colors"
+                  title="Close Modal"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Movement Options Tabs: A, B, C (Responsive) */}
+              <div className="shrink-0 p-2 sm:p-2.5 bg-slate-950 border-b border-slate-800">
+                <div className="grid grid-cols-3 bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs gap-1">
+                  <button
+                    onClick={() => setMovementTab('VIEW')}
+                    className={`py-2 px-1 rounded-lg font-extrabold transition-all text-center text-xs flex items-center justify-center gap-1 ${
+                      movementTab === 'VIEW' ? 'bg-amber-500 text-slate-950 shadow-md font-black' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Eye className="w-3.5 h-3.5 shrink-0" />
+                    <span className="sm:hidden">Overview</span>
+                    <span className="hidden sm:inline">A. Job Card View</span>
+                  </button>
+                  <button
+                    onClick={() => setMovementTab('FULL')}
+                    className={`py-2 px-1 rounded-lg font-extrabold transition-all text-center text-xs flex items-center justify-center gap-1 ${
+                      movementTab === 'FULL' ? 'bg-amber-500 text-slate-950 shadow-md font-black' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                    <span className="sm:hidden">Full Move</span>
+                    <span className="hidden sm:inline">B. Full Movement</span>
+                  </button>
+                  <button
+                    onClick={() => setMovementTab('PARTIAL')}
+                    className={`py-2 px-1 rounded-lg font-extrabold transition-all text-center text-xs flex items-center justify-center gap-1 ${
+                      movementTab === 'PARTIAL' ? 'bg-amber-500 text-slate-950 shadow-md font-black' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Split className="w-3.5 h-3.5 shrink-0" />
+                    <span className="sm:hidden">Split Lot</span>
+                    <span className="hidden sm:inline">C. Uncompleted / Split</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Scrollable Body Content */}
+              <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 space-y-4">
+
+                {/* TAB A: JOB CARD VIEW */}
+                {movementTab === 'VIEW' && (
+                  <div className="space-y-3.5 sm:space-y-4 text-xs font-sans">
+                    {selectedJob.photoUrl && (
+                      <div className="bg-slate-950 border border-slate-800 p-3 rounded-2xl flex items-center justify-between gap-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <img
+                            src={selectedJob.photoUrl}
+                            alt="Job Card Original Photo"
+                            className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl object-cover border border-slate-700 shadow-md cursor-pointer shrink-0"
+                            onClick={() => setPhotoLightbox(selectedJob.photoUrl || null)}
+                          />
+                          <div className="min-w-0">
+                            <p className="font-extrabold text-white text-xs truncate">Original Physical Photo</p>
+                            <p className="text-[10px] text-slate-400 truncate">Uploaded during Job Launching</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setPhotoLightbox(selectedJob.photoUrl || null)}
+                          className="px-2.5 sm:px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs flex items-center gap-1 shrink-0"
+                        >
+                          <Eye className="w-3.5 h-3.5 shrink-0" />
+                          <span className="hidden sm:inline">View Photo</span>
+                          <span className="sm:hidden">View</span>
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="bg-slate-950 p-3.5 sm:p-4 rounded-2xl border border-slate-800 space-y-2.5 text-xs font-sans">
+                      <div className="flex justify-between items-center gap-2 border-b border-slate-800/60 pb-1.5">
+                        <span className="text-slate-400 shrink-0">Job Card No:</span>
+                        <strong className="font-mono text-amber-400 text-sm truncate">{selectedJob.jobCardNo}</strong>
+                      </div>
+                      <div className="flex justify-between items-center gap-2 border-b border-slate-800/60 pb-1.5">
+                        <span className="text-slate-400 shrink-0">Current Stage:</span>
+                        <strong className="font-mono text-blue-400 font-bold truncate">{selectedJob.currentStageName}</strong>
+                      </div>
+                      <div className="flex justify-between items-center gap-2 border-b border-slate-800/60 pb-1.5">
+                        <span className="text-slate-400 shrink-0">Customer Part No:</span>
+                        <strong className="text-white font-medium truncate max-w-[200px] text-right">{selectedJob.customerPartNo}</strong>
+                      </div>
+                      <div className="flex justify-between items-center gap-2 border-b border-slate-800/60 pb-1.5">
+                        <span className="text-slate-400 shrink-0">R.F.E. Part Code:</span>
+                        <strong className="font-mono text-amber-300 truncate text-right">{selectedJob.rfePartCode}</strong>
+                      </div>
+                      <div className="flex justify-between items-center gap-2 border-b border-slate-800/60 pb-1.5">
+                        <span className="text-slate-400 shrink-0">Customer Code:</span>
+                        <strong className="text-slate-200 truncate">{selectedJob.customerCode}</strong>
+                      </div>
+                      <div className="flex justify-between items-center gap-2 border-b border-slate-800/60 pb-1.5">
+                        <span className="text-slate-400 shrink-0">Priority:</span>
+                        <span className="font-mono font-bold text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">{selectedJob.priority}</span>
+                      </div>
+                      <div className="flex justify-between items-center gap-2 border-b border-slate-800/60 pb-1.5">
+                        <span className="text-slate-400 shrink-0">Target Delivery Date:</span>
+                        <strong className="font-mono text-slate-200">{selectedJob.targetDate}</strong>
+                      </div>
+                      <div className="flex justify-between items-center gap-2 border-b border-slate-800/60 pb-1.5">
+                        <span className="text-slate-400 shrink-0">Total PCB Quantity:</span>
+                        <strong className="font-mono text-emerald-400 font-bold">{selectedJob.totalPcbQty || (selectedJob.prodPnlQty ? selectedJob.prodPnlQty * 4 : 160)} PCBs</strong>
+                      </div>
+                      <div className="flex justify-between items-center gap-2">
+                        <span className="text-slate-400 shrink-0">Production WIP Area:</span>
+                        <strong className="font-mono text-emerald-400 font-bold">{selectedJob.prodPnlAreaSqm} Sqm</strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB B: FULL MOVEMENT */}
+                {movementTab === 'FULL' && (() => {
+                  const currentPcbQty = selectedJob.totalPcbQty || 160;
+                  const currentArea = selectedJob.prodPnlAreaSqm || 45;
+                  const sqmPerPcb = currentPcbQty > 0 ? currentArea / currentPcbQty : 0;
+
+                  const parsedRejection = typeof rejectedPcbQtyInput === 'number'
+                    ? rejectedPcbQtyInput
+                    : (parseInt(String(rejectedPcbQtyInput), 10) || 0);
+
+                  const actualRejected = Math.min(Math.max(0, parsedRejection), currentPcbQty);
+                  const forwardedPcbQty = Math.max(0, currentPcbQty - actualRejected);
+                  const nextStageSqm = Number((forwardedPcbQty * sqmPerPcb).toFixed(2));
+                  const isPackingStage = selectedJob.currentStageName.includes('PACKING') || selectedJob.currentStageIndex === PF01_STAGES.length - 1;
+
+                  return (
+                    <div className="space-y-4 text-xs font-sans">
+                      <div className="bg-blue-950/70 border border-blue-800/80 p-3.5 sm:p-4 rounded-2xl text-blue-200 space-y-2">
+                        <p className="font-bold text-white text-xs">Full Job Movement Confirmation</p>
+                        <p className="text-xs leading-relaxed text-blue-100">
+                          Move Job Card No. <strong className="text-amber-300 font-mono">{selectedJob.jobCardNo}</strong> to the next process.
+                        </p>
+                        <div className="mt-2 text-[11px] sm:text-xs font-extrabold text-blue-300 bg-slate-950 px-2.5 sm:px-3 py-1.5 rounded-xl border border-blue-800 inline-block font-mono max-w-full truncate">
+                          Current: {selectedJob.currentStageName} ➔ Next: {PF01_STAGES[selectedJob.currentStageIndex + 1] || '20. PACKING (COMPLETED)'}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
+                        <div>
+                          <label className="block text-xs font-bold text-rose-400 mb-1">Rejection PCB Quantity (if any):</label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={currentPcbQty}
+                            value={rejectedPcbQtyInput}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              if (raw === '') {
+                                setRejectedPcbQtyInput('');
+                              } else {
+                                const val = parseInt(raw, 10);
+                                setRejectedPcbQtyInput(isNaN(val) ? 0 : Math.min(Math.max(0, val), currentPcbQty));
+                              }
+                            }}
+                            className="w-full bg-slate-900 border border-rose-600/50 rounded-xl px-3 py-2 text-xs font-bold text-rose-300 font-mono focus:outline-none focus:border-rose-400"
+                            placeholder="0"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-300 mb-1">Movement Category *</label>
+                          <select
+                            value={remarkCategory}
+                            onChange={(e) => setRemarkCategory(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-amber-400"
+                          >
+                            <option value="Clear Movement">Clear Movement (No issues)</option>
+                            <option value="Rejection">Rejection</option>
+                            <option value="Rework">Rework</option>
+                            <option value="Process issue">Process issue</option>
+                            <option value="Other relevant movement remarks">Other relevant movement remarks</option>
+                          </select>
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <label className="block text-xs font-bold text-slate-300 mb-1">
+                            {actualRejected > 0 ? 'Mandatory Rejection Remark *' : 'Remarks Details (Optional)'}
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={rejectionReasonInput}
+                            onChange={(e) => setRejectionReasonInput(e.target.value)}
+                            placeholder={actualRejected > 0 ? 'Specify rejection defect, cause, or operator notes...' : 'Enter optional stage movement remarks...'}
+                            className={`w-full bg-slate-900 border rounded-xl p-2.5 text-xs text-white focus:outline-none ${
+                              actualRejected > 0 ? 'border-rose-500 focus:border-rose-400' : 'border-slate-700 focus:border-amber-400'
+                            }`}
+                          />
+                        </div>
+
+                        {/* Live Calculation Preview */}
+                        <div className="sm:col-span-2 bg-slate-900/90 border border-slate-800 p-2.5 sm:p-3 rounded-xl grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5 text-[11px] font-mono">
+                          <div className="bg-slate-950/60 p-2 rounded-lg sm:bg-transparent sm:p-0">
+                            <span className="text-slate-400 block text-[10px]">Forwarded to Next:</span>
+                            <span className="text-emerald-400 font-black text-sm">{forwardedPcbQty} PCBs</span>
+                          </div>
+                          <div className="bg-slate-950/60 p-2 rounded-lg sm:bg-transparent sm:p-0">
+                            <span className="text-slate-400 block text-[10px]">Next Stage Area:</span>
+                            <span className="text-emerald-300 font-black text-sm">{nextStageSqm} Sqm</span>
+                          </div>
+                          <div className="bg-slate-950/60 p-2 rounded-lg sm:bg-transparent sm:p-0">
+                            <span className="text-slate-400 block text-[10px]">Deducted Rejections:</span>
+                            <span className={`${actualRejected > 0 ? 'text-rose-400 font-black' : 'text-slate-500'} text-sm`}>{actualRejected} PCBs</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {isPackingStage ? (
+                        <button
+                          onClick={() => handleJobDispatch(selectedJob.id)}
+                          className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                        >
+                          <span className="truncate">🚚 CONFIRM JOB DISPATCH & COMPLETE ({forwardedPcbQty} PCBs)</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleFullJobMovement}
+                          className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                        >
+                          <CheckCircle2 className="w-4 h-4 stroke-[2.5] shrink-0" />
+                          <span className="truncate">CONFIRM FULL MOVEMENT ({forwardedPcbQty} PCBs ➔ Next Stage)</span>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* TAB C: UNCOMPLETED / SPLIT MOVEMENT */}
+                {movementTab === 'PARTIAL' && (() => {
+                  const masterPcb = selectedJob.totalPcbQty || selectedJob.custPnlQty || 160;
+                  const parsedMoveQty = typeof partialQty === 'number' ? partialQty : (parseInt(String(partialQty), 10) || 0);
+                  const movedPcb = parsedMoveQty > 0 ? Math.min(parsedMoveQty, masterPcb - 1) : 0;
+                  const remPcb = Math.max(0, masterPcb - movedPcb);
+
+                  return (
+                    <div className="space-y-4 text-xs font-sans">
+                      <div className="bg-amber-950/40 border border-amber-800/80 p-3 sm:p-3.5 rounded-2xl text-amber-200 space-y-1">
+                        <p className="font-extrabold text-amber-300 text-xs sm:text-sm">Uncompleted / Partial Job Movement (PCB Split)</p>
+                        <p className="text-[11px] text-amber-200/80">Move partial PCB quantity forward while maintaining balance PCBs at current stage with exact pending work reason.</p>
+                      </div>
+
+                      <div className="bg-slate-950 p-3.5 sm:p-4 rounded-2xl border border-slate-800 space-y-3">
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-xs font-bold text-slate-300">Quantity Ready to Move Forward (PCBs):</label>
+                            <span className="text-xs font-bold text-amber-300 font-mono bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                              = {movedPcb} PCBs
+                            </span>
+                          </div>
+                          <input
+                            type="number"
+                            min={1}
+                            max={masterPcb - 1}
+                            value={partialQty}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              if (raw === '') {
+                                setPartialQty('');
+                              } else {
+                                const parsed = parseInt(raw, 10);
+                                setPartialQty(isNaN(parsed) ? '' : Math.min(parsed, masterPcb - 1));
+                              }
+                            }}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-amber-300 font-mono"
+                            placeholder={`Enter PCBs (1 to ${masterPcb - 1})`}
+                          />
+                          {parsedMoveQty >= masterPcb && (
+                            <p className="text-[11px] text-rose-400 font-bold mt-1">
+                              ⚠ Quantity cannot exceed {masterPcb - 1} PCBs (Total Lot: {masterPcb} PCBs).
+                            </p>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-amber-300 mb-1">Pending Work Reason:</label>
+                          <select
+                            value={pendingWorkReason}
+                            onChange={(e) => setPendingWorkReason(e.target.value)}
+                            className="w-full bg-slate-900 border border-amber-600/60 rounded-xl px-3 py-2 text-xs font-bold text-slate-100 focus:outline-none focus:border-amber-400"
+                          >
+                            <option value="Drilling & Hole Check Pending">Drilling & Hole Check Pending</option>
+                            <option value="Solder Mask Touch-Up Required">Solder Mask Touch-Up Required</option>
+                            <option value="Legend Reprint Pending">Legend Reprint Pending</option>
+                            <option value="V-Cut / Edge Chamfer Pending">V-Cut / Edge Chamfer Pending</option>
+                            <option value="FQC AI Re-Inspection Required">FQC AI Re-Inspection Required</option>
+                            <option value="Copper Plating Thickness Check Pending">Copper Plating Thickness Check Pending</option>
+                            <option value="Etching / Track Touch-up Pending">Etching / Track Touch-up Pending</option>
+                            <option value="Other / Custom Pending Reason">Other / Custom Pending Reason</option>
+                          </select>
+                        </div>
+
+                        {pendingWorkReason === 'Other / Custom Pending Reason' && (
+                          <div>
+                            <label className="block text-xs font-bold text-slate-300 mb-1">Specify Custom Pending Reason:</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. Special Gold Finger Plating Inspection Pending"
+                              value={customPendingReason}
+                              onChange={(e) => setCustomPendingReason(e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200"
+                            />
+                          </div>
+                        )}
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-300 mb-1">Incomplete Movement Remarks / Work Notes:</label>
+                          <textarea
+                            rows={2}
+                            placeholder="Enter specific details regarding pending work, lot condition, or operator remarks..."
+                            value={remarksText}
+                            onChange={(e) => setRemarksText(e.target.value)}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                          <div className="bg-emerald-950/50 border border-emerald-800/80 p-2.5 sm:p-3 rounded-xl text-emerald-300">
+                            <div className="font-bold truncate">Next Stage: {PF01_STAGES[selectedJob.currentStageIndex + 1]}</div>
+                            <div className="text-xs font-extrabold text-emerald-400 mt-1">{movedPcb} PCBs Moved</div>
+                          </div>
+                          <div className="bg-amber-950/50 border border-amber-800/80 p-2.5 sm:p-3 rounded-xl text-amber-300">
+                            <div className="font-bold truncate">Stays at: {selectedJob.currentStageName}</div>
+                            <div className="text-xs font-extrabold text-amber-400 mt-1">{remPcb} PCBs Balance</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={handlePartialJobMovement}
+                        className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-lg cursor-pointer active:scale-98"
+                      >
+                        <span className="truncate">CONFIRM PARTIAL MOVEMENT ({movedPcb} PCBs Forward • {remPcb} PCBs Balance)</span>
+                      </button>
+                    </div>
+                  );
+                })()}
+
+              </div>
+
+              {/* Sticky Footer */}
+              <div className="shrink-0 p-3 sm:p-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-end">
+                <button
+                  onClick={() => setSelectedJob(null)}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs rounded-xl transition-colors cursor-pointer text-center"
                 >
                   Close
                 </button>
@@ -1402,14 +1479,20 @@ export default function JobMovementUpdatePage() {
       {/* Photo Lightbox Modal */}
       {photoLightbox && (
         <Portal>
-          <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[99999] flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-700 p-4 rounded-3xl max-w-3xl w-full space-y-3 relative shadow-2xl">
-              <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                <span className="font-extrabold text-sm text-white font-mono">Verification of Original Physical Job Card Photo</span>
-                <button onClick={() => setPhotoLightbox(null)} className="text-slate-400 hover:text-white font-bold p-1">✕</button>
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[99999] flex items-center justify-center p-2 sm:p-4">
+            <div className="bg-slate-900 border border-slate-700 p-3 sm:p-4 rounded-2xl sm:rounded-3xl max-w-3xl w-full space-y-3 relative shadow-2xl">
+              <div className="flex justify-between items-center border-b border-slate-800 pb-2 gap-2">
+                <span className="font-extrabold text-xs sm:text-sm text-white font-mono truncate">Physical Job Card Photo</span>
+                <button
+                  onClick={() => setPhotoLightbox(null)}
+                  className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center text-xs font-bold shrink-0 cursor-pointer"
+                  title="Close"
+                >
+                  ✕
+                </button>
               </div>
-              <div className="max-h-[75vh] overflow-auto flex items-center justify-center bg-black rounded-2xl p-2">
-                <img src={photoLightbox} alt="Original Job Card" className="max-h-[70vh] w-auto object-contain rounded-xl" />
+              <div className="max-h-[75vh] overflow-auto flex items-center justify-center bg-black rounded-xl sm:rounded-2xl p-1 sm:p-2">
+                <img src={photoLightbox} alt="Original Job Card" className="max-h-[70vh] w-auto object-contain rounded-lg sm:rounded-xl" />
               </div>
             </div>
           </div>
