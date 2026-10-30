@@ -3230,16 +3230,6 @@ export default function JobCardsPage() {
       if (cardStageIdx === targetIdx || cardStageSlug === targetSlug) {
         return true;
       }
-
-      // If card has sub-lots:
-      if (jc.subJobCards && Array.isArray(jc.subJobCards) && jc.subJobCards.length > 0) {
-        return jc.subJobCards.some((s: any) => {
-          const subStageName = s.currentStage?.name || '';
-          const subSlug = normalizeStageSlug(subStageName);
-          const subIdx = s.currentStage?.defaultOrder ? (s.currentStage.defaultOrder - 1) : normalizeStageIndex(subStageName);
-          return subIdx === targetIdx || subSlug === targetSlug;
-        });
-      }
       return false;
     });
   }, [jobCards, isOperatorUser, assignedStage, isCardCompleted]);
@@ -3256,14 +3246,7 @@ export default function JobCardsPage() {
     if (effectiveStageFilter) {
       const targetSlug = normalizeStageSlug(effectiveStageFilter);
       const cardStageSlug = normalizeStageSlug(jc.currentStageName);
-      let foundInSubs = false;
-      if (jc.subJobCards && Array.isArray(jc.subJobCards) && jc.subJobCards.length > 0) {
-        foundInSubs = jc.subJobCards.some((s: any) => {
-          const subSlug = normalizeStageSlug(s.currentStage?.name || '');
-          return subSlug === targetSlug || (s.currentStage?.name || '').toLowerCase().includes(effectiveStageFilter.toLowerCase());
-        });
-      }
-      matchesStage = cardStageSlug === targetSlug || (jc.currentStageName || '').toLowerCase().includes(effectiveStageFilter.toLowerCase()) || foundInSubs;
+      matchesStage = cardStageSlug === targetSlug || (jc.currentStageName || '').toLowerCase().includes(effectiveStageFilter.toLowerCase());
     }
 
     const matchesPriority = !colFilters.priority || jc.priority.toLowerCase().includes(colFilters.priority.toLowerCase());

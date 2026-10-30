@@ -364,7 +364,9 @@ export default function JobMovementUpdatePage() {
   };
 
   const canUserMoveStage = (jobStageName: string) => {
-    const isStageLocked = (assignedStage && assignedStage.toUpperCase() !== 'ALL') || userRole === 'NORMAL';
+    const storedAssignedStage = typeof window !== 'undefined' ? localStorage.getItem('assignedStage') : null;
+  const isActualOperator = Boolean(storedAssignedStage && storedAssignedStage.toUpperCase() !== 'ALL') || userRole === 'NORMAL';
+  const isStageLocked = isActualOperator && Boolean(assignedStage && assignedStage.toUpperCase() !== 'ALL');
     if (!isStageLocked) return true;
     const assignedSlug = normalizeStageSlug(assignedStage);
     const jobSlug = normalizeStageSlug(jobStageName);
@@ -680,11 +682,13 @@ export default function JobMovementUpdatePage() {
       .trim();
   };
 
-  const isStageLocked = (assignedStage && assignedStage.toUpperCase() !== 'ALL') || userRole === 'NORMAL';
+  const storedAssignedStage = typeof window !== 'undefined' ? localStorage.getItem('assignedStage') : null;
+  const isActualOperator = Boolean(storedAssignedStage && storedAssignedStage.toUpperCase() !== 'ALL') || userRole === 'NORMAL';
+  const isStageLocked = isActualOperator && Boolean(assignedStage && assignedStage.toUpperCase() !== 'ALL');
   const isShearingStage = assignedStage.includes('SHEARING') || assignedStage.includes('1.') || assignedStage.toLowerCase().includes('shearing');
 
   const filteredJobs = jobs.filter((j) => {
-    if (isStageLocked) {
+    if (assignedStage && assignedStage.toUpperCase() !== 'ALL') {
       const assignedSlug = normalizeStageSlug(assignedStage);
       const isUnlaunched = j.status === 'UNLAUNCHED';
       const isCompleted = j.status === 'COMPLETED';
@@ -820,6 +824,7 @@ export default function JobMovementUpdatePage() {
                   }}
                   className="bg-transparent font-bold text-slate-900 outline-none cursor-pointer text-xs font-mono w-full sm:w-auto truncate"
                 >
+                  <option value="ALL" className="bg-white text-slate-900 font-sans font-bold">All Stages (Floor Overview)</option>
                   {PF01_STAGES.map((stg) => (
                     <option key={stg} value={stg} className="bg-white text-slate-900 font-sans">
                       {stg}
