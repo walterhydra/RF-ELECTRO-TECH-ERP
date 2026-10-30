@@ -15,9 +15,7 @@ import {
   Volume2,
   QrCode,
   Barcode,
-  ArrowLeft,
-  ChevronRight,
-  Sparkles
+  ArrowLeft
 } from 'lucide-react';
 import { Portal } from '@/components/ui/Portal';
 
@@ -111,8 +109,6 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
   isOpen,
   onClose,
   onScanSuccess,
-  title = 'Job Card Scanner',
-  subtitle = 'Scan Traveler QR Code or Barcode',
   defaultMode = 'select'
 }) => {
   const [mode, setMode] = useState<ScannerMode>(defaultMode);
@@ -330,127 +326,62 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
       <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[999999] flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
         
         {/* Modal Dialog Container */}
-        <div className="relative w-full max-w-md bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+        <div className={`relative w-full ${
+          mode === 'select' ? 'max-w-sm' : 'max-w-md'
+        } bg-slate-950 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] transition-all duration-200`}>
           
           {/* =============================================================== */}
-          {/* SCREEN 1: PRE-SCAN SELECTION (QR CODE OR BARCODE)                */}
+          {/* SCREEN 1: PRE-SCAN SELECTION (JUST 2 CIRCLES)                   */}
           {/* =============================================================== */}
           {mode === 'select' && (
-            <div className="p-5 sm:p-6 space-y-5 animate-in fade-in duration-150">
+            <div className="p-6 sm:p-8 flex flex-col items-center justify-center text-center space-y-5 animate-in fade-in duration-150">
               
-              {/* Header with Close Button */}
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400">
-                    <Scan className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-black text-white font-mono tracking-wide">
-                      {title}
-                    </h3>
-                    <p className="text-[11px] text-slate-400 font-sans">
-                      Choose code type to scan
-                    </p>
-                  </div>
-                </div>
-
+              {/* Top row with Close button */}
+              <div className="w-full flex items-center justify-between pb-2 border-b border-slate-800/80">
+                <span className="text-xs font-mono font-bold tracking-wider text-slate-400 uppercase">
+                  Select Scanner
+                </span>
                 <button
                   type="button"
                   onClick={onClose}
-                  className="p-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white cursor-pointer transition-all"
+                  className="p-1.5 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white cursor-pointer transition-all"
                   title="Close"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* Selection Banner / Prompt */}
-              <div className="text-center py-1">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-full">
-                  STEP 1 • CHOOSE SCANNER TYPE
-                </span>
-                <p className="text-xs text-slate-300 mt-2">
-                  Select what is printed on your physical Job Traveler:
-                </p>
-              </div>
-
-              {/* The 2 Large Touch Options */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* The 2 Big Minimal Circles */}
+              <div className="flex items-center justify-center gap-8 sm:gap-10 py-5">
                 
-                {/* OPTION 1: QR CODE */}
+                {/* CIRCLE 1: QR CODE */}
                 <button
                   type="button"
                   onClick={() => setMode('qr')}
-                  className="group relative bg-gradient-to-br from-slate-900 to-slate-900/95 hover:from-blue-950/50 hover:to-slate-900 border-2 border-slate-700/80 hover:border-blue-500 rounded-2xl p-4 text-left transition-all cursor-pointer shadow-lg active:scale-[0.98] flex flex-col justify-between"
+                  className="group flex flex-col items-center gap-3 transition-transform active:scale-90 cursor-pointer focus:outline-none"
                 >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="w-12 h-12 rounded-xl bg-blue-500/15 border border-blue-500/40 flex items-center justify-center text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
-                      <QrCode className="w-6 h-6" />
-                    </div>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                      2D Square
-                    </span>
+                  <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-blue-500/10 border-2 border-blue-500/40 group-hover:border-blue-400 group-hover:bg-blue-500/20 group-hover:shadow-[0_0_25px_rgba(59,130,246,0.35)] flex items-center justify-center text-blue-400 group-hover:text-blue-300 transition-all shadow-lg">
+                    <QrCode className="w-11 h-11 sm:w-12 sm:h-12 stroke-[1.8]" />
                   </div>
-                  <div>
-                    <h4 className="text-sm font-black text-white font-mono group-hover:text-blue-400 transition-colors flex items-center justify-between">
-                      <span>QR Code</span>
-                      <span className="text-xs text-blue-400 group-hover:translate-x-1 transition-transform">→</span>
-                    </h4>
-                    <p className="text-[11px] text-slate-400 mt-1 leading-snug">
-                      Scan 2D Square QR Code on traveler traveler sheet
-                    </p>
-                  </div>
+                  <span className="text-sm font-bold font-mono text-slate-200 group-hover:text-blue-400 transition-colors">
+                    QR Code
+                  </span>
                 </button>
 
-                {/* OPTION 2: BARCODE */}
+                {/* CIRCLE 2: BAR CODE */}
                 <button
                   type="button"
                   onClick={() => setMode('barcode')}
-                  className="group relative bg-gradient-to-br from-slate-900 to-slate-900/95 hover:from-amber-950/50 hover:to-slate-900 border-2 border-slate-700/80 hover:border-amber-500 rounded-2xl p-4 text-left transition-all cursor-pointer shadow-lg active:scale-[0.98] flex flex-col justify-between"
+                  className="group flex flex-col items-center gap-3 transition-transform active:scale-90 cursor-pointer focus:outline-none"
                 >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 transition-all shadow-sm">
-                      <Barcode className="w-6 h-6" />
-                    </div>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                      1D Linear
-                    </span>
+                  <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-amber-500/10 border-2 border-amber-500/40 group-hover:border-amber-400 group-hover:bg-amber-500/20 group-hover:shadow-[0_0_25px_rgba(245,158,11,0.35)] flex items-center justify-center text-amber-400 group-hover:text-amber-300 transition-all shadow-lg">
+                    <Barcode className="w-11 h-11 sm:w-12 sm:h-12 stroke-[1.8]" />
                   </div>
-                  <div>
-                    <h4 className="text-sm font-black text-white font-mono group-hover:text-amber-400 transition-colors flex items-center justify-between">
-                      <span>Bar Code</span>
-                      <span className="text-xs text-amber-400 group-hover:translate-x-1 transition-transform">→</span>
-                    </h4>
-                    <p className="text-[11px] text-slate-400 mt-1 leading-snug">
-                      Scan horizontal 1D Code-128 or Code-39 barcode
-                    </p>
-                  </div>
+                  <span className="text-sm font-bold font-mono text-slate-200 group-hover:text-amber-400 transition-colors">
+                    Bar Code
+                  </span>
                 </button>
 
-              </div>
-
-              {/* Bottom Manual Entry Fallback */}
-              <div className="pt-3 border-t border-slate-800/80 space-y-2">
-                <div className="text-[11px] text-slate-400 font-mono flex items-center justify-between">
-                  <span>Torn code or no camera?</span>
-                  <span className="text-[10px] text-blue-400 font-bold">Manual Entry</span>
-                </div>
-                <form onSubmit={handleManualSubmit} className="flex gap-2">
-                  <input
-                    type="text"
-                    value={manualCode}
-                    onChange={(e) => setManualCode(e.target.value)}
-                    placeholder="Enter Job Card No (e.g. 26-27-2432)..."
-                    className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white placeholder-slate-500 focus:outline-none focus:border-blue-400"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!manualCode.trim()}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-black text-xs rounded-xl transition-all cursor-pointer shrink-0"
-                  >
-                    Open Job
-                  </button>
-                </form>
               </div>
 
             </div>
@@ -464,15 +395,15 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
               {/* Top Control Bar */}
               <div className="flex items-center justify-between px-3.5 py-2.5 bg-slate-900/90 border-b border-slate-800 shrink-0">
                 
-                {/* Back to Options Button */}
+                {/* Back to 2 Circles Button */}
                 <button
                   type="button"
                   onClick={() => setMode('select')}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white rounded-xl text-xs font-mono font-bold cursor-pointer transition-all border border-slate-700 active:scale-95"
-                  title="Choose QR Code or Barcode"
+                  title="Back to options"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Option</span>
+                  <span>Back</span>
                 </button>
 
                 {/* Current Active Mode Badge */}
@@ -485,12 +416,12 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
                     {mode === 'qr' ? (
                       <>
                         <QrCode className="w-3.5 h-3.5 text-blue-400" />
-                        <span>QR Code Mode</span>
+                        <span>QR Code</span>
                       </>
                     ) : (
                       <>
                         <Barcode className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Bar Code Mode</span>
+                        <span>Bar Code</span>
                       </>
                     )}
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -552,9 +483,8 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
                   <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center space-y-3 z-10">
                     <RefreshCw className={`w-8 h-8 animate-spin ${mode === 'qr' ? 'text-blue-400' : 'text-amber-400'}`} />
                     <p className={`text-xs font-mono font-bold ${mode === 'qr' ? 'text-blue-300' : 'text-amber-300'}`}>
-                      Activating {mode === 'qr' ? 'QR Code' : 'Bar Code'} Viewfinder...
+                      Starting {mode === 'qr' ? 'QR Code' : 'Bar Code'} Scanner...
                     </p>
-                    <p className="text-[10px] text-slate-500 font-mono">Aligning sensor to code format</p>
                   </div>
                 )}
 
@@ -576,7 +506,7 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
                         onClick={() => setMode('select')}
                         className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold cursor-pointer"
                       >
-                        Back to Options
+                        Back
                       </button>
                     </div>
                   </div>
@@ -677,41 +607,23 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
 
               </div>
 
-              {/* Bottom Quick Switch & Manual Entry */}
-              <div className="p-3 bg-slate-900 border-t border-slate-800 space-y-2 shrink-0">
-                
-                {/* 1-Tap Quick Switch between QR and Barcode without going back */}
-                <div className="flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={() => setMode(mode === 'qr' ? 'barcode' : 'qr')}
-                    className="inline-flex items-center gap-1.5 text-[11px] font-mono text-slate-300 hover:text-white transition-colors cursor-pointer bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded-lg border border-slate-700"
-                  >
-                    <RefreshCw className="w-3 h-3 text-amber-400" />
-                    <span>Switch to {mode === 'qr' ? 'Bar Code' : 'QR Code'}</span>
-                  </button>
-                  <span className="text-[10.5px] text-slate-500 font-mono">Auto-decoding</span>
-                </div>
-
-                <form onSubmit={handleManualSubmit} className="flex gap-2">
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      value={manualCode}
-                      onChange={(e) => setManualCode(e.target.value)}
-                      placeholder="Or enter Job Card No manually..."
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs font-mono font-bold text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={!manualCode.trim()}
-                    className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-black text-xs rounded-xl transition-all cursor-pointer shrink-0"
-                  >
-                    <span>Find</span>
-                  </button>
-                </form>
-
+              {/* Bottom Quick Switch */}
+              <div className="p-3 bg-slate-900 border-t border-slate-800 flex items-center justify-between shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setMode(mode === 'qr' ? 'barcode' : 'qr')}
+                  className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-300 hover:text-white transition-colors cursor-pointer bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700"
+                >
+                  <RefreshCw className="w-3 h-3 text-amber-400" />
+                  <span>Switch to {mode === 'qr' ? 'Bar Code' : 'QR Code'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('select')}
+                  className="text-xs font-mono text-slate-400 hover:text-slate-200 cursor-pointer"
+                >
+                  Change Mode
+                </button>
               </div>
             </>
           )}
