@@ -109,6 +109,8 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
   isOpen,
   onClose,
   onScanSuccess,
+  title = 'Select Scanner',
+  subtitle,
   defaultMode = 'select'
 }) => {
   const [mode, setMode] = useState<ScannerMode>(defaultMode);
@@ -120,11 +122,40 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
   const [hasTorch, setHasTorch] = useState(false);
   const [isTorchOn, setIsTorchOn] = useState(false);
 
+  // Stable refs for callbacks so parent re-renders NEVER cause scanner to blink or restart
+  const onScanSuccessRef = useRef(onScanSuccess);
+  onScanSuccessRef.current = onScanSuccess;
+
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   const scannerRef = useRef<any>(null);
   const isScanningActiveRef = useRef(false);
-  const viewportId = useRef(`rf-scanner-${Math.random().toString(36).substring(2, 9)}`);
+  const isStoppingRef = useRef(false);
+  const prevIsOpenRef = useRef(false);
+  const viewportId = useRef('rf-live-camera-feed-viewport');
 
-  // Handle successful detection
+  // Clean stop scanner instance
+  const stopScanner = useCallback(async () => {
+    isScanningActiveRef.current = false;
+    if (isStoppingRef.current) return;
+    if (scannerRef.current) {
+      isStoppingRef.current = true;
+      try {
+        if (scannerRef.current.isScanning) {
+          await scannerRef.current.stop();
+        }
+        scannerRef.current.clear();
+      } catch (e) {
+        console.warn('Scanner stop warning:', e);
+      } finally {
+        scannerRef.current = null;
+        isStoppingRef.current = false;
+      }
+    }
+  }, []);
+
+  // Handle successful detection (Stable callback, reads refs directly)
   const handleDecoded = useCallback((decodedText: string) => {
     if (!isScanningActiveRef.current) return;
     const clean = parseScannedJobCode(decodedText);
@@ -134,6 +165,13 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
     setIsLocked(true);
     setDetectedCode(clean);
 
+    // Pause camera video frame immediately so user sees the locked code without screen tearing
+    try {
+      if (scannerRef.current && scannerRef.current.isScanning) {
+        scannerRef.current.pause(true);
+      }
+    } catch {}
+
     playScanSuccessBeep();
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       try { navigator.vibrate([80, 40, 80]); } catch {}
@@ -141,45 +179,36 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
 
     // Short visual confirmation before closing
     setTimeout(() => {
-      onScanSuccess(clean, decodedText);
-      onClose();
+      onScanSuccessRef.current(clean, decodedText);
+      onCloseRef.current();
     }, 450);
-  }, [onScanSuccess, onClose]);
-
-  // Clean stop scanner instance
-  const stopScanner = useCallback(async () => {
-    isScanningActiveRef.current = false;
-    if (scannerRef.current) {
-      try {
-        if (scannerRef.current.isScanning) {
-          await scannerRef.current.stop();
-        }
-        scannerRef.current.clear();
-      } catch (e) {
-        console.warn('Scanner stop warning:', e);
-      }
-      scannerRef.current = null;
-    }
   }, []);
 
-  // Reset mode when modal opens or closes
+  const handleDecodedRef = useRef(handleDecoded);
+  handleDecodedRef.current = handleDecoded;
+
+  // Modal open/close lifecycle - ONLY triggers on state changes (not parent polling re-renders)
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !prevIsOpenRef.current) {
+      // Fresh modal open: reset state to initial mode
       setMode(defaultMode);
       setIsLocked(false);
       setDetectedCode(null);
       setErrorMessage(null);
       setIsTorchOn(false);
-    } else {
+    } else if (!isOpen && prevIsOpenRef.current) {
+      // Modal closed: clean up scanner
       stopScanner();
       setIsLocked(false);
       setDetectedCode(null);
       setErrorMessage(null);
       setIsTorchOn(false);
     }
+    prevIsOpenRef.current = isOpen;
   }, [isOpen, defaultMode, stopScanner]);
 
-  // Start / restart camera whenever in 'qr' or 'barcode' mode
+  // Start camera ONLY when isOpen is true and mode is 'qr' or 'barcode'
+  // NOTICE: Effect ONLY depends on [isOpen, mode, facingMode] - ZERO callback references
   useEffect(() => {
     if (!isOpen || mode === 'select') {
       stopScanner();
@@ -196,7 +225,7 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
     const initScanner = async () => {
       try {
         // Small delay to ensure Portal DOM viewport element is mounted
-        await new Promise((r) => setTimeout(r, 80));
+        await new Promise((r) => setTimeout(r, 100));
         if (!isMounted) return;
 
         const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
@@ -217,6 +246,17 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
               Html5QrcodeSupportedFormats.UPC_A,
             ];
 
+        // Clean any existing scanner before starting fresh
+        if (scannerRef.current) {
+          try {
+            if (scannerRef.current.isScanning) {
+              await scannerRef.current.stop();
+            }
+            scannerRef.current.clear();
+          } catch {}
+          scannerRef.current = null;
+        }
+
         const scanner = new Html5Qrcode(viewportId.current, {
           formatsToSupport,
           verbose: false,
@@ -224,22 +264,21 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
 
         scannerRef.current = scanner;
 
-        // Optimized box for QR (square) vs Barcode (wide horizontal rectangle)
+        // Smooth 15-20 fps configuration without forcing restrictive hardware aspect ratio
         const scanConfig = {
-          fps: 22,
+          fps: 16,
           qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
             if (mode === 'qr') {
               const edge = Math.min(viewfinderWidth, viewfinderHeight);
-              const size = Math.max(200, Math.floor(edge * 0.72));
+              const size = Math.max(180, Math.floor(edge * 0.70));
               return { width: size, height: size };
             } else {
               // Barcode format: Wide horizontal box
-              const w = Math.min(viewfinderWidth * 0.88, 320);
-              const h = Math.min(viewfinderHeight * 0.44, 130);
+              const w = Math.min(viewfinderWidth * 0.88, 300);
+              const h = Math.min(viewfinderHeight * 0.44, 120);
               return { width: Math.floor(w), height: Math.floor(h) };
             }
           },
-          aspectRatio: mode === 'qr' ? 1.0 : 1.7777,
         };
 
         // Try environment camera first, then user camera
@@ -247,15 +286,15 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
           await scanner.start(
             { facingMode: facingMode },
             scanConfig,
-            (decodedText: string) => handleDecoded(decodedText),
-            () => {}
+            (decodedText: string) => handleDecodedRef.current(decodedText),
+            () => {} // Frame scan in-progress
           );
         } catch (camErr) {
           console.warn('FacingMode camera failed, trying fallback camera:', camErr);
           await scanner.start(
             { facingMode: facingMode === 'environment' ? 'user' : 'environment' },
             scanConfig,
-            (decodedText: string) => handleDecoded(decodedText),
+            (decodedText: string) => handleDecodedRef.current(decodedText),
             () => {}
           );
         }
@@ -289,7 +328,7 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
       isMounted = false;
       stopScanner();
     };
-  }, [isOpen, mode, facingMode, handleDecoded, stopScanner]);
+  }, [isOpen, mode, facingMode, stopScanner]);
 
   // Torch / Flashlight toggle
   const toggleTorch = async () => {
