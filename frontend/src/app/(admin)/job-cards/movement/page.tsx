@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import { Portal } from '@/components/ui/Portal';
 import { getApiBaseUrl, fetchApi } from '@/lib/utils';
-import { LiveCameraScannerModal, parseScannedJobCode } from '@/components/scanner/LiveCameraScannerModal';
+import { parseScannedJobCode } from '@/components/scanner/LiveCameraScannerModal';
 
 // Process Flow PF-01 19 Predefined Stages (Matching Database ProcessStage Master)
 const PF01_STAGES = [
@@ -707,7 +707,6 @@ export default function JobMovementUpdatePage() {
     );
   });
   const [barcodeInput, setBarcodeInput] = useState('');
-  const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
   const [multiLotCandidates, setMultiLotCandidates] = useState<JobCard[]>([]);
 
   const handleLookupJob = (rawInput: string) => {
@@ -856,31 +855,20 @@ export default function JobMovementUpdatePage() {
         </div>
       )}
 
-      {/* Barcode & Mobile Camera Scanner Box */}
+      {/* Barcode & Job Card Lookup Box */}
       <div className="bg-white border border-slate-200/90 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3.5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
-              <Scan className="w-4 h-4 text-amber-600" />
-            </div>
-            <div>
-              <span className="text-xs font-black text-slate-900 uppercase tracking-wider font-mono">
-                BARCODE & CAMERA SCANNER (QR & CODE128)
-              </span>
-              <span className="text-[11px] text-slate-400 block font-normal">
-                Instant stage movement via physical job card barcode or QR code
-              </span>
-            </div>
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
+            <Scan className="w-4 h-4 text-amber-600" />
           </div>
-          
-          <button
-            type="button"
-            onClick={() => setIsCameraScannerOpen(true)}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs active:scale-95 transition-all cursor-pointer border border-blue-500"
-          >
-            <Camera className="w-4 h-4 text-white" />
-            <span>Open Camera Scanner</span>
-          </button>
+          <div>
+            <span className="text-xs font-black text-slate-900 uppercase tracking-wider font-mono">
+              BARCODE & JOB CARD LOOKUP (QR & CODE128)
+            </span>
+            <span className="text-[11px] text-slate-400 block font-normal">
+              Instant stage movement via physical job card barcode, scanner gun, or typing Job Card No
+            </span>
+          </div>
         </div>
 
         <form onSubmit={handleBarcodeSubmit} className="flex flex-col sm:flex-row gap-2.5">
@@ -890,16 +878,8 @@ export default function JobMovementUpdatePage() {
               value={barcodeInput}
               onChange={(e) => setBarcodeInput(e.target.value)}
               placeholder="Scan Barcode / QR Code or enter Job Card No (e.g. 26-27-2432)..."
-              className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl pl-3.5 pr-10 py-2.5 sm:py-3 text-xs sm:text-sm font-mono font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:bg-white shadow-2xs transition-all"
+              className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl px-3.5 py-2.5 sm:py-3 text-xs sm:text-sm font-mono font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:bg-white shadow-2xs transition-all"
             />
-            <button
-              type="button"
-              onClick={() => setIsCameraScannerOpen(true)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
-              title="Open Camera Scanner"
-            >
-              <Camera className="w-4 h-4" />
-            </button>
           </div>
           <button
             type="submit"
@@ -1520,15 +1500,6 @@ export default function JobMovementUpdatePage() {
           </div>
         </Portal>
       )}
-
-      {/* Live Camera Scanner Modal (QR & Barcode) */}
-      <LiveCameraScannerModal
-        isOpen={isCameraScannerOpen}
-        onClose={() => setIsCameraScannerOpen(false)}
-        onScanSuccess={(scannedCode) => handleLookupJob(scannedCode)}
-        title="Shop Floor Mobile Scanner"
-        subtitle="Point camera at printed Job Card QR Code or 1D Barcode"
-      />
 
     </div>
   );

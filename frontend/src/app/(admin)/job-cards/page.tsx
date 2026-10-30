@@ -59,7 +59,7 @@ import {
 import { Portal } from '@/components/ui/Portal';
 import { getApiBaseUrl, compressImageFile } from '@/lib/utils';
 import { generateCode128Svg } from '@/lib/barcode';
-import { LiveCameraScannerModal, parseScannedJobCode } from '@/components/scanner/LiveCameraScannerModal';
+import { parseScannedJobCode } from '@/components/scanner/LiveCameraScannerModal';
 
 
 // Process Flow PF-01 19 Predefined Stages (Matching Database ProcessStage Master)
@@ -748,7 +748,6 @@ export default function JobCardsPage() {
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   const [serverHost, setServerHost] = useState<string>('');
   const [photoLightbox, setPhotoLightbox] = useState<string | null>(null);
-  const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
   const [unitPcbAreaSqm, setUnitPcbAreaSqm] = useState<number>(0.28125);
 
   // Server Connection Diagnostic State
@@ -3620,13 +3619,12 @@ export default function JobCardsPage() {
               />
             </div>
             <button
-              type="button"
-              onClick={() => setIsCameraScannerOpen(true)}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-xs inline-flex items-center gap-1.5 shrink-0 active:scale-95"
-              title="Open Camera Scanner"
+              type="submit"
+              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-xs inline-flex items-center gap-1.5 shrink-0 active:scale-95"
+              title="Find & Open Job Card"
             >
-              <Camera className="w-3.5 h-3.5 text-white" />
-              <span>Scan</span>
+              <Search className="w-3.5 h-3.5 text-white" />
+              <span>Find</span>
             </button>
           </form>
         </div>
@@ -8698,15 +8696,6 @@ export default function JobCardsPage() {
           </div>
         </Portal>
       )}
-
-      {/* MODAL 8: LIVE MOBILE CAMERA SCANNER (QR & 1D BARCODES) */}
-      <LiveCameraScannerModal
-        isOpen={isCameraScannerOpen}
-        onClose={() => setIsCameraScannerOpen(false)}
-        onScanSuccess={(scannedCode) => handleLookupAndOpenJob(scannedCode)}
-        title="Shop Floor Mobile Scanner"
-        subtitle="Point camera at printed Job Card QR Code or 1D Barcode"
-      />
 
       {/* MODAL 10: FULL-RESOLUTION PHOTO LIGHTBOX MODAL */}
       {photoLightbox && (
