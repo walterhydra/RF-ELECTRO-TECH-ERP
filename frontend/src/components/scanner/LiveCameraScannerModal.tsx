@@ -319,46 +319,36 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose();
         }}
-        className="fixed inset-0 bg-slate-950/50 backdrop-blur-md z-[999999] flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200"
+        className="fixed inset-0 bg-slate-950/45 backdrop-blur-md z-[999999] flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200"
       >
         
         {/* =============================================================== */}
-        {/* SCREEN 1: PRE-SCAN SELECTION (LIGHT THEME MATCHED 2 CIRCLES)   */}
+        {/* SCREEN 1: PRE-SCAN SELECTION (ULTRA-CLEAN 2 CIRCLES ONLY)      */}
         {/* =============================================================== */}
         {mode === 'select' && (
-          <div className="relative w-full max-w-sm bg-white border border-slate-200/90 rounded-3xl shadow-2xl overflow-hidden flex flex-col p-6 sm:p-7 animate-in fade-in zoom-in-95 duration-150 font-sans">
+          <div className="relative bg-white border border-slate-200/80 rounded-[32px] shadow-2xl p-6 sm:p-8 animate-in fade-in zoom-in-95 duration-150 font-sans">
             
-            {/* Top Row: Title + Close Button */}
-            <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-200/80 flex items-center justify-center text-blue-600">
-                  <Scan className="w-4 h-4" />
-                </div>
-                <span className="text-xs font-black font-mono tracking-wider text-slate-800 uppercase">
-                  Select Scanner
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-700 flex items-center justify-center transition-colors cursor-pointer"
-                title="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+            {/* Top-Right Minimal Close Button */}
+            <button
+              type="button"
+              onClick={onClose}
+              className="absolute top-3.5 right-3.5 w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-700 flex items-center justify-center transition-colors cursor-pointer"
+              title="Close"
+            >
+              <X className="w-4 h-4" />
+            </button>
 
-            {/* The 2 Big Clean Circles (Theme Matched) */}
-            <div className="flex items-center justify-center gap-8 sm:gap-10 py-6">
+            {/* The 2 Circles Only */}
+            <div className="flex items-center justify-center gap-7 sm:gap-9 pt-2 pb-1 px-2 sm:px-4">
               
               {/* CIRCLE 1: QR CODE */}
               <button
                 type="button"
                 onClick={() => setMode('qr')}
-                className="group flex flex-col items-center gap-2.5 transition-transform active:scale-95 cursor-pointer focus:outline-none"
+                className="group flex flex-col items-center gap-2.5 transition-transform active:scale-90 cursor-pointer focus:outline-none"
               >
-                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-blue-50 border-2 border-blue-400/60 group-hover:border-blue-600 group-hover:bg-blue-100/70 shadow-lg shadow-blue-500/10 flex items-center justify-center text-blue-600 transition-all">
-                  <QrCode className="w-11 h-11 sm:w-12 sm:h-12 stroke-[1.8]" />
+                <div className="w-22 h-22 sm:w-26 sm:h-26 rounded-full bg-blue-50 border-2 border-blue-400/60 group-hover:border-blue-600 group-hover:bg-blue-100/80 shadow-md shadow-blue-500/10 flex items-center justify-center text-blue-600 transition-all">
+                  <QrCode className="w-10 h-10 sm:w-11 sm:h-11 stroke-[1.8]" />
                 </div>
                 <span className="text-xs sm:text-sm font-black font-mono text-slate-800 group-hover:text-blue-600 transition-colors">
                   QR Code
@@ -369,10 +359,10 @@ export const LiveCameraScannerModal: React.FC<LiveCameraScannerModalProps> = ({
               <button
                 type="button"
                 onClick={() => setMode('barcode')}
-                className="group flex flex-col items-center gap-2.5 transition-transform active:scale-95 cursor-pointer focus:outline-none"
+                className="group flex flex-col items-center gap-2.5 transition-transform active:scale-90 cursor-pointer focus:outline-none"
               >
-                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-amber-50 border-2 border-amber-400/60 group-hover:border-amber-600 group-hover:bg-amber-100/70 shadow-lg shadow-amber-500/10 flex items-center justify-center text-amber-600 transition-all">
-                  <Barcode className="w-11 h-11 sm:w-12 sm:h-12 stroke-[1.8]" />
+                <div className="w-22 h-22 sm:w-26 sm:h-26 rounded-full bg-amber-50 border-2 border-amber-400/60 group-hover:border-amber-600 group-hover:bg-amber-100/80 shadow-md shadow-amber-500/10 flex items-center justify-center text-amber-600 transition-all">
+                  <Barcode className="w-10 h-10 sm:w-11 sm:h-11 stroke-[1.8]" />
                 </div>
                 <span className="text-xs sm:text-sm font-black font-mono text-slate-800 group-hover:text-amber-600 transition-colors">
                   Bar Code
