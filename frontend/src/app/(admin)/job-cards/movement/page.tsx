@@ -117,6 +117,43 @@ const getDeletedJobCardIds = (): string[] => {
   }
 };
 
+const getActiveAuthContext = (): { token: string | null; userId: string | null; userEmail: string | null; userName: string | null } => {
+  if (typeof window === 'undefined') {
+    return { token: null, userId: null, userEmail: null, userName: null };
+  }
+  let token = localStorage.getItem('token');
+  if (!token && typeof document !== 'undefined') {
+    const match = document.cookie.match(/(?:^|;\s*)rf_session_token=([^;]+)/);
+    if (match) token = decodeURIComponent(match[1]);
+  }
+  let userId = localStorage.getItem('userId');
+  let userEmail = localStorage.getItem('userEmail');
+  let userName = localStorage.getItem('userName');
+
+  if (token && typeof token === 'string' && token.includes('.')) {
+    try {
+      const base64Url = token.split('.')[1];
+      if (base64Url) {
+        let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4) {
+          base64 += '=';
+        }
+        const jsonPayload = decodeURIComponent(
+          atob(base64)
+            .split('')
+            .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join('')
+        );
+        const payload = JSON.parse(jsonPayload);
+        if (payload.sub || payload.id) userId = payload.sub || payload.id;
+        if (payload.email) userEmail = payload.email;
+        if (payload.name) userName = payload.name;
+      }
+    } catch (_) {}
+  }
+  return { token, userId, userEmail, userName };
+};
+
 export default function JobMovementUpdatePage() {
   const [isMounted, setIsMounted] = useState(false);
   const [jobs, setJobs] = useState<JobCard[]>([]);
@@ -465,10 +502,7 @@ export default function JobMovementUpdatePage() {
     // 2. NON-BLOCKING BACKGROUND SYNC
     (async () => {
       try {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        const storedUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
-        const storedUserEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
-        const storedUserName = typeof window !== 'undefined' ? localStorage.getItem('userName') : null;
+        const { token, userId: storedUserId, userEmail: storedUserEmail, userName: storedUserName } = getActiveAuthContext();
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 25000);
         const targetEndpoint = encodeURIComponent(jobId && !jobId.startsWith('jc-part-') ? jobId : jobCardNo);
@@ -528,10 +562,7 @@ export default function JobMovementUpdatePage() {
     // 2. NON-BLOCKING BACKGROUND SYNC
     (async () => {
       try {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        const storedUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
-        const storedUserEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
-        const storedUserName = typeof window !== 'undefined' ? localStorage.getItem('userName') : null;
+        const { token, userId: storedUserId, userEmail: storedUserEmail, userName: storedUserName } = getActiveAuthContext();
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 3500);
 
@@ -636,10 +667,7 @@ export default function JobMovementUpdatePage() {
     // 2. NON-BLOCKING BACKGROUND SYNC
     (async () => {
       try {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        const storedUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
-        const storedUserEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
-        const storedUserName = typeof window !== 'undefined' ? localStorage.getItem('userName') : null;
+        const { token, userId: storedUserId, userEmail: storedUserEmail, userName: storedUserName } = getActiveAuthContext();
         const targetEndpoint = encodeURIComponent(
           targetJobId && !targetJobId.startsWith('jc-part-')
             ? targetJobId

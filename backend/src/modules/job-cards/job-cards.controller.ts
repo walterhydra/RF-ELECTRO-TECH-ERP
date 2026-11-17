@@ -22,7 +22,13 @@ export class JobCardsController {
         if (token && token.includes('.')) {
           const payloadBase64 = token.split('.')[1];
           if (payloadBase64) {
-            const decoded = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf8'));
+            let jsonStr = '';
+            try {
+              jsonStr = Buffer.from(payloadBase64, 'base64url').toString('utf8');
+            } catch {
+              jsonStr = Buffer.from(payloadBase64, 'base64').toString('utf8');
+            }
+            const decoded = JSON.parse(jsonStr);
             if (decoded && (decoded.sub || decoded.id || decoded.email)) {
               user = {
                 id: decoded.sub || decoded.id,

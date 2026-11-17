@@ -15,18 +15,39 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Email and password are required' }, { status: 400 });
     }
 
-    // 1. Verify credentials against the live production backend
-    const authRes = await fetch('https://api.rfgenix.com/api/v1/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.trim(), password }),
-    });
+    // 1. Verify credentials against local or live production backend
+    const candidateUrls = [
+      process.env.NEXT_PUBLIC_API_BASE_URL,
+      'http://localhost:3001/api/v1',
+      'https://api.rfgenix.com/api/v1',
+    ].filter(Boolean) as string[];
 
-    const authData = await authRes.json();
+    let authRes: Response | null = null;
+    let authData: any = null;
+    let resolvedBackendUrl = '';
 
-    if (!authRes.ok || !authData.accessToken) {
+    for (const bUrl of candidateUrls) {
+      try {
+        const res = await fetch(`${bUrl}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email.trim(), password }),
+        });
+        const data = await res.json();
+        if (res.ok || res.status === 401 || res.status === 400) {
+          authRes = res;
+          authData = data;
+          resolvedBackendUrl = bUrl;
+          break;
+        }
+      } catch {
+        // try next candidate
+      }
+    }
+
+    if (!authRes || !authRes.ok) {
       return NextResponse.json(
-        { message: authData.message || authData.error?.message || 'Invalid username or password. Please try again.' },
+        { message: authData?.message || authData?.error?.message || 'Invalid username or password. Please try again.' },
         { status: 401 }
       );
     }
@@ -41,6 +62,8 @@ export async function POST(req: NextRequest) {
       password,
       otp,
       expiresAt,
+      backendTempToken: authData?.tempToken,
+      resolvedBackendUrl,
     });
     const signature = crypto.createHmac('sha256', HMAC_SECRET).update(tokenPayload).digest('hex');
     const tempToken = Buffer.from(`${tokenPayload}::${signature}`).toString('base64url');

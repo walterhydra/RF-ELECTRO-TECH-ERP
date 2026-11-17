@@ -9,35 +9,112 @@ const videos = [
 ];
 
 export default function VideoBackground() {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const [sources, setSources] = useState<{ slot0: number; slot1: number }>({
+    slot0: 0,
+    slot1: 1,
+  });
+  const [activeSlot, setActiveSlot] = useState<0 | 1>(0);
 
-  const handleEnded = () => {
-    setCurrentIndex((prev) => (prev + 1) % videos.length);
+  const video0Ref = useRef<HTMLVideoElement>(null);
+  const video1Ref = useRef<HTMLVideoElement>(null);
+  const isTransitioning = useRef(false);
+  const sourcesRef = useRef(sources);
+  sourcesRef.current = sources;
+  const activeSlotRef = useRef(activeSlot);
+  activeSlotRef.current = activeSlot;
+
+  // Start initial playback on mount
+  useEffect(() => {
+    if (video0Ref.current) {
+      video0Ref.current.play().catch((e) => console.log("Auto-play prevented on slot 0", e));
+    }
+  }, []);
+
+  const triggerTransition = (fromSlot: 0 | 1) => {
+    if (isTransitioning.current) return;
+    if (activeSlotRef.current !== fromSlot) return;
+
+    isTransitioning.current = true;
+    const toSlot = fromSlot === 0 ? 1 : 0;
+    const targetVideo = toSlot === 0 ? video0Ref.current : video1Ref.current;
+    const currentVideo = fromSlot === 0 ? video0Ref.current : video1Ref.current;
+
+    if (targetVideo) {
+      targetVideo.currentTime = 0;
+      targetVideo.play().catch((e) => console.log("Auto-play prevented on target slot", e));
+    }
+
+    // Switch active slot to trigger smooth CSS opacity crossfade
+    setActiveSlot(toSlot);
+
+    // After crossfade finishes (1000ms), pause old video and prepare the subsequent video in background
+    setTimeout(() => {
+      if (currentVideo) {
+        currentVideo.pause();
+      }
+
+      // Calculate next video source index for the inactive slot
+      const playingSourceIndex = toSlot === 0 ? sourcesRef.current.slot0 : sourcesRef.current.slot1;
+      const nextSourceIndex = (playingSourceIndex + 1) % videos.length;
+
+      setSources((prev) => ({
+        ...prev,
+        [fromSlot === 0 ? 'slot0' : 'slot1']: nextSourceIndex,
+      }));
+
+      isTransitioning.current = false;
+    }, 1000);
   };
 
-  useEffect(() => {
-    if (videoRef.current) {
-      videoRef.current.load();
-      videoRef.current.play().catch(e => console.log("Auto-play prevented", e));
+  const handleTimeUpdate = (slot: 0 | 1) => {
+    if (activeSlotRef.current !== slot || isTransitioning.current) return;
+    const video = slot === 0 ? video0Ref.current : video1Ref.current;
+    if (!video || !video.duration || Number.isNaN(video.duration)) return;
+
+    // Crossfade 0.8s before video ends so the end black frame/freeze never appears
+    if (video.duration > 1.2 && video.currentTime >= video.duration - 0.8) {
+      triggerTransition(slot);
     }
-  }, [currentIndex]);
+  };
+
+  const handleEnded = (slot: 0 | 1) => {
+    if (activeSlotRef.current === slot && !isTransitioning.current) {
+      triggerTransition(slot);
+    }
+  };
 
   return (
     <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none z-0">
       {/* Dark gradient overlay for text readability */}
-      <div className="absolute inset-0 bg-slate-900/60 z-10" /> 
-      
+      <div className="absolute inset-0 bg-slate-900/50 z-10" />
+
+      {/* Slot 0 Video */}
       <video
-        ref={videoRef}
-        className="absolute inset-0 w-full h-full object-cover opacity-80"
+        ref={video0Ref}
+        src={videos[sources.slot0]}
+        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out ${
+          activeSlot === 0 ? 'opacity-80 z-[2]' : 'opacity-0 z-[1]'
+        }`}
         muted
         playsInline
-        autoPlay
-        onEnded={handleEnded}
-      >
-        <source src={videos[currentIndex]} type="video/mp4" />
-      </video>
+        preload="auto"
+        onTimeUpdate={() => handleTimeUpdate(0)}
+        onEnded={() => handleEnded(0)}
+      />
+
+      {/* Slot 1 Video */}
+      <video
+        ref={video1Ref}
+        src={videos[sources.slot1]}
+        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out ${
+          activeSlot === 1 ? 'opacity-80 z-[2]' : 'opacity-0 z-[1]'
+        }`}
+        muted
+        playsInline
+        preload="auto"
+        onTimeUpdate={() => handleTimeUpdate(1)}
+        onEnded={() => handleEnded(1)}
+      />
     </div>
   );
 }

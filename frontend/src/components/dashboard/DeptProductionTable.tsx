@@ -62,11 +62,13 @@ export const DeptProductionTable: React.FC<DeptProductionTableProps> = ({ data }
             <h2 className="text-sm lg:text-base font-bold text-slate-900 flex items-center gap-2">
               Dept Live Production
             </h2>
-            <p className="text-[11px] sm:text-xs text-slate-500">11 Stage rank, output vs target & queue</p>
+            <p className="text-[11px] sm:text-xs text-slate-500">
+              {data.length} Stages rank, output vs target & queue
+            </p>
           </div>
         </div>
         <span className="px-2 py-0.5 rounded-md text-[11px] sm:text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0">
-          11 Active Depts
+          {data.length} Stages
         </span>
       </div>
 

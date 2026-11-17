@@ -675,6 +675,44 @@ const JobCardQrTag = ({ jobCard, onPrint, onClose, onOpenPdf, onViewPhoto }: { j
 
 const LOCAL_STORAGE_CARDS_KEY = 'rf_electro_job_cards_v3';
 
+const getActiveAuthContext = (): { token: string | null; userId: string | null; userEmail: string | null; userName: string | null } => {
+  if (typeof window === 'undefined') {
+    return { token: null, userId: null, userEmail: null, userName: null };
+  }
+  let token = localStorage.getItem('token');
+  if (!token && typeof document !== 'undefined') {
+    const match = document.cookie.match(/(?:^|;\s*)rf_session_token=([^;]+)/);
+    if (match) token = decodeURIComponent(match[1]);
+  }
+  let userId = localStorage.getItem('userId');
+  let userEmail = localStorage.getItem('userEmail');
+  let userName = localStorage.getItem('userName');
+
+  if (token && typeof token === 'string' && token.includes('.')) {
+    try {
+      const base64Url = token.split('.')[1];
+      if (base64Url) {
+        let base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4) {
+          base64 += '=';
+        }
+        const jsonPayload = decodeURIComponent(
+          atob(base64)
+            .split('')
+            .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join('')
+        );
+        const payload = JSON.parse(jsonPayload);
+        // Authoritative: active signed token ALWAYS overrides stale localStorage entries
+        if (payload.sub || payload.id) userId = payload.sub || payload.id;
+        if (payload.email) userEmail = payload.email;
+        if (payload.name) userName = payload.name;
+      }
+    } catch (_) {}
+  }
+  return { token, userId, userEmail, userName };
+};
+
 const getStoredJobCards = (): JobCard[] | null => {
   if (typeof window === 'undefined') return null;
   try {
@@ -712,29 +750,9 @@ export default function JobCardsPage() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [expandedRow, setExpandedRow] = useState<string | null>('jc-1');
 
-  // RBAC Role State
-  const [userRole, setUserRole] = useState<'MASTER' | 'SUPER_USER' | 'NORMAL'>(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('userRole') || '';
-      const storedStage = localStorage.getItem('assignedStage');
-      const upper = stored.toUpperCase();
-      const hasAssignedStage = Boolean(storedStage && storedStage.toUpperCase() !== 'ALL');
-      if (hasAssignedStage || upper.includes('OPERATOR') || upper === 'NORMAL' || upper === 'PROCESS_OPERATOR') {
-        return 'NORMAL';
-      }
-      const isSuper = upper.includes('SUPER') || upper.includes('MASTER') || (upper.includes('ADMIN') && !upper.includes('OPERATOR')) || upper.includes('PLANNER');
-      if (isSuper) return 'MASTER';
-      if (upper.includes('PROD') || upper.includes('MANAGER')) return 'SUPER_USER';
-      return 'NORMAL';
-    }
-    return 'MASTER';
-  });
-  const [assignedStage, setAssignedStage] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('assignedStage') || 'ALL';
-    }
-    return 'ALL';
-  });
+  // RBAC Role State (Initialized with static defaults on both Server and Client to guarantee zero hydration mismatch)
+  const [userRole, setUserRole] = useState<'MASTER' | 'SUPER_USER' | 'NORMAL'>('MASTER');
+  const [assignedStage, setAssignedStage] = useState<string>('ALL');
 
   // Modals & Lightbox
   const [showGenerateModal, setShowGenerateModal] = useState(false);
@@ -748,6 +766,7 @@ export default function JobCardsPage() {
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   const [serverHost, setServerHost] = useState<string>('');
   const [photoLightbox, setPhotoLightbox] = useState<string | null>(null);
+  const [podLightbox, setPodLightbox] = useState<string | null>(null);
   const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
   const [unitPcbAreaSqm, setUnitPcbAreaSqm] = useState<number>(0.28125);
 
@@ -839,6 +858,7 @@ export default function JobCardsPage() {
 
   // Super Admin Check Helper (Always true for Super Admin / Master / Planner, strictly false for stage-assigned operators)
   const isSuperAdmin = React.useMemo(() => {
+    if (!isMounted) return true;
     if (typeof window !== 'undefined') {
       const storedStage = localStorage.getItem('assignedStage');
       if (storedStage && storedStage.toUpperCase() !== 'ALL') return false;
@@ -851,7 +871,57 @@ export default function JobCardsPage() {
        storedUpper.includes('SUPER') || storedUpper.includes('MASTER') || storedUpper.includes('ADMIN') || storedUpper.includes('PLANNER')) &&
       !storedUpper.includes('OPERATOR')
     );
-  }, [userRole, assignedStage]);
+  }, [userRole, assignedStage, isMounted]);
+
+  // Management & Administrative Accounts Helper (Super Admin, Planner, Production Manager, Quality Head/Inspector, Dispatch Manager)
+  // Strictly false for all 20 dedicated stage operator logins or stage-locked sessions
+  const isManagementOrAdmin = React.useMemo(() => {
+    if (!isMounted) return false;
+    // 1. Any assigned stage strictly indicates a stage operator / stage login
+    if (assignedStage && assignedStage.toUpperCase() !== 'ALL') return false;
+    if (typeof window !== 'undefined') {
+      const storedStage = localStorage.getItem('assignedStage');
+      if (storedStage && storedStage.toUpperCase() !== 'ALL') return false;
+
+      const storedEmail = (localStorage.getItem('userEmail') || '').toLowerCase().trim();
+      const storedRole = (localStorage.getItem('userRole') || '').toUpperCase().trim();
+
+      // If marked as operator, not management
+      if (storedRole.includes('OPERATOR') || storedRole === 'NORMAL' || storedRole === 'PROCESS_OPERATOR') {
+        return false;
+      }
+
+      // Explicit Management & Administrative emails
+      const mgmtEmails = [
+        'admin@rfelectro.com',
+        'planner@rfelectro.com',
+        'production@rfelectro.com',
+        'qc@rfelectro.com',
+        'quality@rfelectro.com',
+        'dispatch@rfelectro.com',
+      ];
+      if (mgmtEmails.includes(storedEmail)) return true;
+
+      // Explicit Management & Administrative roles
+      if (
+        storedRole.includes('SUPER') ||
+        storedRole.includes('ADMIN') ||
+        storedRole.includes('MASTER') ||
+        storedRole.includes('PLANNER') ||
+        storedRole.includes('MANAGER') ||
+        storedRole.includes('PROD') ||
+        storedRole.includes('QUALITY') ||
+        storedRole.includes('HEAD') ||
+        storedRole.includes('INSPECTOR') ||
+        storedRole.includes('DISPATCH') ||
+        storedRole.includes('STORE')
+      ) {
+        return true;
+      }
+    }
+
+    return isSuperAdmin;
+  }, [userRole, assignedStage, isSuperAdmin, isMounted]);
 
   // Toast Notification State (Replaces native browser alerts)
   const [toast, setToast] = useState<{ id: string; type: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -1146,8 +1216,11 @@ export default function JobCardsPage() {
 
     try {
       const storedStageForQuery = (typeof window !== 'undefined' ? localStorage.getItem('assignedStage') || assignedStage : assignedStage) || '';
-      // Pass stage query filter if user is strictly an operator or has an assigned stage
-      const stageQueryParam = (storedStageForQuery && storedStageForQuery.toUpperCase() !== 'ALL' && isOperatorUser)
+      const storedRole = typeof window !== 'undefined' ? (localStorage.getItem('userRole') || '').toUpperCase() : '';
+      const isMgmt = storedRole.includes('SUPER') || storedRole.includes('ADMIN') || storedRole.includes('PLANNER') || storedRole.includes('DISPATCH');
+      const isUserStageLocked = Boolean(storedStageForQuery && storedStageForQuery.toUpperCase() !== 'ALL' && !isMgmt);
+      // Pass stage query filter if user is strictly a stage operator or has an assigned stage
+      const stageQueryParam = isUserStageLocked
         ? `?stage=${encodeURIComponent(storedStageForQuery)}`
         : '';
       const res = await fetch(`${targetUrl}/job-cards${stageQueryParam}`, {
@@ -1892,19 +1965,7 @@ export default function JobCardsPage() {
     // 2. NON-BLOCKING BACKGROUND SYNC TO BACKEND
     (async () => {
       try {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        let storedUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
-        let storedUserEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
-        let storedUserName = typeof window !== 'undefined' ? localStorage.getItem('userName') : null;
-
-        if ((!storedUserId || !storedUserEmail) && token && typeof token === 'string' && token.includes('.')) {
-          try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            if (payload.sub || payload.id) storedUserId = payload.sub || payload.id;
-            if (payload.email) storedUserEmail = payload.email;
-            if (payload.name) storedUserName = payload.name;
-          } catch (_) {}
-        }
+        const { token, userId: storedUserId, userEmail: storedUserEmail, userName: storedUserName } = getActiveAuthContext();
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -1984,6 +2045,7 @@ export default function JobCardsPage() {
       return;
     }
 
+    const authCtx = getActiveAuthContext();
     const jcNo = launchForm.jobCardNo || `26-27-${Math.floor(1000 + Math.random() * 9000)}`;
     const totalPcb = Number(launchForm.totalPcbQty) || 160;
     const launchIsoDate = launchForm.launchDate ? new Date(launchForm.launchDate).toISOString() : new Date().toISOString();
@@ -2088,7 +2150,7 @@ export default function JobCardsPage() {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+            Authorization: `Bearer ${authCtx.token || ''}`,
           },
           body: JSON.stringify(updatedJobCard),
         });
@@ -2174,12 +2236,12 @@ export default function JobCardsPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+          Authorization: `Bearer ${authCtx.token || ''}`,
         },
         body: JSON.stringify({
-          userId: typeof window !== 'undefined' ? localStorage.getItem('userId') : null,
-          userEmail: typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null,
-          userName: typeof window !== 'undefined' ? localStorage.getItem('userName') : null,
+          userId: authCtx.userId,
+          userEmail: authCtx.userEmail,
+          userName: authCtx.userName,
           jobCardNo: jcNo,
           photoUrl: launchForm.photoUrl,
           customerPartNo: launchForm.customerPartNo,
@@ -2285,7 +2347,7 @@ export default function JobCardsPage() {
     if (nextIndex >= PF01_STAGES.length) {
       void (async () => {
         try {
-          const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+          const { token, userId, userEmail, userName } = getActiveAuthContext();
           const id = encodeURIComponent(card.id || card.subJobCardNo || card.jobCardNo);
           await fetch(`${getApiBaseUrl()}/job-cards/${id}/move-stage`, {
             method: 'POST',
@@ -2293,9 +2355,9 @@ export default function JobCardsPage() {
             body: JSON.stringify({
               status: 'COMPLETED',
               jobCardNo: card.jobCardNo,
-              userId: typeof window !== 'undefined' ? localStorage.getItem('userId') : null,
-              userEmail: typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null,
-              userName: typeof window !== 'undefined' ? localStorage.getItem('userName') : null,
+              userId,
+              userEmail,
+              userName,
             }),
           });
         } catch (_) {}
@@ -2364,19 +2426,7 @@ export default function JobCardsPage() {
     // 2. NON-BLOCKING BACKGROUND SYNC
     (async () => {
       try {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        let storedUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
-        let storedUserEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
-        let storedUserName = typeof window !== 'undefined' ? localStorage.getItem('userName') : null;
-
-        if ((!storedUserId || !storedUserEmail) && token && typeof token === 'string' && token.includes('.')) {
-          try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            if (payload.sub || payload.id) storedUserId = payload.sub || payload.id;
-            if (payload.email) storedUserEmail = payload.email;
-            if (payload.name) storedUserName = payload.name;
-          } catch (_) {}
-        }
+        const { token, userId: storedUserId, userEmail: storedUserEmail, userName: storedUserName } = getActiveAuthContext();
         const targetSubNo = subCardNo;
         const primaryTarget = encodeURIComponent(cardId || targetSubNo);
         const controller = new AbortController();
@@ -2484,12 +2534,12 @@ export default function JobCardsPage() {
     if (nextIndex >= PF01_STAGES.length) {
       void (async () => {
         try {
-          const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+          const { token, userId, userEmail, userName } = getActiveAuthContext();
           const id = encodeURIComponent(selectedMovementJob.id || selectedMovementJob.subJobCardNo || selectedMovementJob.jobCardNo);
           await fetch(`${getApiBaseUrl()}/job-cards/${id}/move-stage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-            body: JSON.stringify({ status: 'COMPLETED', jobCardNo: selectedMovementJob.jobCardNo }),
+            body: JSON.stringify({ status: 'COMPLETED', jobCardNo: selectedMovementJob.jobCardNo, userId, userEmail, userName }),
           });
         } catch (_) {}
       })();
@@ -2594,19 +2644,7 @@ export default function JobCardsPage() {
     // 3. NON-BLOCKING BACKGROUND SYNC TO BACKEND
     (async () => {
       try {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        let storedUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
-        let storedUserEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
-        let storedUserName = typeof window !== 'undefined' ? localStorage.getItem('userName') : null;
-
-        if ((!storedUserId || !storedUserEmail) && token && typeof token === 'string' && token.includes('.')) {
-          try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            if (payload.sub || payload.id) storedUserId = payload.sub || payload.id;
-            if (payload.email) storedUserEmail = payload.email;
-            if (payload.name) storedUserName = payload.name;
-          } catch (_) {}
-        }
+        const { token, userId: storedUserId, userEmail: storedUserEmail, userName: storedUserName } = getActiveAuthContext();
         const primaryTarget = encodeURIComponent(targetSubId || targetSubNo);
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 25000);
@@ -2883,19 +2921,7 @@ export default function JobCardsPage() {
     // 3. NON-BLOCKING BACKGROUND SYNC FOR INSTANT MULTI-DEVICE CONSISTENCY
     (async () => {
       try {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-        let storedUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') : null;
-        let storedUserEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : null;
-        let storedUserName = typeof window !== 'undefined' ? localStorage.getItem('userName') : null;
-
-        if ((!storedUserId || !storedUserEmail) && token && typeof token === 'string' && token.includes('.')) {
-          try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            if (payload.sub || payload.id) storedUserId = payload.sub || payload.id;
-            if (payload.email) storedUserEmail = payload.email;
-            if (payload.name) storedUserName = payload.name;
-          } catch (_) {}
-        }
+        const { token, userId: storedUserId, userEmail: storedUserEmail, userName: storedUserName } = getActiveAuthContext();
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
 
@@ -3176,6 +3202,7 @@ export default function JobCardsPage() {
   };
 
   const isOperatorUser = React.useMemo(() => {
+    if (!isMounted) return false;
     if (assignedStage && assignedStage.toUpperCase() !== 'ALL') return true;
     if (typeof window !== 'undefined') {
       const storedStage = localStorage.getItem('assignedStage');
@@ -3184,7 +3211,7 @@ export default function JobCardsPage() {
     if (isSuperAdmin) return false;
     const roleUpper = (userRole || '').toUpperCase();
     return roleUpper.includes('OPERATOR') || roleUpper === 'NORMAL' || roleUpper === 'PROCESS_OPERATOR';
-  }, [isSuperAdmin, assignedStage, userRole]);
+  }, [isSuperAdmin, assignedStage, userRole, isMounted]);
 
   // Helper to identify 100% completed or dispatched job cards
   const isCardCompleted = useCallback((jc: JobCard) => {
@@ -3198,16 +3225,29 @@ export default function JobCardsPage() {
     );
   }, []);
 
+  // Effective Stage Name for UI headers and metrics
+  const effectiveStageName = React.useMemo(() => {
+    if (!isMounted) return '';
+    if (assignedStage && assignedStage.toUpperCase() !== 'ALL') return assignedStage;
+    if (typeof window !== 'undefined') {
+      const s = localStorage.getItem('assignedStage');
+      if (s && s.toUpperCase() !== 'ALL') return s;
+    }
+    return '';
+  }, [assignedStage, isMounted]);
+
   // Scoped Cards: When on Active Production WIP tab, strictly isolate to active (uncompleted) cards
   const scopedCards = React.useMemo(() => {
     // 1. Strictly exclude 100% completed / dispatched jobs from WIP so they only appear in Completed & Dispatch Hub
     const activeOnly = jobCards.filter((jc) => !isCardCompleted(jc));
 
-    const effectiveAssignedStage = (assignedStage && assignedStage !== 'ALL')
+    const effectiveAssignedStage = !isMounted
+      ? null
+      : (assignedStage && assignedStage !== 'ALL')
       ? assignedStage
       : (typeof window !== 'undefined' ? localStorage.getItem('assignedStage') : null);
 
-    const isStageLocked = isOperatorUser && Boolean(effectiveAssignedStage && effectiveAssignedStage.toUpperCase() !== 'ALL');
+    const isStageLocked = !isManagementOrAdmin && Boolean(effectiveAssignedStage && effectiveAssignedStage.toUpperCase() !== 'ALL');
 
     if (!isStageLocked || !effectiveAssignedStage) return activeOnly;
 
@@ -3232,7 +3272,7 @@ export default function JobCardsPage() {
       }
       return false;
     });
-  }, [jobCards, isOperatorUser, assignedStage, isCardCompleted]);
+  }, [jobCards, isManagementOrAdmin, isOperatorUser, assignedStage, isCardCompleted]);
 
   // Filtered Cards based on per-column filters, global search, and radio status
   const filteredCards = scopedCards.filter((jc) => {
@@ -3481,49 +3521,51 @@ export default function JobCardsPage() {
             </div>
           </div>
 
-          {/* Right: Primary Quick Action Buttons (2-col grid on mobile, inline flex row on desktop) */}
-          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto shrink-0">
-            <button
-              onClick={() => setShowReportDrawer(true)}
-              className="h-9 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer whitespace-nowrap active:scale-95 w-full sm:w-auto"
-            >
-              <BarChart3 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-              <span>WIP Excel Report</span>
-            </button>
+          {/* Right: Primary Quick Action Buttons (Only visible to Management & Administrative Accounts, strictly hidden for stage logins) */}
+          {isMounted && isManagementOrAdmin && (
+            <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto shrink-0">
+              <button
+                onClick={() => setShowReportDrawer(true)}
+                className="h-9 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer whitespace-nowrap active:scale-95 w-full sm:w-auto"
+              >
+                <BarChart3 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                <span>WIP Excel Report</span>
+              </button>
 
-            <button
-              onClick={handleForceCloudSync}
-              className="h-9 px-3 bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all border border-blue-200 whitespace-nowrap cursor-pointer active:scale-95 w-full sm:w-auto"
-              title="Purge local cache and force-sync live cards from cloud database"
-            >
-              <RefreshCw className="w-3.5 h-3.5 stroke-[2.5] text-blue-600" />
-              <span>Sync Cloud</span>
-            </button>
+              <button
+                onClick={handleForceCloudSync}
+                className="h-9 px-3 bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all border border-blue-200 whitespace-nowrap cursor-pointer active:scale-95 w-full sm:w-auto"
+                title="Purge local cache and force-sync live cards from cloud database"
+              >
+                <RefreshCw className="w-3.5 h-3.5 stroke-[2.5] text-blue-600" />
+                <span>Sync Cloud</span>
+              </button>
 
-            <Link
-              href="/job-cards/launch"
-              className="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all border border-slate-300/80 whitespace-nowrap cursor-pointer active:scale-95 w-full sm:w-auto"
-            >
-              <Plus className="w-3.5 h-3.5 stroke-[2.5] text-slate-700" />
-              <span>Launch Page ↗</span>
-            </Link>
+              <Link
+                href="/job-cards/launch"
+                className="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all border border-slate-300/80 whitespace-nowrap cursor-pointer active:scale-95 w-full sm:w-auto"
+              >
+                <Plus className="w-3.5 h-3.5 stroke-[2.5] text-slate-700" />
+                <span>Launch Page ↗</span>
+              </Link>
 
-            <Link
-              href="/job-cards/movement"
-              className="h-9 px-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all border border-blue-700 whitespace-nowrap cursor-pointer active:scale-95 w-full sm:w-auto"
-            >
-              <RefreshCw className="w-3.5 h-3.5 stroke-[2.5] text-white" />
-              <span>Job Movement ➔</span>
-            </Link>
+              <Link
+                href="/job-cards/movement"
+                className="h-9 px-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all border border-blue-700 whitespace-nowrap cursor-pointer active:scale-95 w-full sm:w-auto"
+              >
+                <RefreshCw className="w-3.5 h-3.5 stroke-[2.5] text-white" />
+                <span>Job Movement ➔</span>
+              </Link>
 
-            <button
-              onClick={() => handleOpenCreateModal()}
-              className="col-span-2 sm:col-auto h-9 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-emerald-700 w-full sm:w-auto"
-            >
-              <Plus className="w-4 h-4 stroke-[3] text-white" />
-              <span>Add New Card</span>
-            </button>
-          </div>
+              <button
+                onClick={() => handleOpenCreateModal()}
+                className="col-span-2 sm:col-auto h-9 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-emerald-700 w-full sm:w-auto"
+              >
+                <Plus className="w-4 h-4 stroke-[3] text-white" />
+                <span>Add New Card</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -3637,14 +3679,16 @@ export default function JobCardsPage() {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between">
-              <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">ACTIVE JOB CARDS</span>
+              <span suppressHydrationWarning className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">
+                {effectiveStageName ? `${effectiveStageName} ACTIVE CARDS` : 'ACTIVE JOB CARDS'}
+              </span>
               <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
             </div>
             <div className="text-sm sm:text-base lg:text-lg font-black text-slate-900 font-mono mt-0.5 truncate">
               {totalMasterCards} Master Cards
             </div>
-            <div className="text-[10px] sm:text-[11px] text-blue-700 font-semibold truncate">
-              • {inProgressCount} Active in Prod ({totalSubLots} Lots)
+            <div suppressHydrationWarning className="text-[10px] sm:text-[11px] text-blue-700 font-semibold truncate">
+              • {inProgressCount} Active {effectiveStageName ? 'at this Stage' : 'in Prod'} ({totalSubLots} Lots)
             </div>
           </div>
         </div>
@@ -3656,14 +3700,16 @@ export default function JobCardsPage() {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between">
-              <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">TOTAL PRODUCTION PCB</span>
+              <span suppressHydrationWarning className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">
+                {effectiveStageName ? `${effectiveStageName} TOTAL PCB` : 'TOTAL PRODUCTION PCB'}
+              </span>
               <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
             </div>
             <div className="text-sm sm:text-base lg:text-lg font-black text-slate-900 font-mono mt-0.5 truncate">
               {activePcbCount} PCBs
             </div>
-            <div className="text-[10px] sm:text-[11px] text-emerald-700 font-semibold truncate">
-              • {activePcbCount} PCBs In-Progress
+            <div suppressHydrationWarning className="text-[10px] sm:text-[11px] text-emerald-700 font-semibold truncate">
+              • {activePcbCount} PCBs {effectiveStageName ? 'at this Stage' : 'In-Progress'}
             </div>
           </div>
         </div>
@@ -3691,10 +3737,10 @@ export default function JobCardsPage() {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between">
-              <span className={`text-[9.5px] sm:text-[10px] font-bold uppercase tracking-wider ${
+              <span suppressHydrationWarning className={`text-[9.5px] sm:text-[10px] font-bold uppercase tracking-wider truncate ${
                 statusRadio === 'Overdue' ? 'text-rose-100' : overdueCount > 0 ? 'text-rose-900' : 'text-slate-500'
               }`}>
-                OVERDUE JOB CARDS
+                {effectiveStageName ? `${effectiveStageName} OVERDUE` : 'OVERDUE JOB CARDS'}
               </span>
               {overdueCount > 0 && (
                 <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping shrink-0" />
@@ -3720,186 +3766,190 @@ export default function JobCardsPage() {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between">
-              <span className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider">TOTAL WIP AREA</span>
+              <span suppressHydrationWarning className="text-[9.5px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate">
+                {effectiveStageName ? `${effectiveStageName} WIP AREA` : 'TOTAL WIP AREA'}
+              </span>
               <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0"></span>
             </div>
             <div className="text-sm sm:text-base lg:text-lg font-black text-slate-900 font-mono mt-0.5 truncate">
               {activeSqmArea.toFixed(1)} Sqm
             </div>
-            <div className="text-[10px] sm:text-[11px] text-purple-700 font-semibold truncate">
-              • {activeSqmArea.toFixed(1)} Sqm Active Floor
+            <div suppressHydrationWarning className="text-[10px] sm:text-[11px] text-purple-700 font-semibold truncate">
+              • {activeSqmArea.toFixed(1)} Sqm {effectiveStageName ? 'at this Stage' : 'Active Floor'}
             </div>
           </div>
         </div>
 
       </div>
 
-      {/* 2.5 ANALYTICS & LIVE MOVEMENT WIDGETS SECTION */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 items-stretch font-quicksand">
-        
-        {/* LEFT: Top 3 WIP Stages by SQM Area */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 shadow-xs space-y-3 flex flex-col justify-between font-quicksand">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 gap-2 font-quicksand">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0 ring-1 ring-blue-500/20">
-                <BarChart3 className="w-4 h-4" />
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide truncate font-quicksand">
-                  Top 3 WIP Stages (By Area)
-                </h3>
-                <p className="hidden sm:block text-[11px] text-slate-500 font-quicksand">Highest active floor volume in production</p>
-              </div>
-            </div>
-            <span className="text-[11px] sm:text-xs font-bold font-quicksand text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200 whitespace-nowrap shrink-0 shadow-2xs">
-              {top3WipStages.reduce((acc, curr) => acc + curr.areaSqm, 0).toFixed(1)} Sqm Total
-            </span>
-          </div>
-
-          {/* Stage Progress Items */}
-          <div className="space-y-2 flex-1 flex flex-col justify-center font-quicksand">
-            {top3WipStages.length > 0 ? (
-              top3WipStages.map((stg, idx) => (
-                <div
-                  key={stg.stageName}
-                  className="bg-white hover:bg-slate-50/70 p-2.5 rounded-xl border border-slate-200/80 transition-all shadow-2xs space-y-2 font-quicksand"
-                >
-                  <div className="flex items-center justify-between text-xs gap-2 font-quicksand">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-xs font-bold font-quicksand text-slate-400 w-4 text-center shrink-0">
-                        #{idx + 1}
-                      </span>
-                      <span className="font-bold text-slate-900 font-quicksand text-xs truncate">
-                        {stg.stageName}
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-quicksand shrink-0 hidden sm:inline-block">
-                        ({stg.cardCount} Cards • {stg.pcbQty} PCBs)
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 font-quicksand text-xs shrink-0">
-                      <span className="font-bold text-slate-900">{stg.areaSqm} Sqm</span>
-                      <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200/60 px-1.5 py-0.5 rounded-md font-quicksand">
-                        {stg.percentage}%
-                      </span>
-                    </div>
-                  </div>
-                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex">
-                    <div
-                      className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-300 rounded-full"
-                      style={{ width: `${Math.max(5, stg.percentage)}%` }}
-                    />
-                  </div>
+      {/* 2.5 ANALYTICS & LIVE MOVEMENT WIDGETS SECTION (Only visible to Management & Administrative Accounts, strictly hidden for stage logins) */}
+      {isMounted && isManagementOrAdmin && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 items-stretch font-quicksand">
+          
+          {/* LEFT: Top 3 WIP Stages by SQM Area */}
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 shadow-xs space-y-3 flex flex-col justify-between font-quicksand">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 gap-2 font-quicksand">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0 ring-1 ring-blue-500/20">
+                  <BarChart3 className="w-4 h-4" />
                 </div>
-              ))
-            ) : (
-              <div className="text-center py-5 text-xs text-slate-400 font-medium bg-slate-50 rounded-lg border border-dashed border-slate-200 font-quicksand">
-                No active WIP stages currently running
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT: Top 5 Rejection Job Cards (Live Movement Entries) */}
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 shadow-xs space-y-3 flex flex-col justify-between font-quicksand">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 gap-2 font-quicksand">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center font-bold shrink-0 ring-1 ring-rose-500/20">
-                <ShieldAlert className="w-4 h-4" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
+                <div className="min-w-0">
                   <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide truncate font-quicksand">
-                    Top 5 Rejection Job Cards
+                    Top 3 WIP Stages (By Area)
                   </h3>
-                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0" />
+                  <p className="hidden sm:block text-[11px] text-slate-500 font-quicksand">Highest active floor volume in production</p>
                 </div>
-                <p className="hidden sm:block text-[11px] text-slate-500 font-quicksand">Live operator defect entries during stage movement</p>
               </div>
+              <span className="text-[11px] sm:text-xs font-bold font-quicksand text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200 whitespace-nowrap shrink-0 shadow-2xs">
+                {top3WipStages.reduce((acc, curr) => acc + curr.areaSqm, 0).toFixed(1)} Sqm Total
+              </span>
             </div>
-            <span className="text-[11px] sm:text-xs font-bold font-quicksand text-rose-700 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-200 whitespace-nowrap shrink-0 shadow-2xs">
-              {top5RejectedCards.reduce((acc, curr) => acc + (curr.rejectedPcbQty || 0), 0)} Rejections
-            </span>
-          </div>
 
-          {/* Rejection List */}
-          <div className="space-y-2 flex-1 font-quicksand">
-            {top5RejectedCards.length > 0 ? (
-              top5RejectedCards.map((jc, idx) => {
-                const lastLog = jc.rejectionLogs?.[jc.rejectionLogs.length - 1];
-                const rawRemark = lastLog?.remark || '';
-                const cleanRemark = rawRemark.includes('[REJECTION]')
-                  ? rawRemark.replace(/\[REJECTION\]\s*\d*\s*PCB\(s\)?\s*marked as Clear Movement at[^)]+\)?/gi, '').trim().replace(/^—\s*|^-\s*/, '')
-                  : rawRemark;
-
-                return (
+            {/* Stage Progress Items */}
+            <div className="space-y-2 flex-1 flex flex-col justify-center font-quicksand">
+              {top3WipStages.length > 0 ? (
+                top3WipStages.map((stg, idx) => (
                   <div
-                    key={jc.id}
-                    onClick={() => fetchJobCardHistory(jc)}
-                    title="Click to view job card history"
-                    className="group relative flex items-center justify-between gap-3 bg-white hover:bg-rose-50/20 border border-slate-200/80 hover:border-rose-200 p-2.5 rounded-xl transition-all shadow-2xs hover:shadow-xs cursor-pointer font-quicksand"
+                    key={stg.stageName}
+                    className="bg-white hover:bg-slate-50/70 p-2.5 rounded-xl border border-slate-200/80 transition-all shadow-2xs space-y-2 font-quicksand"
                   >
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1 font-quicksand">
-                      {/* Rank Indicator */}
-                      <span className="text-xs font-bold font-quicksand text-slate-400 w-4 text-center shrink-0">
-                        #{idx + 1}
-                      </span>
-
-                      <div className="min-w-0 flex-1 font-quicksand">
-                        {/* Job Card No & Customer Details - No boxes around words */}
-                        <div className="flex items-center gap-2 min-w-0 font-quicksand">
-                          <span className="font-quicksand font-bold text-xs text-slate-900 group-hover:text-rose-600 tracking-normal">
-                            {jc.jobCardNo}
-                          </span>
-                          {jc.customerCode && (
-                            <span className="text-[11px] font-semibold font-quicksand text-slate-500 truncate">
-                              • {jc.customerCode}
-                            </span>
-                          )}
-                          {jc.customerPartNo && (
-                            <span className="text-[10px] text-slate-400 font-quicksand truncate hidden sm:inline-block">
-                              ({jc.customerPartNo})
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Defect Stage & Remark - Clean text without boxes */}
-                        <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500 font-quicksand">
-                          {lastLog?.stageName && (
-                            <span className="font-quicksand font-bold text-slate-700 shrink-0">
-                              {lastLog.stageName} •
-                            </span>
-                          )}
-                          <span className="truncate text-slate-500 text-[11px] font-medium font-quicksand">
-                            {cleanRemark || 'Stage Movement Rejection'}
-                          </span>
-                        </div>
+                    <div className="flex items-center justify-between text-xs gap-2 font-quicksand">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xs font-bold font-quicksand text-slate-400 w-4 text-center shrink-0">
+                          #{idx + 1}
+                        </span>
+                        <span className="font-bold text-slate-900 font-quicksand text-xs truncate">
+                          {stg.stageName}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-quicksand shrink-0 hidden sm:inline-block">
+                          ({stg.cardCount} Cards • {stg.pcbQty} PCBs)
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 font-quicksand text-xs shrink-0">
+                        <span className="font-bold text-slate-900">{stg.areaSqm} Sqm</span>
+                        <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200/60 px-1.5 py-0.5 rounded-md font-quicksand">
+                          {stg.percentage}%
+                        </span>
                       </div>
                     </div>
-
-                    {/* Defect Metrics */}
-                    <div className="text-right shrink-0 font-quicksand">
-                      <div className="text-xs font-bold font-quicksand text-rose-600">
-                        {jc.rejectedPcbQty} PCBs
-                      </div>
-                      {Number(jc.rejectedAreaSqm || 0) > 0 ? (
-                        <div className="text-[10px] font-quicksand text-slate-400 font-medium">
-                          {jc.rejectedAreaSqm} Sqm
-                        </div>
-                      ) : null}
+                    <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex">
+                      <div
+                        className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-300 rounded-full"
+                        style={{ width: `${Math.max(5, stg.percentage)}%` }}
+                      />
                     </div>
                   </div>
-                );
-              })
-            ) : (
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center text-xs text-slate-600 font-medium flex items-center justify-center gap-2 font-quicksand">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>No rejections logged yet across active job cards.</span>
-              </div>
-            )}
+                ))
+              ) : (
+                <div className="text-center py-5 text-xs text-slate-400 font-medium bg-slate-50 rounded-lg border border-dashed border-slate-200 font-quicksand">
+                  No active WIP stages currently running
+                </div>
+              )}
+            </div>
           </div>
-        </div>
 
-      </div>
+          {/* RIGHT: Top 5 Rejection Job Cards (Live Movement Entries) */}
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 shadow-xs space-y-3 flex flex-col justify-between font-quicksand">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 gap-2 font-quicksand">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center font-bold shrink-0 ring-1 ring-rose-500/20">
+                  <ShieldAlert className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide truncate font-quicksand">
+                      Top 5 Rejection Job Cards
+                    </h3>
+                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0" />
+                  </div>
+                  <p className="hidden sm:block text-[11px] text-slate-500 font-quicksand">Live operator defect entries during stage movement</p>
+                </div>
+              </div>
+              <span className="text-[11px] sm:text-xs font-bold font-quicksand text-rose-700 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-200 whitespace-nowrap shrink-0 shadow-2xs">
+                {top5RejectedCards.reduce((acc, curr) => acc + (curr.rejectedPcbQty || 0), 0)} Rejections
+              </span>
+            </div>
+
+            {/* Rejection List */}
+            <div className="space-y-2 flex-1 font-quicksand">
+              {top5RejectedCards.length > 0 ? (
+                top5RejectedCards.map((jc, idx) => {
+                  const lastLog = jc.rejectionLogs?.[jc.rejectionLogs.length - 1];
+                  const rawRemark = lastLog?.remark || '';
+                  const cleanRemark = rawRemark.includes('[REJECTION]')
+                    ? rawRemark.replace(/\[REJECTION\]\s*\d*\s*PCB\(s\)?\s*marked as Clear Movement at[^)]+\)?/gi, '').trim().replace(/^—\s*|^-\s*/, '')
+                    : rawRemark;
+
+                  return (
+                    <div
+                      key={jc.id}
+                      onClick={() => fetchJobCardHistory(jc)}
+                      title="Click to view job card history"
+                      className="group relative flex items-center justify-between gap-3 bg-white hover:bg-rose-50/20 border border-slate-200/80 hover:border-rose-200 p-2.5 rounded-xl transition-all shadow-2xs hover:shadow-xs cursor-pointer font-quicksand"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1 font-quicksand">
+                        {/* Rank Indicator */}
+                        <span className="text-xs font-bold font-quicksand text-slate-400 w-4 text-center shrink-0">
+                          #{idx + 1}
+                        </span>
+
+                        <div className="min-w-0 flex-1 font-quicksand">
+                          {/* Job Card No & Customer Details - No boxes around words */}
+                          <div className="flex items-center gap-2 min-w-0 font-quicksand">
+                            <span className="font-quicksand font-bold text-xs text-slate-900 group-hover:text-rose-600 tracking-normal">
+                              {jc.jobCardNo}
+                            </span>
+                            {jc.customerCode && (
+                              <span className="text-[11px] font-semibold font-quicksand text-slate-500 truncate">
+                                • {jc.customerCode}
+                              </span>
+                            )}
+                            {jc.customerPartNo && (
+                              <span className="text-[10px] text-slate-400 font-quicksand truncate hidden sm:inline-block">
+                                ({jc.customerPartNo})
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Defect Stage & Remark - Clean text without boxes */}
+                          <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-500 font-quicksand">
+                            {lastLog?.stageName && (
+                              <span className="font-quicksand font-bold text-slate-700 shrink-0">
+                                {lastLog.stageName} •
+                              </span>
+                            )}
+                            <span className="truncate text-slate-500 text-[11px] font-medium font-quicksand">
+                              {cleanRemark || 'Stage Movement Rejection'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Defect Metrics */}
+                      <div className="text-right shrink-0 font-quicksand">
+                        <div className="text-xs font-bold font-quicksand text-rose-600">
+                          {jc.rejectedPcbQty} PCBs
+                        </div>
+                        {Number(jc.rejectedAreaSqm || 0) > 0 ? (
+                          <div className="text-[10px] font-quicksand text-slate-400 font-medium">
+                            {jc.rejectedAreaSqm} Sqm
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center text-xs text-slate-600 font-medium flex items-center justify-center gap-2 font-quicksand">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>No rejections logged yet across active job cards.</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+        </div>
+      )}
 
       {/* 3. THIRD ROW SEARCH BAR & STATUS COUNT PILLS (Matching Screenshot 2) */}
       <div className="bg-white border border-slate-200/80 rounded-2xl p-3 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -5159,7 +5209,7 @@ export default function JobCardsPage() {
                                 </span>
                                 {latestDispatch?.deliveryPhotoUrl && (
                                   <button
-                                    onClick={() => setPhotoLightbox(latestDispatch.deliveryPhotoUrl)}
+                                    onClick={() => setPodLightbox(latestDispatch.deliveryPhotoUrl)}
                                     className="text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded border border-blue-200 inline-flex items-center gap-1 cursor-pointer transition-colors"
                                     title="Click to view signed proof of delivery photo"
                                   >
@@ -5221,7 +5271,7 @@ export default function JobCardsPage() {
 
                               {isDelivered && latestDispatch?.deliveryPhotoUrl && (
                                 <button
-                                  onClick={() => setPhotoLightbox(latestDispatch.deliveryPhotoUrl)}
+                                  onClick={() => setPodLightbox(latestDispatch.deliveryPhotoUrl)}
                                   className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg text-[11px] flex items-center gap-1 shadow-2xs transition-all active:scale-95 cursor-pointer border border-blue-200"
                                   title="View Signed Delivery Challan Photo"
                                 >
@@ -7490,8 +7540,14 @@ export default function JobCardsPage() {
       {/* MODAL 5: ORIGINAL JOB CARD PHOTO LIGHTBOX */}
       {photoLightbox && (
         <Portal>
-          <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[9999] flex items-center justify-center p-4">
-            <div className="relative bg-white border border-slate-200 rounded-3xl max-w-3xl w-full p-4 space-y-3 shadow-2xl overflow-hidden">
+          <div 
+            className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200"
+            onClick={() => setPhotoLightbox(null)}
+          >
+            <div 
+              className="relative bg-white border border-slate-200 rounded-3xl max-w-3xl w-full p-4 space-y-3 shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                 <div className="flex items-center gap-2">
                   <Camera className="w-5 h-5 text-blue-600" />
@@ -8586,7 +8642,7 @@ export default function JobCardsPage() {
                     <div className="border border-slate-200 rounded-xl p-3 bg-slate-50 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3 min-w-0">
                         <div
-                          onClick={() => setPhotoLightbox(deliveryForm.deliveryPhotoUrl)}
+                          onClick={() => setPodLightbox(deliveryForm.deliveryPhotoUrl)}
                           className="relative group cursor-pointer w-14 h-14 rounded-lg border border-slate-300 shrink-0 bg-white overflow-hidden shadow-2xs"
                           title="Click to view full photo"
                         >
@@ -8610,7 +8666,7 @@ export default function JobCardsPage() {
                       <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           type="button"
-                          onClick={() => setPhotoLightbox(deliveryForm.deliveryPhotoUrl)}
+                          onClick={() => setPodLightbox(deliveryForm.deliveryPhotoUrl)}
                           className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1"
                         >
                           <Eye className="w-3.5 h-3.5" />
@@ -8708,11 +8764,11 @@ export default function JobCardsPage() {
       />
 
       {/* MODAL 10: FULL-RESOLUTION PHOTO LIGHTBOX MODAL */}
-      {photoLightbox && (
+      {podLightbox && (
         <Portal>
           <div 
             className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[99999] flex items-center justify-center p-4 animate-in fade-in duration-200"
-            onClick={() => setPhotoLightbox(null)}
+            onClick={() => setPodLightbox(null)}
           >
             <div 
               className="relative max-w-4xl max-h-[90vh] bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col"
@@ -8725,7 +8781,7 @@ export default function JobCardsPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <a
-                    href={photoLightbox}
+                    href={podLightbox}
                     download="proof-of-delivery.jpg"
                     target="_blank"
                     rel="noreferrer"
@@ -8736,7 +8792,7 @@ export default function JobCardsPage() {
                   </a>
                   <button
                     type="button"
-                    onClick={() => setPhotoLightbox(null)}
+                    onClick={() => setPodLightbox(null)}
                     className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 hover:text-white transition-colors cursor-pointer"
                   >
                     ✕
@@ -8745,7 +8801,7 @@ export default function JobCardsPage() {
               </div>
               <div className="p-4 overflow-auto flex items-center justify-center max-h-[calc(90vh-60px)] bg-slate-950/50">
                 <img 
-                  src={photoLightbox} 
+                  src={podLightbox} 
                   alt="Delivery Proof Document" 
                   className="max-h-[75vh] w-auto max-w-full object-contain rounded-lg shadow-lg border border-slate-800"
                 />

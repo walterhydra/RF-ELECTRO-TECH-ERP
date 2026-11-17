@@ -2332,6 +2332,13 @@ export class JobCardsService {
       });
       if (found) userId = found.id;
     }
+    if (!userId && currentStage?.id) {
+      const stageOp = await this.prisma.user.findFirst({
+        where: { assignedStageId: currentStage.id },
+        select: { id: true },
+      });
+      if (stageOp) userId = stageOp.id;
+    }
     if (!userId && subCard.createdById) {
       const found = await this.prisma.user.findUnique({
         where: { id: subCard.createdById },
@@ -2751,6 +2758,13 @@ export class JobCardsService {
         select: { id: true },
       });
       if (found) userId = found.id;
+    }
+    if (!userId && currentStage?.id) {
+      const stageOp = await this.prisma.user.findFirst({
+        where: { assignedStageId: currentStage.id },
+        select: { id: true },
+      });
+      if (stageOp) userId = stageOp.id;
     }
     if (!userId && subCard.createdById) {
       const found = await this.prisma.user.findUnique({
