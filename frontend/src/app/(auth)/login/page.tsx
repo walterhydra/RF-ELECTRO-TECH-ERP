@@ -42,7 +42,7 @@ export default function LoginPage() {
   // OTP State
   const [tempToken, setTempToken] = useState('');
   const [otp, setOtp] = useState('');
-  const [targetEmail, setTargetEmail] = useState('milanpandavadra84@gmail.com');
+  const [targetEmail, setTargetEmail] = useState('ocbpl.qms@gmail.com');
   const [otpCooldown, setOtpCooldown] = useState(0);
   const [resending, setResending] = useState(false);
 
@@ -89,16 +89,16 @@ export default function LoginPage() {
     setInfoMessage('');
 
     try {
-      // 1. Send OTP request to backend API
-      let res = await fetch(`${getApiBaseUrl()}/auth/request-otp`, {
+      // 1. Send OTP request via internal Next.js route with direct Gmail SMTP delivery
+      let res = await fetch('/api/auth/request-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password }),
       });
 
-      // Fallback to internal route if needed
+      // Fallback to backend API if internal route fails
       if (!res.ok) {
-        res = await fetch('/api/auth/request-otp', {
+        res = await fetch(`${getApiBaseUrl()}/auth/request-otp`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: email.trim(), password }),
@@ -222,13 +222,13 @@ export default function LoginPage() {
       let success = false;
       let newTargetEmail = targetEmail || 'ocbpl.qms@gmail.com';
 
-      // 1. If tempToken exists, try dedicated resend-otp endpoints first
+      // 1. If tempToken exists, try internal route first (with direct Gmail SMTP), then backend
       if (tempToken) {
         try {
-          const res = await fetch(`${getApiBaseUrl()}/auth/resend-otp`, {
+          const res = await fetch('/api/auth/resend-otp', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tempToken }),
+            body: JSON.stringify({ tempToken, email: email.trim(), password }),
           });
           const data = await res.json();
           if (res.ok) {
@@ -239,10 +239,10 @@ export default function LoginPage() {
 
         if (!success) {
           try {
-            const res = await fetch('/api/auth/resend-otp', {
+            const res = await fetch(`${getApiBaseUrl()}/auth/resend-otp`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ tempToken, email: email.trim(), password }),
+              body: JSON.stringify({ tempToken }),
             });
             const data = await res.json();
             if (res.ok) {
