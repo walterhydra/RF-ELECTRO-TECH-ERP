@@ -16,7 +16,7 @@ interface PendingOtpSession {
   userProfile: any;
 }
 
-const TARGET_OTP_EMAIL = process.env.OTP_TARGET_EMAIL || 'ocbpl.qms@gmail.com';
+const TARGET_OTP_EMAIL = process.env.OTP_TARGET_EMAIL || 'milanpandavadra84@gmail.com, ocbpl.qms@gmail.com';
 
 @Injectable()
 export class AuthService {

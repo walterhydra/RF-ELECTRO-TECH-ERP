@@ -42,7 +42,7 @@ export default function LoginPage() {
   // OTP State
   const [tempToken, setTempToken] = useState('');
   const [otp, setOtp] = useState('');
-  const [targetEmail, setTargetEmail] = useState('ocbpl.qms@gmail.com');
+  const [targetEmail, setTargetEmail] = useState('milanpandavadra84@gmail.com');
   const [otpCooldown, setOtpCooldown] = useState(0);
   const [resending, setResending] = useState(false);
 
