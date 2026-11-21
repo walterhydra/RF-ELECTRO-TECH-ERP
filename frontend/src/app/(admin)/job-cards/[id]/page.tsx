@@ -24,6 +24,7 @@ import {
   PauseCircle,
   Send,
   Trash2,
+  User,
 } from 'lucide-react';
 import { getApiBaseUrl } from '@/lib/utils';
 
@@ -100,7 +101,13 @@ interface TraceabilityLog {
   remarks?: string;
   remarkType?: string;
   isOverride: boolean;
-  createdBy?: { name: string; email?: string };
+  createdBy?: {
+    id?: string;
+    name: string;
+    email?: string;
+    role?: { name: string };
+    department?: { name: string };
+  };
   subJobCard?: { subJobCardNo: string };
   createdAt: string;
 }
@@ -547,8 +554,10 @@ export default function JobCardDetailPage() {
                   const isInit = String(log.remarkType || '').includes('INITIAL_LAUNCH');
                   const isComp = String(log.remarkType || '').includes('JOB_COMPLETED');
                   const opName = log.createdBy?.name || 'Operator';
-                  const opRole = log.createdBy?.role?.name || '';
+                  const opRole = log.createdBy?.role?.name || log.createdBy?.role || '';
+                  const opEmail = log.createdBy?.email || '';
                   const opId = log.createdBy?.id || log.createdById || '';
+                  const opDisplayId = opEmail ? opEmail : (opId && opId !== 'system' && opId !== 'planner' ? opId.slice(0, 8) : '');
 
                   return (
                     <tr key={log.id || idx} className={`hover:bg-slate-50/80 transition-colors ${isRej ? 'bg-rose-50/30' : isIncomplete ? 'bg-amber-50/30' : ''}`}>
@@ -608,11 +617,19 @@ export default function JobCardDetailPage() {
                         )}
                       </td>
                       <td className="py-2.5 px-3 whitespace-nowrap">
-                        <div className="font-semibold text-slate-900 text-[11px]">{opName}</div>
-                        <div className="text-[10px] text-slate-400 font-mono">
-                          {opRole && <span>{opRole}</span>}
-                          {opId && <span> • ID: {opId.slice(0, 8)}</span>}
+                        <div className="font-semibold text-slate-900 text-[11px] flex items-center gap-1">
+                          <User className="w-3 h-3 text-indigo-600 shrink-0" />
+                          <span>{opName}</span>
                         </div>
+                        <div className="text-[10px] text-slate-500 font-medium">
+                          {opRole && <span>{opRole}</span>}
+                        </div>
+                        {opDisplayId && (
+                          <div className="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.2 rounded font-mono text-[9px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200" title={`User Login / ID: ${opEmail || opId}`}>
+                            <span className="text-slate-400 font-normal">ID:</span>
+                            <span className="max-w-[140px] truncate">{opDisplayId}</span>
+                          </div>
+                        )}
                       </td>
                       <td className="py-2.5 px-3 font-sans text-[11px] text-slate-600 max-w-xs">
                         {log.rejectionReason && (

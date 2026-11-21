@@ -590,7 +590,7 @@ export default function StageUpdatePage() {
                     )}
                     <div className="flex items-center justify-between text-[9px] text-slate-500 font-mono pt-0.5">
                       <span>By: <strong className="text-slate-300">{log.createdBy?.name || 'Operator'}</strong> ({log.createdBy?.role?.name || 'Staff'})</span>
-                      {log.createdBy?.id && <span>ID: {log.createdBy.id.slice(0, 8)}</span>}
+                      {(log.createdBy?.email || log.createdBy?.id) && <span>ID: {log.createdBy?.email || log.createdBy?.id?.slice(0, 8)}</span>}
                     </div>
                   </div>
                 );

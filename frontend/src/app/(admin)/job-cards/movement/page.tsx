@@ -29,7 +29,8 @@ import {
   Barcode,
   Split,
   X,
-  ImageIcon
+  ImageIcon,
+  Play
 } from 'lucide-react';
 import { Portal } from '@/components/ui/Portal';
 import { getApiBaseUrl, fetchApi } from '@/lib/utils';
@@ -248,7 +249,7 @@ export default function JobMovementUpdatePage() {
                   custPnlAreaSqm: subAreaSqm,
                   currentStageIndex: stageIdx,
                   currentStageName: PF01_STAGES[stageIdx] || rawStage,
-                  status: sub.status === 'CREATED' ? 'UNLAUNCHED' : sub.status,
+                  status: (sub.status === 'CREATED' || sub.status === 'PENDING_LAUNCH' || sub.status === 'NOT_LAUNCHED' || j.status === 'CREATED' || j.status === 'NOT_LAUNCHED') ? 'UNLAUNCHED' : sub.status,
                   createdAt: j.createdAt,
                 };
               });
@@ -296,7 +297,7 @@ export default function JobMovementUpdatePage() {
               custPnlAreaSqm: masterAreaSqm,
               currentStageIndex: stageIdx,
               currentStageName: PF01_STAGES[stageIdx] || rawStage,
-              status: j.status === 'CREATED' ? 'UNLAUNCHED' : j.status,
+              status: (j.status === 'CREATED' || j.status === 'PENDING_LAUNCH' || j.status === 'NOT_LAUNCHED') ? 'UNLAUNCHED' : j.status,
               createdAt: j.createdAt,
             }];
 
@@ -413,12 +414,22 @@ export default function JobMovementUpdatePage() {
   const handleAdvanceStage = (jobId: string) => {
     const targetJob = jobs.find((j) => j.id === jobId);
     if (targetJob) {
+      const isUnlaunched = targetJob.status === 'UNLAUNCHED' || (targetJob.status as string) === 'CREATED' || (targetJob.status as string) === 'PENDING_LAUNCH';
+      if (isUnlaunched) {
+        showToastMsg('This Job Card is UNLAUNCHED. Please release/launch it into Stage 1 Production before moving stages.');
+        return;
+      }
       setSelectedJob(targetJob);
     }
   };
 
   const handleFullJobMovement = () => {
     if (!selectedJob) return;
+    const isUnlaunched = selectedJob.status === 'UNLAUNCHED' || (selectedJob.status as string) === 'CREATED' || (selectedJob.status as string) === 'PENDING_LAUNCH';
+    if (isUnlaunched) {
+      showToastMsg('Action Rejected: Unlaunched Job Card cannot be moved to next stage. Release/Launch it first!');
+      return;
+    }
     const jobId = selectedJob.id;
     const jobCardNo = selectedJob.jobCardNo;
     if (!canUserMoveStage(selectedJob.currentStageName)) {
@@ -590,6 +601,11 @@ export default function JobMovementUpdatePage() {
 
   const handlePartialJobMovement = () => {
     if (!selectedJob) return;
+    const isUnlaunched = selectedJob.status === 'UNLAUNCHED' || (selectedJob.status as string) === 'CREATED' || (selectedJob.status as string) === 'PENDING_LAUNCH';
+    if (isUnlaunched) {
+      showToastMsg('Action Rejected: Unlaunched Job Card cannot be split/moved. Release/Launch it first!');
+      return;
+    }
     if (!canUserMoveStage(selectedJob.currentStageName)) {
       showToastMsg(`Permission Denied: Operator assigned to "${assignedStage}" cannot move jobs out of "${selectedJob.currentStageName}".`);
       return;
@@ -716,12 +732,22 @@ export default function JobMovementUpdatePage() {
   const isShearingStage = assignedStage.includes('SHEARING') || assignedStage.includes('1.') || assignedStage.toLowerCase().includes('shearing');
 
   const filteredJobs = jobs.filter((j) => {
+    const isUnlaunched =
+      j.status === 'UNLAUNCHED' ||
+      (j.status as string) === 'CREATED' ||
+      (j.status as string) === 'PENDING_LAUNCH' ||
+      (j.status as string) === 'NOT_LAUNCHED';
+    const isCompleted = j.status === 'COMPLETED';
+
     if (assignedStage && assignedStage.toUpperCase() !== 'ALL') {
       const assignedSlug = normalizeStageSlug(assignedStage);
-      const isUnlaunched = j.status === 'UNLAUNCHED';
-      const isCompleted = j.status === 'COMPLETED';
+      const isShearingAssigned =
+        assignedSlug === 'shearing' ||
+        assignedSlug === '1shearing' ||
+        assignedSlug.includes('shear');
 
-      if (isUnlaunched && assignedSlug !== 'shearing' && assignedSlug !== '1shearing') return false;
+      // CRITICAL: Unlaunched cards must NEVER show up in any stage other than Shearing!
+      if (isUnlaunched && !isShearingAssigned) return false;
       if (isCompleted && assignedSlug !== 'packing' && assignedSlug !== '20packing') return false;
 
       const jobSlug = normalizeStageSlug(j.currentStageName);
@@ -1091,7 +1117,11 @@ export default function JobMovementUpdatePage() {
 
                   <div className="min-w-0 bg-blue-50/60 p-2.5 rounded-xl border border-blue-200/70">
                     <span className="text-[10px] text-blue-600 uppercase font-mono font-bold block">CURRENT STAGE</span>
-                    <span className="font-black text-blue-800 font-mono truncate block mt-0.5">{j.currentStageName}</span>
+                    {j.status === 'UNLAUNCHED' ? (
+                      <span className="font-extrabold text-amber-800 font-mono text-xs truncate block mt-0.5">UNLAUNCHED (Awaiting Launch)</span>
+                    ) : (
+                      <span className="font-black text-blue-800 font-mono truncate block mt-0.5">{j.currentStageName}</span>
+                    )}
                   </div>
                 </div>
 
@@ -1119,7 +1149,15 @@ export default function JobMovementUpdatePage() {
                     <span className="text-xs truncate">View & Move Stage</span>
                   </button>
 
-                  {j.currentStageName.includes('PACKING') || stageIndex === PF01_STAGES.length - 1 ? (
+                  {j.status === 'UNLAUNCHED' ? (
+                    <Link
+                      href="/job-cards/launch"
+                      className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl flex items-center gap-1 shadow-xs transition-all cursor-pointer shrink-0 active:scale-98 min-h-[40px]"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span className="text-xs font-black">Launch Job</span>
+                    </Link>
+                  ) : j.currentStageName.includes('PACKING') || stageIndex === PF01_STAGES.length - 1 ? (
                     <button
                       onClick={() => handleJobDispatch(j.id)}
                       className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer shrink-0 min-h-[40px] active:scale-98"
@@ -1283,6 +1321,26 @@ export default function JobMovementUpdatePage() {
 
                 {/* TAB B: FULL MOVEMENT */}
                 {movementTab === 'FULL' && (() => {
+                  const isCardUnlaunched = selectedJob.status === 'UNLAUNCHED' || (selectedJob.status as string) === 'CREATED' || (selectedJob.status as string) === 'PENDING_LAUNCH';
+                  if (isCardUnlaunched) {
+                    return (
+                      <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl text-center space-y-3 font-sans">
+                        <AlertCircle className="w-9 h-9 text-amber-600 mx-auto" />
+                        <h4 className="font-black text-slate-900 text-sm">Job Card Not Yet Launched</h4>
+                        <p className="text-xs text-slate-600 max-w-md mx-auto">
+                          Job Card <strong className="font-mono">{selectedJob.jobCardNo}</strong> is currently unlaunched. It must be released into Stage 1 (Shearing) before it can move into subsequent manufacturing stages.
+                        </p>
+                        <Link
+                          href="/job-cards/launch"
+                          className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs shadow-xs transition-all active:scale-95"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>Go to Job Card Launch Page</span>
+                        </Link>
+                      </div>
+                    );
+                  }
+
                   const currentPcbQty = selectedJob.totalPcbQty || 160;
                   const currentArea = selectedJob.prodPnlAreaSqm || 45;
                   const sqmPerPcb = currentPcbQty > 0 ? currentArea / currentPcbQty : 0;
@@ -1399,6 +1457,26 @@ export default function JobMovementUpdatePage() {
 
                 {/* TAB C: UNCOMPLETED / SPLIT MOVEMENT */}
                 {movementTab === 'PARTIAL' && (() => {
+                  const isCardUnlaunched = selectedJob.status === 'UNLAUNCHED' || (selectedJob.status as string) === 'CREATED' || (selectedJob.status as string) === 'PENDING_LAUNCH';
+                  if (isCardUnlaunched) {
+                    return (
+                      <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl text-center space-y-3 font-sans">
+                        <AlertCircle className="w-9 h-9 text-amber-600 mx-auto" />
+                        <h4 className="font-black text-slate-900 text-sm">Job Card Not Yet Launched</h4>
+                        <p className="text-xs text-slate-600 max-w-md mx-auto">
+                          Job Card <strong className="font-mono">{selectedJob.jobCardNo}</strong> is currently unlaunched. Unlaunched cards cannot be split or moved until launched into Stage 1.
+                        </p>
+                        <Link
+                          href="/job-cards/launch"
+                          className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs shadow-xs transition-all active:scale-95"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>Go to Job Card Launch Page</span>
+                        </Link>
+                      </div>
+                    );
+                  }
+
                   const masterPcb = selectedJob.totalPcbQty || selectedJob.custPnlQty || 160;
                   const parsedMoveQty = typeof partialQty === 'number' ? partialQty : (parseInt(String(partialQty), 10) || 0);
                   const movedPcb = parsedMoveQty > 0 ? Math.min(parsedMoveQty, masterPcb - 1) : 0;

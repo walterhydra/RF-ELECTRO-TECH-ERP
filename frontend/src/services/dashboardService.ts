@@ -104,17 +104,17 @@ export interface LiveDashboardData {
 }
 
 const default11Stages = [
-  { rank: 1, department: 'Shearing & Cutting', shortCode: 'SHEARING', color: '#3B82F6', targetSqm: 35, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
-  { rank: 2, department: 'CNC Drilling', shortCode: 'DRILLING', color: '#10B981', targetSqm: 30, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
-  { rank: 3, department: 'DML (Dry Film)', shortCode: 'DML', color: '#6366F1', targetSqm: 25, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
-  { rank: 4, department: 'PTH / PIT (Plating)', shortCode: 'PIT', color: '#F59E0B', targetSqm: 25, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
-  { rank: 5, department: 'EPL (Pattern Plating)', shortCode: 'EPL', color: '#EC4899', targetSqm: 20, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
-  { rank: 6, department: 'SES (Etching & Strip)', shortCode: 'SES', color: '#8B5CF6', targetSqm: 20, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
-  { rank: 7, department: 'PISM (Solder Mask)', shortCode: 'PISM', color: '#14B8A6', targetSqm: 22, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
-  { rank: 8, department: 'LP / Legend Print', shortCode: 'LP', color: '#F97316', targetSqm: 18, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
-  { rank: 9, department: 'HASL / Surface Finish', shortCode: 'HASL', color: '#06B6D4', targetSqm: 18, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
-  { rank: 10, department: 'Routing & Profile (RT)', shortCode: 'RT', color: '#84CC16', targetSqm: 15, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
-  { rank: 11, department: 'BBT & Testing', shortCode: 'BBT', color: '#E11D48', targetSqm: 12, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
+  { rank: 1, department: 'Shearing & Cutting', shortCode: 'SHEARING', color: '#3B82F6', targetSqm: 150, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
+  { rank: 2, department: 'CNC Drilling', shortCode: 'DRILLING', color: '#10B981', targetSqm: 150, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
+  { rank: 3, department: 'DML (Dry Film)', shortCode: 'DML', color: '#6366F1', targetSqm: 150, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
+  { rank: 4, department: 'PTH / PIT (Plating)', shortCode: 'PIT', color: '#F59E0B', targetSqm: 150, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
+  { rank: 5, department: 'EPL (Pattern Plating)', shortCode: 'EPL', color: '#EC4899', targetSqm: 150, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
+  { rank: 6, department: 'SES (Etching & Strip)', shortCode: 'SES', color: '#8B5CF6', targetSqm: 150, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
+  { rank: 7, department: 'PISM (Solder Mask)', shortCode: 'PISM', color: '#14B8A6', targetSqm: 150, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
+  { rank: 8, department: 'LP / Legend Print', shortCode: 'LP', color: '#F97316', targetSqm: 150, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
+  { rank: 9, department: 'HASL / Surface Finish', shortCode: 'HASL', color: '#06B6D4', targetSqm: 150, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
+  { rank: 10, department: 'Routing & Profile (RT)', shortCode: 'RT', color: '#84CC16', targetSqm: 150, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
+  { rank: 11, department: 'BBT & Testing', shortCode: 'BBT', color: '#E11D48', targetSqm: 150, todayProductionSqm: 0, achievementPercent: 0, runningJobs: 0, waitingJobs: 0, holdJobs: 0 },
 ];
 
 // Initial clean state while live data is fetched from PostgreSQL database

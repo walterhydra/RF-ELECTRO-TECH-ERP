@@ -3285,8 +3285,16 @@ export default function JobCardsPage() {
     let matchesStage = true;
     if (effectiveStageFilter) {
       const targetSlug = normalizeStageSlug(effectiveStageFilter);
-      const cardStageSlug = normalizeStageSlug(jc.currentStageName);
-      matchesStage = cardStageSlug === targetSlug || (jc.currentStageName || '').toLowerCase().includes(effectiveStageFilter.toLowerCase());
+      const isShearingTarget = targetSlug === 'shearing' || targetSlug === '1shearing' || targetSlug.includes('shear');
+      const isCardUnlaunched = jc.status === 'UNLAUNCHED' || jc.status === 'CREATED' || (jc.status as string) === 'PENDING_LAUNCH' || (jc.status as string) === 'NOT_LAUNCHED';
+
+      if (isCardUnlaunched) {
+        // Unlaunched cards NEVER belong to any stage other than Shearing!
+        matchesStage = isShearingTarget;
+      } else {
+        const cardStageSlug = normalizeStageSlug(jc.currentStageName);
+        matchesStage = cardStageSlug === targetSlug || (jc.currentStageName || '').toLowerCase().includes(effectiveStageFilter.toLowerCase());
+      }
     }
 
     const matchesPriority = !colFilters.priority || jc.priority.toLowerCase().includes(colFilters.priority.toLowerCase());
@@ -3339,9 +3347,9 @@ export default function JobCardsPage() {
     [overdueCards]
   );
 
-  // Top 3 WIP Stages by active Sqm Area
+  // Top 3 WIP Stages by active Sqm Area (Active In-Progress Floor WIP Only)
   const top3WipStages = React.useMemo(() => {
-    const activeCards = scopedCards.filter((j) => j.status !== 'COMPLETED');
+    const activeCards = scopedCards.filter((j) => j.status === 'IN_PROGRESS');
     const totalFloorSqm = activeCards.reduce((sum, j) => sum + (j.custPnlAreaSqm || j.prodPnlAreaSqm || 0), 0);
 
     const stageMap: Record<string, { stageName: string; areaSqm: number; pcbQty: number; cardCount: number }> = {};
@@ -6317,10 +6325,17 @@ export default function JobCardsPage() {
                       </div>
                       <h3 className="font-black text-white text-2xl flex items-center gap-3 mt-0.5 font-mono tracking-tight">
                         <span className="text-amber-300">{selectedMovementJob.jobCardNo}</span>
-                        <span className="text-xs px-3 py-1 rounded-full bg-blue-950/90 text-blue-300 border border-blue-500/40 font-bold font-sans flex items-center gap-1 shadow-xs whitespace-nowrap">
-                          <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
-                          Stage: {selectedMovementJob.currentStageName || PF01_STAGES[0]}
-                        </span>
+                        {(selectedMovementJob.status === 'UNLAUNCHED' || selectedMovementJob.status === 'CREATED' || (selectedMovementJob.status as string) === 'PENDING_LAUNCH') ? (
+                          <span className="text-xs px-3 py-1 rounded-full bg-slate-800 text-amber-300 border border-amber-500/40 font-bold font-sans flex items-center gap-1.5 shadow-xs whitespace-nowrap">
+                            <Clock className="w-3.5 h-3.5 text-amber-400" />
+                            UNLAUNCHED (Awaiting Launch)
+                          </span>
+                        ) : (
+                          <span className="text-xs px-3 py-1 rounded-full bg-blue-950/90 text-blue-300 border border-blue-500/40 font-bold font-sans flex items-center gap-1 shadow-xs whitespace-nowrap">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                            Stage: {selectedMovementJob.currentStageName || PF01_STAGES[0]}
+                          </span>
+                        )}
                       </h3>
                     </div>
                   </div>
@@ -6768,6 +6783,29 @@ export default function JobCardsPage() {
 
                 {/* TAB B: FULL MOVEMENT (HORIZONTAL SIDE-BY-SIDE) */}
                 {movementTab === 'FULL' && (() => {
+                  const isCardUnlaunched = selectedMovementJob.status === 'UNLAUNCHED' || selectedMovementJob.status === 'CREATED' || (selectedMovementJob.status as string) === 'PENDING_LAUNCH';
+                  if (isCardUnlaunched) {
+                    return (
+                      <div className="bg-amber-50 border border-amber-200 p-8 rounded-2xl text-center space-y-4 font-sans max-w-lg mx-auto my-6 shadow-xs">
+                        <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" />
+                        <h4 className="font-black text-slate-900 text-base">Job Card Not Yet Launched</h4>
+                        <p className="text-xs text-slate-600 leading-relaxed">
+                          Job Card <strong className="font-mono text-slate-900">{selectedMovementJob.jobCardNo}</strong> is currently unlaunched. It must be released into Stage 1 (Shearing) before it can move into subsequent manufacturing stages.
+                        </p>
+                        <button
+                          onClick={() => {
+                            handleLaunchExistingJobCard(selectedMovementJob.id);
+                            setSelectedMovementJob(null);
+                          }}
+                          className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs shadow-md transition-all active:scale-95 cursor-pointer"
+                        >
+                          <Play className="w-4 h-4 fill-current" />
+                          <span>LAUNCH INTO STAGE 1 NOW</span>
+                        </button>
+                      </div>
+                    );
+                  }
+
                   const currentTotalPcb = selectedMovementJob.totalPcbQty || (selectedMovementJob.custPnlQty && selectedMovementJob.custPnlQty > 50 ? selectedMovementJob.custPnlQty : Math.round((selectedMovementJob.prodPnlQty || 0) * 4)) || 160;
                   const parsedRejectQty = Math.min(Math.max(0, Number(fullMoveRejectQty) || 0), currentTotalPcb);
                   const movingPcbQty = Math.max(0, currentTotalPcb - parsedRejectQty);
@@ -6996,6 +7034,29 @@ export default function JobCardsPage() {
 
                 {/* TAB C: UNCOMPLETED / SPLIT MOVEMENT (HORIZONTAL SIDE-BY-SIDE) */}
                 {movementTab === 'PARTIAL' && (() => {
+                  const isCardUnlaunched = selectedMovementJob.status === 'UNLAUNCHED' || selectedMovementJob.status === 'CREATED' || (selectedMovementJob.status as string) === 'PENDING_LAUNCH';
+                  if (isCardUnlaunched) {
+                    return (
+                      <div className="bg-amber-50 border border-amber-200 p-8 rounded-2xl text-center space-y-4 font-sans max-w-lg mx-auto my-6 shadow-xs">
+                        <AlertCircle className="w-10 h-10 text-amber-600 mx-auto" />
+                        <h4 className="font-black text-slate-900 text-base">Job Card Not Yet Launched</h4>
+                        <p className="text-xs text-slate-600 leading-relaxed">
+                          Job Card <strong className="font-mono text-slate-900">{selectedMovementJob.jobCardNo}</strong> is currently unlaunched. Unlaunched cards cannot be split or moved until launched into Stage 1.
+                        </p>
+                        <button
+                          onClick={() => {
+                            handleLaunchExistingJobCard(selectedMovementJob.id);
+                            setSelectedMovementJob(null);
+                          }}
+                          className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs shadow-md transition-all active:scale-95 cursor-pointer"
+                        >
+                          <Play className="w-4 h-4 fill-current" />
+                          <span>LAUNCH INTO STAGE 1 NOW</span>
+                        </button>
+                      </div>
+                    );
+                  }
+
                   const masterPcb = selectedMovementJob.totalPcbQty || (selectedMovementJob.custPnlQty && selectedMovementJob.custPnlQty > 50 ? selectedMovementJob.custPnlQty : Math.round((selectedMovementJob.prodPnlQty || 0) * 4)) || 160;
                   const parsedMoveQty = typeof partialMoveQty === 'number' ? partialMoveQty : (parseInt(String(partialMoveQty), 10) || 0);
                   const validMoveQty = Math.min(Math.max(1, parsedMoveQty), Math.max(1, masterPcb - 1));
@@ -7943,16 +8004,17 @@ export default function JobCardsPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        let csvContent = "Step No,Date & Time,Job Card No,Sub Lot,Process Stage,Event Type,Qty Received,Qty Forwarded,Qty Rejected,Operator Name,Operator Role,Remarks\n";
+                        let csvContent = "Step No,Date & Time,Job Card No,Sub Lot,Process Stage,Event Type,Qty Received,Qty Forwarded,Qty Rejected,Operator Name,Operator ID / Email,Operator Role,Remarks\n";
                         historyLogs.forEach((l: any, i: number) => {
                           const dateStr = l.createdAt ? new Date(l.createdAt).toLocaleString('en-GB') : '-';
                           const stageName = `"${(l.stage?.name || l.stageName || '-').replace(/"/g, '""')}"`;
                           const subNo = l.subJobCard?.subJobCardNo || historyModalJob.jobCardNo;
                           const eventType = l.remarkType || 'STAGE_MOVEMENT';
                           const opName = `"${(l.createdBy?.name || 'Operator').replace(/"/g, '""')}"`;
-                          const opRole = `"${(l.createdBy?.role?.name || 'Staff').replace(/"/g, '""')}"`;
+                          const opEmailOrId = `"${(l.createdBy?.email || l.createdBy?.id || l.createdById || '-').replace(/"/g, '""')}"`;
+                          const opRole = `"${(l.createdBy?.role?.name || l.createdBy?.role || 'Staff').replace(/"/g, '""')}"`;
                           const remarkStr = `"${(l.remarks || l.rejectionReason || '').replace(/"/g, '""')}"`;
-                          csvContent += `${historyLogs.length - i},${dateStr},${historyModalJob.jobCardNo},${subNo},${stageName},${eventType},${l.qtyReceived || 0},${l.qtyForwarded || 0},${l.qtyRejected || 0},${opName},${opRole},${remarkStr}\n`;
+                          csvContent += `${historyLogs.length - i},${dateStr},${historyModalJob.jobCardNo},${subNo},${stageName},${eventType},${l.qtyReceived || 0},${l.qtyForwarded || 0},${l.qtyRejected || 0},${opName},${opEmailOrId},${opRole},${remarkStr}\n`;
                         });
                         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
                         const blobUrl = URL.createObjectURL(blob);
@@ -7994,12 +8056,14 @@ export default function JobCardsPage() {
                       const q = historySearchQuery.toLowerCase();
                       const stage = String(log.stage?.name || log.stageName || '').toLowerCase();
                       const opName = String(log.createdBy?.name || '').toLowerCase();
-                      const opRole = String(log.createdBy?.role?.name || '').toLowerCase();
+                      const opRole = String(log.createdBy?.role?.name || log.createdBy?.role || '').toLowerCase();
                       const opDept = String(log.createdBy?.department?.name || '').toLowerCase();
+                      const opEmail = String(log.createdBy?.email || '').toLowerCase();
+                      const opId = String(log.createdBy?.id || log.createdById || '').toLowerCase();
                       const remarks = String(log.remarks || '').toLowerCase();
                       const reason = String(log.rejectionReason || '').toLowerCase();
                       const subNo = String(log.subJobCard?.subJobCardNo || '').toLowerCase();
-                      return stage.includes(q) || opName.includes(q) || opRole.includes(q) || opDept.includes(q) || remarks.includes(q) || reason.includes(q) || subNo.includes(q);
+                      return stage.includes(q) || opName.includes(q) || opRole.includes(q) || opDept.includes(q) || opEmail.includes(q) || opId.includes(q) || remarks.includes(q) || reason.includes(q) || subNo.includes(q);
                     }
 
                     return true;
@@ -8080,8 +8144,11 @@ export default function JobCardsPage() {
                             const stageName = log.stage?.name || log.stageName || 'Stage Movement';
                             const subNo = log.subJobCard?.subJobCardNo || historyModalJob.jobCardNo;
                             const opName = log.createdBy?.name || 'Shop Floor Operator';
-                            const opRole = log.createdBy?.role?.name || 'Operator';
+                            const opRole = log.createdBy?.role?.name || log.createdBy?.role || 'Operator';
                             const opDept = log.createdBy?.department?.name || '';
+                            const opEmail = log.createdBy?.email || '';
+                            const opId = log.createdBy?.id || log.createdById || '';
+                            const opDisplayId = opEmail ? opEmail : (opId && opId !== 'system' && opId !== 'planner' ? (opId.length > 12 ? `${opId.slice(0, 8)}...` : opId) : (log.createdById || ''));
                             const stepNumber = filtered.length - idx;
 
                             return (
@@ -8179,10 +8246,20 @@ export default function JobCardsPage() {
                                     )}
 
                                     {/* Operator Info */}
-                                    <div className="ml-auto flex items-center gap-2 text-xs sm:text-sm text-slate-700 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200">
-                                      <User className="w-4 h-4 text-slate-400" />
-                                      <span className="font-bold text-slate-900">{opName}</span>
-                                      <span className="text-xs text-slate-500 font-medium">({opRole}{opDept ? ` • ${opDept}` : ''})</span>
+                                    <div className="ml-auto flex items-center gap-2 text-xs sm:text-sm text-slate-700 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200">
+                                      <User className="w-4 h-4 text-indigo-600 shrink-0" />
+                                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="font-bold text-slate-900">{opName}</span>
+                                          <span className="text-xs text-slate-500 font-medium">({opRole}{opDept ? ` • ${opDept}` : ''})</span>
+                                        </div>
+                                        {opDisplayId && (
+                                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono text-[10px] sm:text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/80" title={`User Login / ID: ${opEmail || opId}`}>
+                                            <span className="text-slate-400 font-normal">ID:</span>
+                                            <span className="max-w-[180px] truncate">{opDisplayId}</span>
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
 
@@ -8231,7 +8308,11 @@ export default function JobCardsPage() {
                             const stageName = log.stage?.name || log.stageName || 'Stage';
                             const subNo = log.subJobCard?.subJobCardNo || historyModalJob.jobCardNo;
                             const opName = log.createdBy?.name || 'Operator';
-                            const opRole = log.createdBy?.role?.name || 'Staff';
+                            const opRole = log.createdBy?.role?.name || log.createdBy?.role || 'Staff';
+                            const opDept = log.createdBy?.department?.name || '';
+                            const opEmail = log.createdBy?.email || '';
+                            const opId = log.createdBy?.id || log.createdById || '';
+                            const opDisplayId = opEmail ? opEmail : (opId && opId !== 'system' && opId !== 'planner' ? (opId.length > 12 ? `${opId.slice(0, 8)}...` : opId) : (log.createdById || ''));
                             const stepNumber = filtered.length - idx;
 
                             return (
@@ -8281,8 +8362,17 @@ export default function JobCardsPage() {
                                   )}
                                 </td>
                                 <td className="py-3.5 px-4 whitespace-nowrap">
-                                  <div className="font-bold text-slate-900 text-sm">{opName}</div>
-                                  <div className="text-xs text-slate-400 font-medium">{opRole}</div>
+                                  <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                                    <User className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                    <span>{opName}</span>
+                                  </div>
+                                  <div className="text-xs text-slate-500 font-medium">{opRole}{opDept ? ` • ${opDept}` : ''}</div>
+                                  {opDisplayId && (
+                                    <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/80 max-w-[200px] truncate" title={`User Login / ID: ${opEmail || opId}`}>
+                                      <span className="text-slate-400 font-normal">ID:</span>
+                                      <span className="truncate">{opDisplayId}</span>
+                                    </div>
+                                  )}
                                 </td>
                                 <td className="py-3.5 px-4 text-xs sm:text-sm text-slate-600 max-w-xs truncate font-medium" title={log.remarks || log.rejectionReason || ''}>
                                   {log.remarks || log.rejectionReason || '—'}

@@ -626,17 +626,17 @@ export class ReportsService {
 
     // 11-12 Standard PCB Process Stages fallback if DB stages are empty
     const defaultStageTemplates = [
-      { name: '1. SHEARING', code: 'SHEARING', color: '#3B82F6', target: 35 },
-      { name: '2. DRILLING', code: 'DRILLING', color: '#10B981', target: 30 },
-      { name: '4. DML', code: 'DML', color: '#6366F1', target: 25 },
-      { name: '5. PIT', code: 'PIT', color: '#F59E0B', target: 25 },
-      { name: '7. EPL', code: 'EPL', color: '#EC4899', target: 20 },
-      { name: '8. SES', code: 'SES', color: '#8B5CF6', target: 20 },
-      { name: '9. PISM', code: 'PISM', color: '#14B8A6', target: 22 },
-      { name: '11. LP', code: 'LP', color: '#F97316', target: 18 },
-      { name: '12. HASL', code: 'HASL', color: '#06B6D4', target: 18 },
-      { name: '14. RT', code: 'RT', color: '#84CC16', target: 15 },
-      { name: '15. BBT', code: 'BBT', color: '#E11D48', target: 12 },
+      { name: '1. SHEARING', code: 'SHEARING', color: '#3B82F6', target: 150 },
+      { name: '2. DRILLING', code: 'DRILLING', color: '#10B981', target: 150 },
+      { name: '4. DML', code: 'DML', color: '#6366F1', target: 150 },
+      { name: '5. PIT', code: 'PIT', color: '#F59E0B', target: 150 },
+      { name: '7. EPL', code: 'EPL', color: '#EC4899', target: 150 },
+      { name: '8. SES', code: 'SES', color: '#8B5CF6', target: 150 },
+      { name: '9. PISM', code: 'PISM', color: '#14B8A6', target: 150 },
+      { name: '11. LP', code: 'LP', color: '#F97316', target: 150 },
+      { name: '12. HASL', code: 'HASL', color: '#06B6D4', target: 150 },
+      { name: '14. RT', code: 'RT', color: '#84CC16', target: 150 },
+      { name: '15. BBT', code: 'BBT', color: '#E11D48', target: 150 },
     ];
 
     // 2. Fetch ALL Active JobCards and SubJobCards from DB
@@ -913,7 +913,7 @@ export class ReportsService {
       const cleanName = formatStageDisplayName(stage.name);
       const stageStats = stageWipMap[stage.id] || stageWipMap[stage.name] || stageWipMap[stage.code] || { running: 0, waiting: 0, hold: 0, todaySqm: 0 };
       
-      const targetSqm = defaultStageTemplates[idx % defaultStageTemplates.length]?.target || 25;
+      const targetSqm = 150;
       const todaySqm = Number((stageStats.todaySqm > 0 ? stageStats.todaySqm : (idx === 0 ? totalTodayProductionSqm : 0)).toFixed(1));
       const achievementPercent = targetSqm > 0 ? Math.round((todaySqm / targetSqm) * 100) : 0;
 

@@ -6,7 +6,7 @@ import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class JobCardsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async generateFromPo(customerPoId: string, createdById: string) {
     if (!createdById) {
@@ -148,23 +148,23 @@ export class JobCardsService {
     const [allRejectionLogs, allLastMovements] = await Promise.all([
       allSubCardIds.length > 0
         ? this.prisma.stageMovementLog.findMany({
-            where: {
-              subJobCardId: { in: allSubCardIds },
-              qtyRejected: { gt: 0 },
-            },
-            include: { stage: true },
-            orderBy: { createdAt: 'asc' },
-          }).catch(() => [])
+          where: {
+            subJobCardId: { in: allSubCardIds },
+            qtyRejected: { gt: 0 },
+          },
+          include: { stage: true },
+          orderBy: { createdAt: 'asc' },
+        }).catch(() => [])
         : [],
       allSubCardIds.length > 0
         ? this.prisma.stageMovementLog.findMany({
-            where: { subJobCardId: { in: allSubCardIds } },
-            include: {
-              createdBy: { select: { id: true, name: true, email: true, role: true } },
-              stage: true,
-            },
-            orderBy: { createdAt: 'desc' },
-          }).catch(() => [])
+          where: { subJobCardId: { in: allSubCardIds } },
+          include: {
+            createdBy: { select: { id: true, name: true, email: true, role: true } },
+            stage: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        }).catch(() => [])
         : [],
     ]);
 
@@ -227,7 +227,7 @@ export class JobCardsService {
                 prodPnlQty: Math.ceil(subPcbQty / 4),
                 subJobCardNo: cleanNo,
               },
-            }).catch(() => {});
+            }).catch(() => { });
           }
         });
 
@@ -278,21 +278,34 @@ export class JobCardsService {
         }
 
         // Populate active stage info directly on job card object for client sync
-        const sortedSubCards = [...(jc.subJobCards || [])].sort((a: any, b: any) => {
-          const orderA = a.currentStage?.defaultOrder || 0;
-          const orderB = b.currentStage?.defaultOrder || 0;
-          return orderB - orderA;
-        });
-        const topSub = sortedSubCards[0];
-        if (topSub && topSub.currentStage) {
-          (jc as any).currentStageName = topSub.currentStage.name;
-          (jc as any).currentStageIndex = Math.max(0, (topSub.currentStage.defaultOrder || 1) - 1);
+        const isUnlaunchedCard =
+          jc.status === JobCardStatus.CREATED ||
+          (jc.status as string) === 'NOT_LAUNCHED' ||
+          (jc.status as string) === 'UNLAUNCHED' ||
+          (jc.status as string) === 'PENDING_LAUNCH';
+
+        if (isUnlaunchedCard) {
+          (jc as any).currentStageName = '1. SHEARING';
+          (jc as any).currentStageIndex = 0;
         } else if (jc.status === JobCardStatus.COMPLETED) {
           (jc as any).currentStageName = '20. PACKING';
           (jc as any).currentStageIndex = 19;
         } else {
-          (jc as any).currentStageName = '1. SHEARING';
-          (jc as any).currentStageIndex = 0;
+          const sortedSubCards = [...(jc.subJobCards || [])]
+            .filter((s: any) => s.status !== 'PENDING_LAUNCH' && s.status !== 'CREATED')
+            .sort((a: any, b: any) => {
+              const orderA = a.currentStage?.defaultOrder || 0;
+              const orderB = b.currentStage?.defaultOrder || 0;
+              return orderB - orderA;
+            });
+          const topSub = sortedSubCards[0];
+          if (topSub && topSub.currentStage) {
+            (jc as any).currentStageName = topSub.currentStage.name;
+            (jc as any).currentStageIndex = Math.max(0, (topSub.currentStage.defaultOrder || 1) - 1);
+          } else {
+            (jc as any).currentStageName = '1. SHEARING';
+            (jc as any).currentStageIndex = 0;
+          }
         }
       } else {
         if (jc.status === JobCardStatus.COMPLETED) {
@@ -358,15 +371,28 @@ export class JobCardsService {
         const cardMatches = (targetStageId && jc.currentStageId === targetStageId) || (targetStageSlug && cardStageSlug === targetStageSlug);
 
         const isShearingTarget = targetStageSlug === 'shearing' || targetStageSlug === '1shearing' || (targetStageSlug && targetStageSlug.includes('shear'));
-        const isCardUnlaunched = jc.status === 'CREATED' || jc.status === 'PENDING_LAUNCH';
+        const isCardUnlaunched =
+          jc.status === 'CREATED' ||
+          jc.status === 'PENDING_LAUNCH' ||
+          jc.status === 'NOT_LAUNCHED' ||
+          jc.status === 'UNLAUNCHED' ||
+          (!jc.launchedAt && jc.status !== 'COMPLETED');
+
+        // CRITICAL: If this card is unlaunched, it MUST NEVER appear in any stage other than Shearing!
+        if (isCardUnlaunched && !isShearingTarget) {
+          return null;
+        }
 
         // If job card has sub-lots, check if any sub-lot is at this stage
         if (jc.subJobCards && Array.isArray(jc.subJobCards) && jc.subJobCards.length > 0) {
           const matchingSubs = jc.subJobCards.filter((s: any) => {
+            const isSubUnlaunched = s.status === 'PENDING_LAUNCH' || s.status === 'CREATED' || isCardUnlaunched;
+            if (isSubUnlaunched) {
+              return isShearingTarget;
+            }
             if (targetStageId && s.currentStageId === targetStageId) return true;
             const subStageSlug = normalizeStageSlug(s.currentStage?.name || '');
             if (targetStageSlug && subStageSlug === targetStageSlug) return true;
-            if (isShearingTarget && (s.status === 'PENDING_LAUNCH' || !s.currentStageId)) return true;
             return false;
           });
 
@@ -399,8 +425,8 @@ export class JobCardsService {
           };
         }
 
-        // If no sub-lots, check if the parent job card itself is at this stage
-        if (cardMatches) {
+        // If no sub-lots, check if the parent job card itself is at this stage (NEVER if unlaunched!)
+        if (cardMatches && !isCardUnlaunched) {
           return {
             ...jc,
             _matchedStage: true,
@@ -758,26 +784,26 @@ export class JobCardsService {
 
     // Ensure standard 20 process stages exist matching PF-OI Standard Flow
     const defaultStageList = [
-      { name: '1. SHEARING',       code: 'SHR',      order: 1  },
-      { name: '2. DRILLING',       code: 'DRL',      order: 2  },
-      { name: '3. DRL-QC',         code: 'DRL-QC',   order: 3  },
-      { name: '4. DML',            code: 'DML',      order: 4  },
-      { name: '5. PIT',            code: 'PIT',      order: 5  },
-      { name: '6. PIT-QC',         code: 'PIT-QC',   order: 6  },
-      { name: '7. PLATING',        code: 'PLT',      order: 7  },
-      { name: '8. ETCHING',        code: 'ETC',      order: 8  },
-      { name: '9. PREMASK-QC/AOI', code: 'PM-QC',    order: 9  },
-      { name: '10. PISM',          code: 'PISM',     order: 10 },
-      { name: '11. PISM-QC',       code: 'PISM-QC',  order: 11 },
-      { name: '12. LEGEND PRINT',  code: 'LGD',      order: 12 },
-      { name: '13. HASL',          code: 'HASL',     order: 13 },
-      { name: '14. HASL-QC',       code: 'HASL-QC',  order: 14 },
-      { name: '15. ROUTING',       code: 'RTE',      order: 15 },
-      { name: '16. VG',            code: 'VG',       order: 16 },
-      { name: '17. BBT',           code: 'BBT',      order: 17 },
-      { name: '18. FQC (AI)',       code: 'FQC',      order: 18 },
-      { name: '19. PDI-AQL',       code: 'PDI',      order: 19 },
-      { name: '20. PACKING',       code: 'PKG',      order: 20 },
+      { name: '1. SHEARING', code: 'SHR', order: 1 },
+      { name: '2. DRILLING', code: 'DRL', order: 2 },
+      { name: '3. DRL-QC', code: 'DRL-QC', order: 3 },
+      { name: '4. DML', code: 'DML', order: 4 },
+      { name: '5. PIT', code: 'PIT', order: 5 },
+      { name: '6. PIT-QC', code: 'PIT-QC', order: 6 },
+      { name: '7. PLATING', code: 'PLT', order: 7 },
+      { name: '8. ETCHING', code: 'ETC', order: 8 },
+      { name: '9. PREMASK-QC/AOI', code: 'PM-QC', order: 9 },
+      { name: '10. PISM', code: 'PISM', order: 10 },
+      { name: '11. PISM-QC', code: 'PISM-QC', order: 11 },
+      { name: '12. LEGEND PRINT', code: 'LGD', order: 12 },
+      { name: '13. HASL', code: 'HASL', order: 13 },
+      { name: '14. HASL-QC', code: 'HASL-QC', order: 14 },
+      { name: '15. ROUTING', code: 'RTE', order: 15 },
+      { name: '16. VG', code: 'VG', order: 16 },
+      { name: '17. BBT', code: 'BBT', order: 17 },
+      { name: '18. FQC (AI)', code: 'FQC', order: 18 },
+      { name: '19. PDI-AQL', code: 'PDI', order: 19 },
+      { name: '20. PACKING', code: 'PKG', order: 20 },
     ];
 
     try {
@@ -809,7 +835,7 @@ export class JobCardsService {
                   where: { id: existing.id },
                   data: { name: item.name, defaultOrder: item.order },
                 });
-              } catch {}
+              } catch { }
             }
           }
         } else {
@@ -826,7 +852,7 @@ export class JobCardsService {
                   where: { id: existingByOrder.id },
                   data: { name: item.name, defaultOrder: item.order },
                 });
-              } catch {}
+              } catch { }
             }
           } else {
             try {
@@ -848,7 +874,7 @@ export class JobCardsService {
                     description: `${item.name} Stage`,
                   },
                 });
-              } catch {}
+              } catch { }
             }
           }
         }
@@ -877,22 +903,22 @@ export class JobCardsService {
             await this.prisma.subJobCard.updateMany({
               where: { currentStageId: stg.id },
               data: { currentStageId: replacementStage.id },
-            }).catch(() => {});
+            }).catch(() => { });
             await this.prisma.processFlowStep.updateMany({
               where: { stageId: stg.id },
               data: { stageId: replacementStage.id },
-            }).catch(() => {});
+            }).catch(() => { });
             await this.prisma.stageMovementLog.updateMany({
               where: { stageId: stg.id },
               data: { stageId: replacementStage.id },
-            }).catch(() => {});
+            }).catch(() => { });
           } else {
             await this.prisma.processFlowStep.deleteMany({
               where: { stageId: stg.id },
-            }).catch(() => {});
+            }).catch(() => { });
           }
 
-          await this.prisma.processStage.delete({ where: { id: stg.id } }).catch(() => {});
+          await this.prisma.processStage.delete({ where: { id: stg.id } }).catch(() => { });
         }
       }
     } catch (err: any) {
@@ -940,7 +966,7 @@ export class JobCardsService {
             stageId: stages[i].id,
             stepOrder: i + 1,
           },
-        }).catch(() => {});
+        }).catch(() => { });
       }
 
       await this.prisma.processFlowStep.deleteMany({
@@ -948,12 +974,12 @@ export class JobCardsService {
           processFlowMasterId: processFlow.id,
           stepOrder: { gt: stages.length },
         },
-      }).catch(() => {});
+      }).catch(() => { });
 
       await this.prisma.processFlowMaster.update({
         where: { id: processFlow.id },
         data: { totalSteps: stages.length },
-      }).catch(() => {});
+      }).catch(() => { });
 
       processFlow = await this.prisma.processFlowMaster.findUnique({
         where: { id: processFlow.id },
@@ -1022,7 +1048,7 @@ export class JobCardsService {
 
   async createJobCard(data: any, createdById: string) {
     const deps = await this.ensureDependencies();
-    
+
     let validUser = null;
     if (createdById) {
       validUser = await this.prisma.user.findUnique({ where: { id: createdById } }).catch(() => null);
@@ -1671,8 +1697,10 @@ export class JobCardsService {
         id: true,
         name: true,
         email: true,
+        phone: true,
         role: { select: { name: true } },
         department: { select: { name: true } },
+        assignedStage: { select: { name: true } },
       },
     };
 
@@ -1967,7 +1995,7 @@ export class JobCardsService {
       // 1. Delete associated dispatches
       await tx.dispatch.deleteMany({
         where: { jobCardId: targetId },
-      }).catch(() => {});
+      }).catch(() => { });
 
       if (subCardIds.length > 0) {
         // 2. Delete stage movement logs
@@ -2009,26 +2037,26 @@ export class JobCardsService {
 
   private async getNextProcessStage(currentStage: any, flowSteps?: any[]): Promise<{ targetNextStageId: string | null; isLastStage: boolean }> {
     const defaultStageList = [
-      { name: '1. SHEARING',       code: 'SHR',      order: 1  },
-      { name: '2. DRILLING',       code: 'DRL',      order: 2  },
-      { name: '3. DRL-QC',         code: 'DRL-QC',   order: 3  },
-      { name: '4. DML',            code: 'DML',      order: 4  },
-      { name: '5. PIT',            code: 'PIT',      order: 5  },
-      { name: '6. PIT-QC',         code: 'PIT-QC',   order: 6  },
-      { name: '7. PLATING',        code: 'PLT',      order: 7  },
-      { name: '8. ETCHING',        code: 'ETC',      order: 8  },
-      { name: '9. PREMASK-QC/AOI', code: 'PM-QC',    order: 9  },
-      { name: '10. PISM',          code: 'PISM',     order: 10 },
-      { name: '11. PISM-QC',       code: 'PISM-QC',  order: 11 },
-      { name: '12. LEGEND PRINT',  code: 'LGD',      order: 12 },
-      { name: '13. HASL',          code: 'HASL',     order: 13 },
-      { name: '14. HASL-QC',       code: 'HASL-QC',  order: 14 },
-      { name: '15. ROUTING',       code: 'RTE',      order: 15 },
-      { name: '16. VG',            code: 'VG',       order: 16 },
-      { name: '17. BBT',           code: 'BBT',      order: 17 },
-      { name: '18. FQC (AI)',       code: 'FQC',      order: 18 },
-      { name: '19. PDI-AQL',       code: 'PDI',      order: 19 },
-      { name: '20. PACKING',       code: 'PKG',      order: 20 },
+      { name: '1. SHEARING', code: 'SHR', order: 1 },
+      { name: '2. DRILLING', code: 'DRL', order: 2 },
+      { name: '3. DRL-QC', code: 'DRL-QC', order: 3 },
+      { name: '4. DML', code: 'DML', order: 4 },
+      { name: '5. PIT', code: 'PIT', order: 5 },
+      { name: '6. PIT-QC', code: 'PIT-QC', order: 6 },
+      { name: '7. PLATING', code: 'PLT', order: 7 },
+      { name: '8. ETCHING', code: 'ETC', order: 8 },
+      { name: '9. PREMASK-QC/AOI', code: 'PM-QC', order: 9 },
+      { name: '10. PISM', code: 'PISM', order: 10 },
+      { name: '11. PISM-QC', code: 'PISM-QC', order: 11 },
+      { name: '12. LEGEND PRINT', code: 'LGD', order: 12 },
+      { name: '13. HASL', code: 'HASL', order: 13 },
+      { name: '14. HASL-QC', code: 'HASL-QC', order: 14 },
+      { name: '15. ROUTING', code: 'RTE', order: 15 },
+      { name: '16. VG', code: 'VG', order: 16 },
+      { name: '17. BBT', code: 'BBT', order: 17 },
+      { name: '18. FQC (AI)', code: 'FQC', order: 18 },
+      { name: '19. PDI-AQL', code: 'PDI', order: 19 },
+      { name: '20. PACKING', code: 'PKG', order: 20 },
     ];
 
     const currentStageName = String(currentStage?.name || '').trim();
@@ -2180,8 +2208,8 @@ export class JobCardsService {
     const rawTarget = cleanStr(id) || cardId || subJobCardNo || jobCardNo || (body?.jobCardNo || '').trim();
     const searchNo = jobCardNo || rawTarget;
 
-    const isUuidTarget = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cardId) ||
-                         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawTarget);
+    const isUuid = (val?: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val || '');
+    const isUuidTarget = isUuid(cardId) || isUuid(rawTarget);
 
     const subCardOr: any[] = [];
     if (isUuidTarget) {
@@ -2286,7 +2314,7 @@ export class JobCardsService {
       const dbUser = await this.prisma.user.findFirst({
         where: {
           OR: [
-            ...(targetUserId ? [{ id: targetUserId }] : []),
+            ...(isUuid(targetUserId) ? [{ id: targetUserId }] : []),
             ...(targetEmail ? [{ email: targetEmail }] : []),
           ],
         },
@@ -2592,7 +2620,7 @@ export class JobCardsService {
     const rawTarget = cleanStr(id) || cardId || subJobCardNo || jobCardNo || (body?.jobCardNo || '').trim();
     const searchNo = jobCardNo || rawTarget;
 
-    const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+    const isUuid = (val?: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val || '');
 
     const subCardOr: any[] = [];
     if (isUuid(cardId)) subCardOr.push({ id: cardId });
@@ -2692,7 +2720,7 @@ export class JobCardsService {
       const dbUser = await this.prisma.user.findFirst({
         where: {
           OR: [
-            ...(targetUserId ? [{ id: targetUserId }] : []),
+            ...(isUuid(targetUserId) ? [{ id: targetUserId }] : []),
             ...(targetEmail ? [{ email: targetEmail }] : []),
           ],
         },

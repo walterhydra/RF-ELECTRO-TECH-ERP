@@ -351,11 +351,12 @@ export class SubJobCardsService {
     const currentStep = steps.find((s: any) => s.stageId === subCard.currentStageId);
     const nextStep = currentStep ? steps.find((s: any) => s.stepOrder > currentStep.stepOrder) : null;
     let effectiveUser = user;
+    const isTargetUuid = (dto as any)?.userId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test((dto as any).userId);
     if (!effectiveUser?.id && ((dto as any)?.userId || (dto as any)?.userEmail)) {
       effectiveUser = await this.prisma.user.findFirst({
         where: {
           OR: [
-            ...((dto as any)?.userId ? [{ id: (dto as any).userId }] : []),
+            ...(isTargetUuid ? [{ id: (dto as any).userId }] : []),
             ...((dto as any)?.userEmail ? [{ email: (dto as any).userEmail }] : []),
           ],
         },
