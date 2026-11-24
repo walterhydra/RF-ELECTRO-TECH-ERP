@@ -34,6 +34,20 @@ export interface DeptBarChartItem {
   color: string;
 }
 
+export interface DeptOutJobItem {
+  id?: string;
+  jobCardNo: string;
+  subJobCardNo?: string;
+  productName: string;
+  customerName: string;
+  qtyPcb: number;
+  qtyPnl: number;
+  areaSqm: number;
+  time: string;
+  operatorName: string;
+  remarks: string;
+}
+
 export interface DeptProductionRow {
   rank: number;
   department: string;
@@ -45,6 +59,8 @@ export interface DeptProductionRow {
   runningJobs: number;
   waitingJobs: number;
   holdJobs: number;
+  outJobsCount?: number;
+  outJobs?: DeptOutJobItem[];
 }
 
 export interface MachineBreakdownItem {
@@ -86,6 +102,8 @@ export interface PipelineStageItem {
   running: number;
   waiting: number;
   hold: number;
+  outJobsCount?: number;
+  outJobs?: DeptOutJobItem[];
   isDispatch?: boolean;
 }
 

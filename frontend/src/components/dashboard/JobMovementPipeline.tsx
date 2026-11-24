@@ -74,6 +74,11 @@ export const JobMovementPipeline: React.FC<JobMovementPipelineProps> = ({
                     <div className="text-sm lg:text-base font-extrabold text-slate-900 font-mono">
                       {stage.todaySqm || 0} <span className="text-[11px] font-bold text-slate-600">Sqm</span>
                     </div>
+                    {stage.outJobsCount && stage.outJobsCount > 0 ? (
+                      <div className="text-[10px] font-bold text-emerald-600 font-mono">
+                        {stage.outJobsCount} out today
+                      </div>
+                    ) : null}
 
                     {/* Stats */}
                     <div className="mt-1.5 space-y-0.5 text-[11px] font-medium text-slate-600">

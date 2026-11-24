@@ -693,12 +693,19 @@ export class ReportsService {
       where: { createdAt: { gte: startOfToday, lte: endOfToday } },
       include: {
         stage: true,
+        createdBy: { select: { id: true, name: true } },
         subJobCard: {
           include: {
-            jobCard: true
+            jobCard: {
+              include: {
+                product: { select: { id: true, name: true, code: true } },
+                customerPO: { include: { customer: { select: { id: true, companyName: true, code: true } } } },
+              }
+            }
           }
         }
-      }
+      },
+      orderBy: { createdAt: 'desc' }
     }).catch(() => []);
 
     // 4. Dispatches
@@ -818,23 +825,72 @@ export class ReportsService {
       }
     }
 
-    // 6. Calculate Stage-Wise and Plant-Wide Output
+    // 6. Calculate Stage-Wise and Plant-Wide Output with Exact Physical Area
     let shearingStageOutputSqm = 0;
     const stageWiseSqmMap: Record<string, number> = {};
+    const stageOutJobsMap: Record<string, any[]> = {};
 
     todayMovements.forEach((m: any) => {
-      const processed = m.qtyProcessed || 0;
       const jc = m.subJobCard?.jobCard;
-      const cardSqm = jc ? getJobCardAreaSqm(jc) : 12.5;
-      const totalQty = jc?.totalQty || 100;
-      // Actual physical area processed in this movement
-      const sqm = (processed / Math.max(1, totalQty)) * cardSqm;
-      
+      const sub = m.subJobCard;
+
+      // Exact physical panel area of this job / lot
+      const totalArea = Number(sub?.prodPnlAreaSqm || sub?.custPnlAreaSqm || jc?.prodPnlAreaSqm || jc?.custPnlAreaSqm || 0);
+      // Total individual PCB pieces
+      const totalPcbQty = Number(jc?.totalPcbQty || sub?.qty || jc?.custPnlQty || (jc?.totalQty ? jc.totalQty * 4 : 1));
+      // Actual forwarded / OUT quantity from this stage
+      const qtyOut = Number(m.qtyForwarded > 0 ? m.qtyForwarded : (m.qtyProcessed || 0));
+
+      // Calculate actual physical SQM: never multiply by pcbsPerPanel ratio
+      let sqm = 0;
+      if (totalPcbQty > 0 && totalArea > 0 && qtyOut > 0) {
+        if (qtyOut >= totalPcbQty) {
+          sqm = totalArea;
+        } else {
+          sqm = Number(((qtyOut / totalPcbQty) * totalArea).toFixed(3));
+        }
+      }
+
+      const pcbsPerPnl = (jc?.totalPcbQty && jc?.prodPnlQty) ? Math.round(jc.totalPcbQty / jc.prodPnlQty) : 4;
+      const pnlQty = pcbsPerPnl > 0 ? Math.round(qtyOut / pcbsPerPnl) : qtyOut;
+
+      const jobDetail = {
+        id: m.id,
+        jobCardNo: jc?.jobCardNo || sub?.subJobCardNo || '—',
+        subJobCardNo: sub?.subJobCardNo || jc?.jobCardNo || '—',
+        productName: jc?.product?.name || jc?.customerPartNo || 'PCB',
+        customerName: jc?.customerPO?.customer?.companyName || jc?.customerCode || 'Direct Customer',
+        qtyPcb: qtyOut,
+        qtyPnl: pnlQty,
+        areaSqm: Number(sqm.toFixed(2)),
+        time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        operatorName: m.createdBy?.name || 'Operator',
+        remarks: m.remarks || m.rejectionReason || '',
+      };
+
       if (m.stageId) {
         if (!stageWiseSqmMap[m.stageId]) stageWiseSqmMap[m.stageId] = 0;
         stageWiseSqmMap[m.stageId] += sqm;
         if (stageWipMap[m.stageId]) {
           stageWipMap[m.stageId].todaySqm += sqm;
+        }
+        if (!stageOutJobsMap[m.stageId]) stageOutJobsMap[m.stageId] = [];
+        stageOutJobsMap[m.stageId].push(jobDetail);
+      }
+      if (m.stage?.name) {
+        const sName = m.stage.name.toUpperCase();
+        if (!stageOutJobsMap[sName]) stageOutJobsMap[sName] = [];
+        stageOutJobsMap[sName].push(jobDetail);
+        if (stageWipMap[sName]) {
+          stageWipMap[sName].todaySqm = (stageWipMap[sName].todaySqm || 0) + sqm;
+        }
+      }
+      if (m.stage?.code) {
+        const sCode = m.stage.code.toUpperCase();
+        if (!stageOutJobsMap[sCode]) stageOutJobsMap[sCode] = [];
+        stageOutJobsMap[sCode].push(jobDetail);
+        if (stageWipMap[sCode]) {
+          stageWipMap[sCode].todaySqm = (stageWipMap[sCode].todaySqm || 0) + sqm;
         }
       }
     });
@@ -851,18 +907,19 @@ export class ReportsService {
     // Plant-wide daily production = physical volume of all JobCards created / launched today in PostgreSQL DB
     const todayLaunchedCards = allJobCards.filter((jc: any) => new Date(jc.createdAt) >= startOfToday);
     const todayLaunchedSqm = todayLaunchedCards.reduce((acc, jc) => acc + getJobCardAreaSqm(jc), 0);
-    const totalTodayProductionSqm = Number(todayLaunchedSqm.toFixed(1));
+    const maxStageThroughput = Math.max(0, ...Object.values(stageWiseSqmMap));
+    const totalTodayProductionSqm = Number((maxStageThroughput > 0 ? maxStageThroughput : todayLaunchedSqm).toFixed(1));
 
     // Plant-wide monthly production = physical volume of all JobCards created / launched this month in PostgreSQL DB
     const monthLaunchedCards = allJobCards.filter((jc: any) => new Date(jc.createdAt) >= startOfMonth);
     const monthLaunchedSqm = monthLaunchedCards.reduce((acc, jc) => acc + getJobCardAreaSqm(jc), 0);
     const totalMonthProductionSqm = Number(monthLaunchedSqm.toFixed(1));
 
-    // 7. Calculate Dispatches
+    // 7. Calculate Dispatches with exact PCB count divisor
     let monthDispatchedSqmCalc = 0;
     for (const d of monthDispatches as any[]) {
       const cardSqm = d.jobCard ? getJobCardAreaSqm(d.jobCard) : 12.5;
-      const totalQty = d.jobCard?.totalQty || 100;
+      const totalQty = d.jobCard?.totalPcbQty || d.jobCard?.custPnlQty || (d.jobCard?.totalQty ? d.jobCard.totalQty * 4 : 100);
       monthDispatchedSqmCalc += (d.dispatchedQty * (cardSqm / totalQty));
     }
     const monthDispatchedSqm = Number(monthDispatchedSqmCalc.toFixed(1));
@@ -870,7 +927,7 @@ export class ReportsService {
     let todayDispatchedSqmCalc = 0;
     for (const d of todayDispatches as any[]) {
       const cardSqm = d.jobCard ? getJobCardAreaSqm(d.jobCard) : 12.5;
-      const totalQty = d.jobCard?.totalQty || 100;
+      const totalQty = d.jobCard?.totalPcbQty || d.jobCard?.custPnlQty || (d.jobCard?.totalQty ? d.jobCard.totalQty * 4 : 100);
       todayDispatchedSqmCalc += (d.dispatchedQty * (cardSqm / totalQty));
     }
     const todayDispatchedSqm = Number(todayDispatchedSqmCalc.toFixed(1));
@@ -906,6 +963,53 @@ export class ReportsService {
       return clean;
     };
 
+    const defaultStageTargets: Record<string, number> = {
+      'SHEARING': 35,
+      'SHR': 35,
+      'DRILLING': 30,
+      'DRL': 30,
+      'DRL-QC': 25,
+      'DML': 25,
+      'DML LINE': 25,
+      'PIT': 20,
+      'PHOTO IMAGE (PIT)': 20,
+      'PIT-QC': 20,
+      'PLATING': 22,
+      'PLT': 22,
+      'EPL': 22,
+      'ETCHING': 18,
+      'ETC': 18,
+      'SES': 18,
+      'PM-QC': 20,
+      'AOI': 20,
+      'AOI / INSPECTION': 20,
+      'PREMASK-QC/AOI': 20,
+      'PISM': 15,
+      'SOLDER MASK': 15,
+      'PISM-QC': 15,
+      'MASK QC': 15,
+      'LEGEND PRINT': 35,
+      'LGD': 35,
+      'LP': 35,
+      'HASL': 30,
+      'HASL FINISH': 30,
+      'HASL-QC': 25,
+      'ROUTING': 25,
+      'CNC ROUTING': 25,
+      'RTE': 25,
+      'RT': 25,
+      'VG': 20,
+      'V-GROOVING': 20,
+      'BBT': 20,
+      'BBT TESTING': 20,
+      'FQC': 25,
+      'FINAL QC': 25,
+      'PDI': 25,
+      'PDI INSPECTION': 25,
+      'PACKING': 30,
+      'PKG': 30,
+    };
+
     const deptColors = ['#3B82F6', '#10B981', '#6366F1', '#F59E0B', '#EC4899', '#8B5CF6', '#14B8A6', '#F97316', '#06B6D4', '#84CC16', '#E11D48'];
     const activeStageList = stages.length > 0 ? stages : defaultStageTemplates.map((t, i) => ({ id: `STAGE_${i+1}`, name: t.name, code: t.code, defaultOrder: i+1 }));
 
@@ -913,12 +1017,16 @@ export class ReportsService {
       const cleanName = formatStageDisplayName(stage.name);
       const stageStats = stageWipMap[stage.id] || stageWipMap[stage.name] || stageWipMap[stage.code] || { running: 0, waiting: 0, hold: 0, todaySqm: 0 };
       
-      const targetSqm = 150;
-      const todaySqm = Number((stageStats.todaySqm > 0 ? stageStats.todaySqm : (idx === 0 ? totalTodayProductionSqm : 0)).toFixed(1));
+      const stageCodeUpper = (stage.code || '').toUpperCase().trim();
+      const stageCleanUpper = cleanName.toUpperCase().trim();
+      const targetSqm = defaultStageTargets[stageCleanUpper] || defaultStageTargets[stageCodeUpper] || 25;
+      const todaySqm = Number((stageStats.todaySqm > 0 ? stageStats.todaySqm : (idx === 0 && totalTodayProductionSqm < 10 ? totalTodayProductionSqm : 0)).toFixed(1));
       const achievementPercent = targetSqm > 0 ? Math.round((todaySqm / targetSqm) * 100) : 0;
+      const outJobs = stageOutJobsMap[stage.id] || stageOutJobsMap[stage.name?.toUpperCase()] || stageOutJobsMap[stageCodeUpper] || [];
 
       return {
         rank: idx + 1,
+        stageId: stage.id,
         department: cleanName,
         shortCode: stage.code || cleanName.substring(0, 8).toUpperCase(),
         color: deptColors[idx % deptColors.length],
@@ -928,6 +1036,8 @@ export class ReportsService {
         runningJobs: stageStats.running,
         waitingJobs: stageStats.waiting,
         holdJobs: stageStats.hold,
+        outJobsCount: outJobs.length,
+        outJobs: outJobs,
       };
     }).sort((a, b) => b.todayProductionSqm - a.todayProductionSqm || b.runningJobs - a.runningJobs || b.waitingJobs - a.waitingJobs);
 
@@ -939,7 +1049,9 @@ export class ReportsService {
     const pipelineStages = activeStageList.map((stage: any, idx: number) => {
       const cleanName = formatStageDisplayName(stage.name);
       const stageStats = stageWipMap[stage.id] || stageWipMap[stage.name] || stageWipMap[stage.code] || { running: 0, waiting: 0, hold: 0, todaySqm: 0 };
-      const todaySqm = Number((stageStats.todaySqm > 0 ? stageStats.todaySqm : (idx === 0 ? totalTodayProductionSqm : 0)).toFixed(1));
+      const stageCodeUpper = (stage.code || '').toUpperCase().trim();
+      const todaySqm = Number((stageStats.todaySqm > 0 ? stageStats.todaySqm : (idx === 0 && totalTodayProductionSqm < 10 ? totalTodayProductionSqm : 0)).toFixed(1));
+      const outJobs = stageOutJobsMap[stage.id] || stageOutJobsMap[stage.name?.toUpperCase()] || stageOutJobsMap[stageCodeUpper] || [];
 
       return {
         name: cleanName,
@@ -949,6 +1061,8 @@ export class ReportsService {
         running: stageStats.running,
         waiting: stageStats.waiting,
         hold: stageStats.hold,
+        outJobsCount: outJobs.length,
+        outJobs: outJobs,
         isDispatch: false,
       };
     });
@@ -962,6 +1076,8 @@ export class ReportsService {
       running: 0,
       waiting: 0,
       hold: 0,
+      outJobsCount: todayDispatches.length,
+      outJobs: [],
       isDispatch: true,
     });
 
